@@ -12,6 +12,9 @@ services:
     container_name: genai-platform
     restart: unless-stopped
     init: true
+    # Run as the host user (setup.sh writes PUID/PGID): every file in data/, models/ and output/
+    # belongs to that user, so the directories can be copied or moved without sudo
+    user: "${PUID:?run scripts/setup.sh — PUID is missing in .env}:${PGID:?run scripts/setup.sh — PGID is missing in .env}"
     ports:
       - "${BIND_ADDR:-0.0.0.0}:${PORT:-7860}:7860"
     # Radeon iGPU via Vulkan: render node + numeric GIDs of the host render/video groups (written by setup.sh)

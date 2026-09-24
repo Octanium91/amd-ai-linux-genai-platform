@@ -36,8 +36,9 @@ The queue, models, users and gallery are shared.
 | `/data/state/users.json`, `sessions.json` | | users (scrypt) and sessions (token hashes only), mode 600 |
 | `/data/state/models.local.json`, `presets.local.json` | | your own models and modes |
 | `/data/state/{logs,thumbs,previews}` | | sd-cli logs, thumbnails, previews |
+| `/data/state/cache` | | Mesa shader cache (`XDG_CACHE_HOME`) |
 
-The image can be rebuilt and updated at will: none of this is stored in it.
+The image can be rebuilt and updated at will: none of this is stored in it. The container runs as the host user (`PUID`/`PGID`), so the files belong to that user and the directories can be copied to another disk or server, see [moving.md](moving.md).
 
 ## Generation
 

@@ -26,6 +26,7 @@ export const config = {
     logs: path.join(DATA, 'state', 'logs'),
     previews: path.join(DATA, 'state', 'previews'),
     thumbs: path.join(DATA, 'state', 'thumbs'),
+    cache: path.join(DATA, 'state', 'cache'),
   },
 };
 

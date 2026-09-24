@@ -52,6 +52,7 @@ GTT (the memory the GPU can use) is the key parameter for video. If `setup.sh` w
 | [docs/models.md](docs/models.md) | Model and mode catalog, licenses, templates, adding your own |
 | [docs/benchmarks.md](docs/benchmarks.md) | Speed measurements and what affects them |
 | [docs/architecture.md](docs/architecture.md) | How the platform works, data layout, API, security, i18n |
+| [docs/moving.md](docs/moving.md) | Moving to another disk or server, backup and restore |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | Common problems and fixes |
 
 ## Security

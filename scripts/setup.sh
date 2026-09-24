@@ -82,6 +82,9 @@ if [ ! -f .env ]; then cp .env.example .env; ok "created .env from .env.example"
 set_env() { grep -q "^$1=" .env && sed -i "s|^$1=.*|$1=$2|" .env || echo "$1=$2" >> .env; }
 [ -n "$RENDER_GID" ] && set_env RENDER_GID "$RENDER_GID"
 [ -n "$VIDEO_GID" ] && set_env VIDEO_GID "$VIDEO_GID"
+set_env PUID "$(id -u)"
+set_env PGID "$(id -g)"
+ok "the container runs as $(id -un) (PUID $(id -u), PGID $(id -g))"
 chmod 600 .env
 DATA_PATH=$(grep -E '^DATA_PATH=' .env | cut -d= -f2-); DATA_PATH=${DATA_PATH:-./data}
 mkdir -p "$DATA_PATH" && ok "data directory: $DATA_PATH"
@@ -89,6 +92,16 @@ MODELS_PATH=$(grep -E '^MODELS_PATH=' .env | cut -d= -f2-); MODELS_PATH=${MODELS
 mkdir -p "$MODELS_PATH" && ok "models directory: $MODELS_PATH ($(df -h "$MODELS_PATH" | awk 'NR==2{print $4}') free)"
 OUTPUT_PATH=$(grep -E '^OUTPUT_PATH=' .env | cut -d= -f2-); OUTPUT_PATH=${OUTPUT_PATH:-./output}
 mkdir -p "$OUTPUT_PATH" && ok "output directory: $OUTPUT_PATH"
+
+# Files left by an older root-running container (or copied with sudo) must belong to the host user
+FOREIGN=$(find "$DATA_PATH" "$MODELS_PATH" "$OUTPUT_PATH" ! -user "$(id -u)" 2>/dev/null | head -1)
+if [ -n "$FOREIGN" ]; then
+  if [ $INSTALL = 1 ]; then
+    sudo chown -R "$(id -u):$(id -g)" "$DATA_PATH" "$MODELS_PATH" "$OUTPUT_PATH" && ok "ownership of data/models/output fixed"
+  else
+    warn "some files are not owned by $(id -un) (e.g. $FOREIGN) → ./scripts/setup.sh --install, or: sudo chown -R $(id -u):$(id -g) $DATA_PATH $MODELS_PATH $OUTPUT_PATH"
+  fi
+fi
 
 echo
 if [ $FAIL = 1 ]; then echo "There are errors — fix them and run again."; exit 1; fi

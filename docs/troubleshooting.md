@@ -45,9 +45,13 @@ If there is another administrator, they can change the password in the Users sec
 
 ```bash
 docker compose down
-sudo rm data/state/users.json data/state/sessions.json
+rm data/state/users.json data/state/sessions.json
 docker compose up -d
 ```
+
+## `EACCES: permission denied` in the logs
+
+The container runs as `PUID`/`PGID` from `.env` and cannot write files owned by another user (left by an older root-running version or copied with `sudo`). Run `./scripts/setup.sh --install`: it fixes the ownership. See [moving.md](moving.md).
 
 ## stable-diffusion.cpp regressions
 
