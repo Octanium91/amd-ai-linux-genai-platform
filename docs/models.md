@@ -28,7 +28,7 @@
 
 | Режим | Тип | Модели | По умолчанию | Время на Radeon 890M |
 |---|---|---|---|---|
-| Realistic Vision 6 · фото | изображение | RV6 + VAE | 512×768, 25 шагов, dpm++2m karras, CFG 5.5 | ~1 мин на картинку |
+| Realistic Vision 6 · фото | изображение | RV6 + VAE | 512×768, 25 шагов, dpm++2m karras, CFG 5.5 | ~40 с на картинку |
 | AnimateLCM · Realistic Vision | видео | RV6 + VAE + AnimateLCM + LoRA | 512×512, 16 кадров (2 с при 8 к/с → 24 fps), 6 шагов, lcm, CFG 1 | **~2.5 мин** |
 | AnimateDiff v3 · Realistic Vision | видео | RV6 + VAE + AnimateDiff v3 + adapter | 512×512, 16 кадров, 20 шагов, euler, CFG 8 | ~16 мин |
 | Wan 2.2 TI2V 5B | видео | Wan 2.2 5B + VAE + UMT5 | 832×480, 49 кадров при 24 к/с, 25 шагов | часы (для Strix Halo) |

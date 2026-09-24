@@ -192,8 +192,9 @@ function buildArgs(job, preset, outBase, initImage) {
     args.push('--video-frames', String(p.frames), '--fps', String(p.fps));
   }
   if (p.flowShift != null) args.push('--flow-shift', String(p.flowShift));
-  const init = initImage || (p.image ? path.join(dirs.uploads, p.image) : null);
-  if (init) args.push('-i', init, ...(preset.imageArgs || []));
+  // Продолжение сегмента держится ближе к последнему кадру (continueArgs), чем обычное «картинка → видео»
+  if (initImage) args.push('-i', initImage, ...(preset.continueArgs || preset.imageArgs || []));
+  else if (p.image) args.push('-i', path.join(dirs.uploads, p.image), ...(preset.imageArgs || []));
   if (preset.preview && preset.preview !== 'none') {
     args.push('--preview', preset.preview, '--preview-path', path.join(dirs.previews, job.id + (preset.kind === 'image' ? '.png' : '.webp')),
       '--preview-interval', '1');
