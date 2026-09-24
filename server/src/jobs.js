@@ -109,30 +109,40 @@ async function makeThumb(job, src) {
   if (t.code === 0) job.thumb = job.id + '.jpg';
 }
 
-async function finalizeVideo(job, avi) {
+// segments — AVI сегментов по порядку; начиная со второго, первый кадр сегмента совпадает
+// с последним кадром предыдущего (он был стартовой картинкой) и выбрасывается при склейке
+async function finalizeVideo(job, segments) {
   const base = baseName(job);
   const mp4 = path.join(dirs.output, base + '.mp4');
-  const encode = (vf) => runCmd('ffmpeg', ['-loglevel', 'error', '-y', '-i', avi, ...(vf ? ['-vf', vf] : []),
-    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', '-movflags', '+faststart', mp4]);
   const { fps, outFps } = job.params;
-  let conv;
-  if (outFps && outFps !== fps) {
-    // Модель генерирует с родной частотой, итоговая досчитывается интерполяцией движения (CPU)
-    conv = await encode(`minterpolate=fps=${outFps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1`);
-    if (conv.code !== 0) {
-      job.warning = `Интерполяция до ${outFps} fps не удалась, сохранено с ${fps} fps`;
-      conv = await encode();
-    }
-  } else {
-    conv = await encode();
+  const interp = outFps && outFps !== fps
+    ? `minterpolate=fps=${outFps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1` : null;
+  const encode = (withInterp) => {
+    const inputs = segments.flatMap((f) => ['-i', f]);
+    const parts = segments.map((f, i) => (i === 0
+      ? '[0:v]setpts=PTS-STARTPTS[s0]'
+      : `[${i}:v]trim=start_frame=1,setpts=PTS-STARTPTS[s${i}]`));
+    const chain = segments.length > 1
+      ? `${parts.join(';')};${segments.map((f, i) => `[s${i}]`).join('')}concat=n=${segments.length}:v=1:a=0[c]`
+      : '[0:v]null[c]';
+    const graph = `${chain};[c]${withInterp && interp ? interp : 'null'}[out]`;
+    return runCmd('ffmpeg', ['-loglevel', 'error', '-y', ...inputs, '-filter_complex', graph, '-map', '[out]',
+      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', '-movflags', '+faststart', mp4]);
+  };
+  let conv = await encode(true);
+  if (conv.code !== 0 && interp) {
+    job.warning = `Интерполяция до ${outFps} fps не удалась, сохранено с ${fps} fps`;
+    conv = await encode(false);
   }
   if (conv.code === 0) {
-    fs.rmSync(avi, { force: true });
+    for (const f of segments) fs.rmSync(f, { force: true });
     job.files = [base + '.mp4'];
   } else {
-    fs.renameSync(avi, path.join(dirs.output, base + '.avi'));
+    // Без ffmpeg оставляем хотя бы первый сегмент как есть
+    fs.renameSync(segments[0], path.join(dirs.output, base + '.avi'));
+    for (const f of segments.slice(1)) fs.rmSync(f, { force: true });
     job.files = [base + '.avi'];
-    job.warning = 'Не удалось перепаковать в mp4: ' + conv.err.trim().slice(0, 300);
+    job.warning = 'Не удалось собрать mp4: ' + conv.err.trim().slice(0, 300);
   }
   await makeThumb(job, path.join(dirs.output, job.files[0]));
 }
@@ -162,7 +172,7 @@ const ROLE_FLAGS = {
   motion_module: '--motion-module',
 };
 
-function buildArgs(job, preset, tmpBase) {
+function buildArgs(job, preset, outBase, initImage) {
   const p = job.params;
   const catalog = loadCatalog();
   const args = ['-M', preset.kind === 'image' ? 'img_gen' : 'vid_gen'];
@@ -182,92 +192,118 @@ function buildArgs(job, preset, tmpBase) {
     args.push('--video-frames', String(p.frames), '--fps', String(p.fps));
   }
   if (p.flowShift != null) args.push('--flow-shift', String(p.flowShift));
-  if (p.image) args.push('-i', path.join(dirs.uploads, p.image), ...(preset.imageArgs || []));
+  const init = initImage || (p.image ? path.join(dirs.uploads, p.image) : null);
+  if (init) args.push('-i', init, ...(preset.imageArgs || []));
   if (preset.preview && preset.preview !== 'none') {
     args.push('--preview', preset.preview, '--preview-path', path.join(dirs.previews, job.id + (preset.kind === 'image' ? '.png' : '.webp')),
       '--preview-interval', '1');
   }
   args.push(...(preset.extraArgs || []));
-  args.push('-o', preset.kind === 'image' ? `${tmpBase}.png` : `${tmpBase}.avi`);
+  args.push('-o', preset.kind === 'image' ? `${outBase}.png` : `${outBase}.avi`);
   return args;
 }
 
 // ---------- исполнение ----------
 
-function run(job) {
+// Один запуск sd-cli: вывод пишется в лог и разбирается на прогресс
+function runSd(job, args, log) {
+  return new Promise((resolve) => {
+    log.write('$ ' + [config.sdCli, ...args].map((a) => (/[\s"']/.test(a) ? JSON.stringify(a) : a)).join(' ') + '\n');
+    const proc = spawn(config.sdCli, args, { env: process.env });
+    current.proc = proc;
+    let buf = '';
+    const onData = (chunk) => {
+      const s = chunk.toString();
+      log.write(s);
+      buf += s;
+      const parts = buf.split(/[\r\n]+/);
+      buf = parts.pop();
+      for (const line of parts) parseLine(job, line.replace(ANSI, ''));
+      const tail = buf.replace(ANSI, '');
+      if (STEP_BAR.test(tail) || LOAD_BAR.test(tail)) parseLine(job, tail);
+      save();
+    };
+    proc.stdout.on('data', onData);
+    proc.stderr.on('data', onData);
+    let spawnError = null;
+    proc.on('error', (e) => (spawnError = e));
+    proc.on('close', (code, signal) => {
+      if (buf) parseLine(job, buf.replace(ANSI, ''));
+      resolve({ code, signal, spawnError });
+    });
+  });
+}
+
+function newProgress(segment, segments, doneSegments = []) {
+  return { stage: 'prepare', stages: { prepare: { startedAt: Date.now() } }, loading: null, segment, segments, doneSegments };
+}
+
+async function run(job) {
   const preset = loadPresets().find((p) => p.id === job.params.presetId);
-  job.progress = { stage: 'prepare', stages: { prepare: { startedAt: Date.now() } }, loading: null };
-  job.startedAt = Date.now();
-  let args;
+  const segments = job.params.segments || 1;
   const tmpBase = path.join(dirs.output, `.${job.id}`);
+  const outputs = [];
+  job.startedAt = Date.now();
+  job.progress = newProgress(1, segments);
+  current = { job, proc: null };
+  const log = fs.createWriteStream(path.join(dirs.logs, job.id + '.log'));
+  const cleanup = () => {
+    for (let i = 0; i < segments; i++) {
+      fs.rmSync(`${tmpBase}_s${i}.avi`, { force: true });
+      fs.rmSync(`${tmpBase}_s${i}_last.png`, { force: true });
+    }
+    for (const f of job._saved || []) fs.rmSync(f, { force: true });
+    delete job._saved;
+  };
+
   try {
     if (!preset) throw new Error('Пресет не найден: ' + job.params.presetId);
-    args = buildArgs(job, preset, tmpBase);
-  } catch (e) {
-    finish(job, 'failed', e.message);
+    job.status = 'running';
     save(true);
-    return setImmediate(nextJob);
-  }
-  job.status = 'running';
-  job.cmd = [config.sdCli, ...args].map((a) => (/[\s"']/.test(a) ? JSON.stringify(a) : a)).join(' ');
-  const log = fs.createWriteStream(path.join(dirs.logs, job.id + '.log'));
-  log.write('$ ' + job.cmd + '\n');
-
-  const proc = spawn(config.sdCli, args, { env: process.env });
-  current = { job, proc };
-  save(true);
-
-  let buf = '';
-  const onData = (chunk) => {
-    const s = chunk.toString();
-    log.write(s);
-    buf += s;
-    const parts = buf.split(/[\r\n]+/);
-    buf = parts.pop();
-    for (const line of parts) parseLine(job, line.replace(ANSI, ''));
-    const tail = buf.replace(ANSI, '');
-    if (STEP_BAR.test(tail) || LOAD_BAR.test(tail)) parseLine(job, tail);
-    save();
-  };
-  proc.stdout.on('data', onData);
-  proc.stderr.on('data', onData);
-
-  let spawnError = null;
-  proc.on('error', (e) => (spawnError = e));
-  proc.on('close', async (code, signal) => {
-    if (buf) parseLine(job, buf.replace(ANSI, ''));
-    log.end();
-    const cleanup = () => {
-      fs.rmSync(`${tmpBase}.avi`, { force: true });
-      for (const f of job._saved || []) fs.rmSync(f, { force: true });
-      delete job._saved;
-    };
-    try {
-      if (job.status === 'cancelled') {
-        cleanup();
-      } else if (code === 0) {
-        setStage(job, 'saving');
-        if (preset.kind === 'image') await finalizeImages(job);
-        else {
-          if (!fs.existsSync(`${tmpBase}.avi`)) throw new Error('sd-cli не сохранил видео');
-          await finalizeVideo(job, `${tmpBase}.avi`);
-        }
-        finish(job, 'done');
-      } else {
-        cleanup();
-        const why = spawnError?.message || job.lastErrors?.at(-1)
-          || `sd-cli завершился с кодом ${code}${signal ? ` (${signal})` : ''}`;
-        finish(job, 'failed', why);
+    for (let i = 0; i < segments && job.status === 'running'; i++) {
+      let init = null;
+      if (i > 0) {
+        // Продолжение: последний кадр предыдущего сегмента становится стартовым кадром следующего
+        init = `${tmpBase}_s${i - 1}_last.png`;
+        const r = await runCmd('ffmpeg', ['-loglevel', 'error', '-y', '-sseof', '-0.5', '-i', outputs[i - 1],
+          '-update', '1', '-q:v', '1', init]);
+        if (r.code !== 0 || !fs.existsSync(init)) throw new Error('Не удалось взять последний кадр сегмента: ' + r.err.trim());
+        const prev = job.progress;
+        job.progress = newProgress(i + 1, segments,
+          [...prev.doneSegments, { startedAt: prev.stages.prepare.startedAt, endedAt: Date.now() }]);
       }
-    } catch (e) {
-      cleanup();
-      finish(job, 'failed', e.message);
+      const outBase = `${tmpBase}_s${i}`;
+      const args = buildArgs(job, preset, outBase, init);
+      if (i === 0) job.cmd = [config.sdCli, ...args].join(' ');
+      const { code, signal, spawnError } = await runSd(job, args, log);
+      if (job.status !== 'running') break;
+      if (code !== 0) {
+        throw new Error(spawnError?.message || job.lastErrors?.at(-1)
+          || `sd-cli завершился с кодом ${code}${signal ? ` (${signal})` : ''}`);
+      }
+      if (preset.kind !== 'image') {
+        if (!fs.existsSync(`${outBase}.avi`)) throw new Error('sd-cli не сохранил видео');
+        outputs.push(`${outBase}.avi`);
+      }
     }
-    job.durationSec = Math.round((job.finishedAt - job.startedAt) / 1000);
-    current = null;
-    save(true);
-    nextJob();
-  });
+    if (job.status === 'cancelled') {
+      cleanup();
+    } else {
+      setStage(job, 'saving');
+      if (preset.kind === 'image') await finalizeImages(job);
+      else await finalizeVideo(job, outputs);
+      cleanup();
+      finish(job, 'done');
+    }
+  } catch (e) {
+    cleanup();
+    if (job.status !== 'cancelled') finish(job, 'failed', e.message);
+  }
+  log.end();
+  job.durationSec = Math.round((job.finishedAt - job.startedAt) / 1000);
+  current = null;
+  save(true);
+  nextJob();
 }
 
 export function nextJob() {
@@ -293,10 +329,27 @@ function planFrames(d, duration) {
   return Math.min(d.maxFrames ?? 121, Math.max(d.minFrames ?? 5, frames));
 }
 
+// «Экстра» — вдвое больше шагов, чем «Высокое», если режим не задал своё значение
+export function qualitySteps(d, quality) {
+  const q = d.quality || {};
+  if (quality === 'extra') return q.extra ?? (q.high ? q.high * 2 : null);
+  return q[quality] ?? null;
+}
+
+// Предел модели за один проход и экстра-предел (склейка двух сегментов через «картинка → видео»)
+export function durationLimits(preset) {
+  const d = preset.defaults || {};
+  const nativeFps = d.nativeFps ?? 24;
+  const maxFrames = d.maxFrames ?? 121;
+  const base = (d.frameRule === 'exact' ? maxFrames : maxFrames - 1) / nativeFps;
+  const extendable = preset.kind === 'video' && preset.image !== 'none';
+  return { base, max: extendable ? base * 2 : base, extendable };
+}
+
 export function createJob(preset, body, user, image) {
   const d = preset.defaults || {};
   const round16 = (v) => Math.round(v / 16) * 16;
-  const quality = d.quality?.[body.quality] != null ? body.quality : 'normal';
+  const quality = qualitySteps(d, body.quality) != null ? body.quality : 'normal';
   let seed = Math.trunc(Number(body.seed));
   if (!Number.isFinite(seed) || seed < 0) seed = crypto.randomInt(0, 2 ** 31 - 1);
 
@@ -309,7 +362,7 @@ export function createJob(preset, body, user, image) {
     width: round16(clamp(body.width, 128, 2048, d.width ?? 512)),
     height: round16(clamp(body.height, 128, 2048, d.height ?? 512)),
     quality,
-    steps: d.quality?.[quality] ?? d.steps ?? 20,
+    steps: qualitySteps(d, quality) ?? d.steps ?? 20,
     cfg: clamp(body.cfg, 0, 30, d.cfg ?? 7),
     flowShift: d.flowShift == null ? null : clamp(body.flowShift, 0, 30, d.flowShift),
     sampler: /^[a-z0-9_+]+$/.test(body.sampler || '') ? body.sampler : d.sampler || 'euler',
@@ -320,14 +373,18 @@ export function createJob(preset, body, user, image) {
     params.count = Math.round(clamp(body.count, 1, 8, 1));
   } else {
     const nativeFps = d.nativeFps ?? 24;
-    const maxFrames = d.maxFrames ?? 121;
     const exact = d.frameRule === 'exact';
-    const duration = clamp(body.duration, 0.5, (exact ? maxFrames : maxFrames - 1) / nativeFps, d.duration ?? 2);
-    const frames = planFrames(d, duration);
+    const lim = durationLimits(preset);
+    const duration = clamp(body.duration, 0.5, lim.max, d.duration ?? 2);
+    // Длиннее предела модели — два сегмента, второй продолжает последний кадр первого
+    const segments = duration > lim.base + 1e-6 ? 2 : 1;
+    const frames = planFrames(d, duration / segments);
+    const segSeconds = (exact ? frames : frames - 1) / nativeFps;
     Object.assign(params, {
       frames,
+      segments,
       fps: nativeFps,
-      duration: (exact ? frames : frames - 1) / nativeFps,
+      duration: segSeconds * segments,
       outFps: OUT_FPS.includes(Number(body.outFps)) ? Number(body.outFps) : d.outFps ?? nativeFps,
     });
   }
@@ -349,11 +406,14 @@ export function cancelJob(job) {
     finish(job, 'cancelled');
   } else if (job.status === 'running' && current?.job === job) {
     finish(job, 'cancelled');
+    // Между сегментами sd-cli не запущен: цикл сам увидит статус cancelled и остановится
     const { proc } = current;
-    proc.kill('SIGTERM');
-    setTimeout(() => {
-      if (proc.exitCode === null && proc.signalCode === null) proc.kill('SIGKILL');
-    }, 10000);
+    if (proc && proc.exitCode === null) {
+      proc.kill('SIGTERM');
+      setTimeout(() => {
+        if (proc.exitCode === null && proc.signalCode === null) proc.kill('SIGKILL');
+      }, 10000);
+    }
   }
   save(true);
 }
@@ -411,7 +471,7 @@ export function modelsInUse() {
 export function shutdownJobs() {
   if (current) {
     finish(current.job, 'failed', 'Контейнер остановлен во время генерации');
-    current.proc.kill('SIGTERM');
+    current.proc?.kill('SIGTERM');
   }
   save(true);
 }

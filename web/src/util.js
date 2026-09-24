@@ -56,7 +56,7 @@ export const STAGES = {
   ],
 };
 
-export const QUALITY_LABEL = { draft: 'Черновик', normal: 'Стандарт', high: 'Высокое' };
+export const QUALITY_LABEL = { draft: 'Черновик', normal: 'Стандарт', high: 'Высокое', extra: 'Экстра' };
 
 export const clipSeconds = (p) => p.duration ?? p.frames / p.fps;
 

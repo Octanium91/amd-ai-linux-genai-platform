@@ -294,3 +294,15 @@ code { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; back
 .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 @media (max-width: 640px) { .grid3 { grid-template-columns: 1fr; } .users-actions { white-space: normal; } }
 .setup-note { font-size: 13px; line-height: 1.5; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line)); }
+
+/* экстра-зона: длительность сверх предела модели и качество «Экстра» */
+.extra-text { color: var(--bad) !important; }
+.extra-badge { margin-left: 6px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #fff; background: var(--bad); padding: 1px 6px; border-radius: 99px; }
+.range-wrap { position: relative; }
+.range-wrap:has(input.has-extra)::after {
+  content: ''; position: absolute; left: calc(var(--base) + 7px); right: 7px; top: 50%; height: 4px; transform: translateY(-50%);
+  background: color-mix(in srgb, var(--bad) 35%, transparent); border-radius: 99px; pointer-events: none;
+}
+input[type="range"].extra { accent-color: var(--bad); }
+.chip.extra { border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); color: var(--bad); }
+.chip.extra.on { background: var(--bad); border-color: var(--bad); color: #fff; }

@@ -8,7 +8,8 @@ export function ParamChips({ p, user }) {
       <span>{p.presetName || p.presetId}</span>
       <span>{p.width}×{p.height}</span>
       {video ? <span>{clipSeconds(p).toFixed(1)} с · {p.outFps ?? p.fps} fps</span> : <span>× {p.count || 1}</span>}
-      <span>{QUALITY_LABEL[p.quality] || `${p.steps} шаг.`}</span>
+      <span className={p.quality === 'extra' ? 'extra-text' : ''}>{QUALITY_LABEL[p.quality] || `${p.steps} шаг.`}</span>
+      {p.segments > 1 && <span className="extra-text">экстра · 2 сегмента</span>}
       <span>CFG {p.cfg}</span>
       <span>seed {p.seed}</span>
       {p.image && <span>🖼 {video ? 'картинка → видео' : 'картинка → картинка'}</span>}
@@ -104,7 +105,8 @@ export function ActiveJob({ job, now, onCancel }) {
       <div className="active-head">
         <div>
           <div className="eyebrow">
-            <span className="dot live" /> {jobKind(job) === 'video' ? 'Генерируется видео' : 'Генерируется изображение'} · {fmtDuration(total)}
+            <span className="dot live" /> {jobKind(job) === 'video' ? 'Генерируется видео' : 'Генерируется изображение'}
+            {pr.segments > 1 ? ` · сегмент ${pr.segment} из ${pr.segments}` : ''} · {fmtDuration(total)}
           </div>
           <div className="prompt">{job.params.prompt}</div>
           <ParamChips p={job.params} user={job.user} />

@@ -8,7 +8,11 @@ const QUALITY = [
   { key: 'draft', label: 'Черновик' },
   { key: 'normal', label: 'Стандарт' },
   { key: 'high', label: 'Высокое' },
+  { key: 'extra', label: 'Экстра', extra: true },
 ];
+
+// «Экстра» — вдвое больше шагов, чем «Высокое» (как на сервере)
+const qualitySteps = (d, q) => (q === 'extra' ? d.quality?.extra ?? (d.quality?.high ? d.quality.high * 2 : null) : d.quality?.[q]);
 const SAMPLERS = ['euler', 'euler_a', 'dpm++2m', 'dpm++2m_sde', 'res_multistep', 'lcm', 'ddim_trailing', 'tcd'];
 
 function fromPreset(p) {
@@ -30,15 +34,19 @@ function fromPreset(p) {
   };
 }
 
-// Та же формула, что на сервере: Wan — 4n+1 кадров, AnimateDiff — ровно duration × fps
+// Та же формула, что на сервере: Wan — 4n+1 кадров, AnimateDiff — ровно duration × fps.
+// Длиннее предела модели (экстра) — два сегмента, второй продолжает последний кадр первого.
 function planFrames(preset, duration) {
   const d = preset?.defaults || {};
   const nativeFps = d.nativeFps ?? 24;
   const maxFrames = d.maxFrames ?? 121;
   const exact = d.frameRule === 'exact';
-  const raw = duration * nativeFps;
+  const base = (exact ? maxFrames : maxFrames - 1) / nativeFps;
+  const extendable = preset?.kind === 'video' && preset?.image !== 'none';
+  const segments = extendable && duration > base + 1e-6 ? 2 : 1;
+  const raw = (duration / segments) * nativeFps;
   const frames = Math.min(maxFrames, Math.max(d.minFrames ?? 5, exact ? Math.round(raw) : Math.round(raw / 4) * 4 + 1));
-  return { frames, nativeFps, maxDuration: (exact ? maxFrames : maxFrames - 1) / nativeFps };
+  return { frames, segments, nativeFps, baseDuration: base, maxDuration: extendable ? base * 2 : base, extendable };
 }
 
 function Num({ label, value, onChange, step = 1, min, max, hint }) {
@@ -58,7 +66,7 @@ function Chips({ items, value, onChange, render = (x) => x }) {
       {items.map((x) => {
         const key = typeof x === 'object' ? x.key : x;
         return (
-          <button type="button" key={key} className={`chip ${value === key ? 'on' : ''}`} onClick={() => onChange(key)}>
+          <button type="button" key={key} className={`chip ${value === key ? 'on' : ''} ${x?.extra ? 'extra' : ''}`} onClick={() => onChange(key)}>
             {render(x)}
           </button>
         );
@@ -151,8 +159,9 @@ export default function GenerateForm({ kind, user, presets, jobs, reuse, queueSi
   const resolutions = preset?.resolutions || FALLBACK_RES;
   const acceptsImage = preset && preset.image !== 'none';
   const plan = planFrames(preset, form.duration);
-  const steps = d.quality?.[form.quality] ?? 20;
-  const eta = estimate(jobs, isVideo ? { ...form, frames: plan.frames, steps } : { ...form, frames: form.count, steps });
+  const steps = qualitySteps(d, form.quality) ?? 20;
+  const extraDuration = isVideo && plan.segments > 1;
+  const eta = estimate(jobs, isVideo ? { ...form, frames: plan.frames * plan.segments, steps } : { ...form, frames: form.count, steps });
   const interpolated = form.outFps !== plan.nativeFps;
 
   const onFile = (f) => {
@@ -249,10 +258,22 @@ export default function GenerateForm({ kind, user, presets, jobs, reuse, queueSi
       {isVideo ? (
         <>
           <label className="field">
-            <span className="field-label field-label-row">Длительность <b>{Number(form.duration).toFixed(1)} с</b></span>
-            <input type="range" min={Math.max(0.5, Math.ceil(((d.minFrames ?? 5) / plan.nativeFps) * 2) / 2)} max={plan.maxDuration} step={0.5}
-              value={Math.min(form.duration, plan.maxDuration)} onChange={(e) => set('duration')(Number(e.target.value))} />
-            <span className="field-hint">До {plan.maxDuration} с за одну генерацию — предел модели. Время растёт пропорционально длительности.</span>
+            <span className="field-label field-label-row">
+              <span>Длительность {extraDuration && <span className="extra-badge">экстра</span>}</span>
+              <b className={extraDuration ? 'extra-text' : ''}>{Number(form.duration).toFixed(1)} с</b>
+            </span>
+            <div className="range-wrap" style={{ '--base': `${((plan.baseDuration - 0.5) / (plan.maxDuration - 0.5 || 1)) * 100}%` }}>
+              <input type="range" className={`${extraDuration ? 'extra' : ''} ${plan.extendable ? 'has-extra' : ''}`}
+                min={Math.max(0.5, Math.ceil(((d.minFrames ?? 5) / plan.nativeFps) * 2) / 2)} max={plan.maxDuration} step={0.5}
+                value={Math.min(form.duration, plan.maxDuration)} onChange={(e) => set('duration')(Number(e.target.value))} />
+            </div>
+            <span className={`field-hint ${extraDuration ? 'extra-text' : ''}`}>
+              {extraDuration
+                ? `Экстра: длиннее предела модели (${plan.baseDuration} с). Видео собирается из 2 сегментов — второй продолжает последний кадр первого. Время ×2, на стыке возможен скачок движения.`
+                : plan.extendable
+                  ? `До ${plan.baseDuration} с — за один проход модели. Дальше, до ${plan.maxDuration} с, — экстра-зона (красная).`
+                  : `До ${plan.maxDuration} с за одну генерацию — предел модели.`}
+            </span>
           </label>
           <div className="field">
             <span className="field-label">Кадров в секунду (FPS)</span>
@@ -275,7 +296,11 @@ export default function GenerateForm({ kind, user, presets, jobs, reuse, queueSi
       <div className="field">
         <span className="field-label">Качество</span>
         <Chips items={QUALITY} value={form.quality} onChange={set('quality')} render={(q) => q.label} />
-        <span className="field-hint">Больше проходов модели ({steps}) — чище картинка, но дольше. Черновик подходит, чтобы проверить идею.</span>
+        <span className={`field-hint ${form.quality === 'extra' ? 'extra-text' : ''}`}>
+          {form.quality === 'extra'
+            ? `Экстра: ${steps} проходов — вдвое больше «Высокого». Время ×2; прирост качества уже небольшой.`
+            : `Больше проходов модели (${steps}) — чище картинка, но дольше. Черновик подходит, чтобы проверить идею.`}
+        </span>
       </div>
 
       <button type="button" className="link" onClick={() => setAdvanced((a) => !a)}>{advanced ? '▾' : '▸'} Дополнительно</button>
@@ -321,7 +346,7 @@ export default function GenerateForm({ kind, user, presets, jobs, reuse, queueSi
         </button>
         <span className="muted small">
           {isVideo
-            ? `${plan.frames} кадр. при ${plan.nativeFps} к/с${interpolated ? ` → ${form.outFps} к/с` : ''} · ${form.width}×${form.height}`
+            ? `${plan.segments > 1 ? `2 сегмента × ${plan.frames}` : plan.frames} кадр. при ${plan.nativeFps} к/с${interpolated ? ` → ${form.outFps} к/с` : ''} · ${form.width}×${form.height}`
             : `${form.count} × ${form.width}×${form.height}`}
           <br />
           {eta ? `≈ ${fmtDuration(eta)} по прошлой генерации` : 'оценка времени появится после первой генерации'}
