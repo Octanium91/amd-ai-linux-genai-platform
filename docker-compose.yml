@@ -1,0 +1,40 @@
+# AMD AI Linux GenAI Platform
+# Запуск: ./scripts/setup.sh (один раз), затем docker compose up -d --build
+name: genai-platform
+
+services:
+  platform:
+    build:
+      context: .
+      args:
+        SD_CPP_REF: ${SD_CPP_REF:-88411ef}
+    image: genai-platform:latest
+    container_name: genai-platform
+    restart: unless-stopped
+    init: true
+    ports:
+      - "${BIND_ADDR:-0.0.0.0}:${PORT:-7860}:7860"
+    # iGPU Radeon через Vulkan: render node + числовые GID групп render/video хоста (пишет setup.sh)
+    devices:
+      - /dev/dri:/dev/dri
+    group_add:
+      - "${RENDER_GID:?запустите scripts/setup.sh — нужен RENDER_GID в .env}"
+      - "${VIDEO_GID:?запустите scripts/setup.sh — нужен VIDEO_GID в .env}"
+    environment:
+      HF_TOKEN: ${HF_TOKEN:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      # Одна DEVICE_LOCAL-куча Vulkan на весь GTT вместо маленького UMA carve-out (512 МБ и т.п.)
+      radv_enable_unified_heap_on_apu: "true"
+      # Только драйвер RADV, без программного llvmpipe
+      VK_DRIVER_FILES: /usr/share/vulkan/icd.d/radeon_icd.json
+    ipc: host
+    ulimits:
+      memlock: -1
+    volumes:
+      # Состояние платформы: история, пользователи, результаты, загруженные картинки
+      - ${DATA_PATH:-./data}:/data
+      # Скачанные модели — отдельный том: не зависят от образа и переживают любые пересборки
+      - ${MODELS_PATH:-./models}:/data/models
+      - ./config/drirc:/etc/drirc:ro
+      - /etc/localtime:/etc/localtime:ro

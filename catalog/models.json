@@ -1,0 +1,122 @@
+[
+  {
+    "id": "realistic-vision-v6",
+    "name": "Realistic Vision 6.0 B1 (SD 1.5, fp16)",
+    "category": "checkpoint",
+    "description": "Фотореалистичная модель на базе Stable Diffusion 1.5. Основа для изображений и AnimateDiff/AnimateLCM.",
+    "file": "checkpoints/Realistic_Vision_V6.0_NV_B1_fp16.safetensors",
+    "url": "https://huggingface.co/SG161222/Realistic_Vision_V6.0_B1_noVAE/resolve/main/Realistic_Vision_V6.0_NV_B1_fp16.safetensors",
+    "size": 2132625894,
+    "license": "CreativeML OpenRAIL-M",
+    "homepage": "https://huggingface.co/SG161222/Realistic_Vision_V6.0_B1_noVAE"
+  },
+  {
+    "id": "sd-vae-ft-mse",
+    "name": "SD VAE ft-MSE 840000",
+    "category": "vae",
+    "description": "Улучшенный VAE для SD 1.5 (Realistic Vision поставляется без VAE).",
+    "file": "vae/vae-ft-mse-840000-ema-pruned.safetensors",
+    "url": "https://huggingface.co/stabilityai/sd-vae-ft-mse-original/resolve/main/vae-ft-mse-840000-ema-pruned.safetensors",
+    "size": 334641190,
+    "license": "MIT",
+    "homepage": "https://huggingface.co/stabilityai/sd-vae-ft-mse-original"
+  },
+  {
+    "id": "animatelcm-mm",
+    "name": "AnimateLCM — модуль движения (SD 1.5)",
+    "category": "motion",
+    "description": "Ускоренный модуль движения AnimateDiff: 4–8 шагов при CFG ≈ 1. Скачивается в формате diffusers и конвертируется платформой в формат stable-diffusion.cpp.",
+    "file": "animatediff/AnimateLCM_sd15_t2v.safetensors",
+    "url": "https://huggingface.co/wangfuyun/AnimateLCM/resolve/main/diffusion_pytorch_model.fp16.safetensors",
+    "size": 907702280,
+    "postprocess": "animatediff-from-diffusers",
+    "license": "не указана в карточке модели",
+    "homepage": "https://huggingface.co/wangfuyun/AnimateLCM"
+  },
+  {
+    "id": "animatelcm-lora",
+    "name": "AnimateLCM — LoRA",
+    "category": "lora",
+    "description": "Парная LoRA для модуля AnimateLCM (вес 0.8).",
+    "file": "loras/AnimateLCM_sd15_t2v_lora.safetensors",
+    "url": "https://huggingface.co/wangfuyun/AnimateLCM/resolve/main/AnimateLCM_sd15_t2v_lora.safetensors",
+    "size": 134621556,
+    "license": "не указана в карточке модели",
+    "homepage": "https://huggingface.co/wangfuyun/AnimateLCM"
+  },
+  {
+    "id": "animatediff-v3-mm",
+    "name": "AnimateDiff v3 — модуль движения (SD 1.5)",
+    "category": "motion",
+    "description": "Классический модуль AnimateDiff v3 (20+ шагов, CFG ≈ 8): детальнее, но в разы медленнее AnimateLCM.",
+    "file": "animatediff/mm_sd15_v3.safetensors",
+    "url": "https://huggingface.co/conrevo/AnimateDiff-A1111/resolve/main/motion_module/mm_sd15_v3.safetensors",
+    "size": 836618008,
+    "license": "Apache-2.0 (оригинал guoyww/animatediff)",
+    "homepage": "https://huggingface.co/guoyww/animatediff"
+  },
+  {
+    "id": "animatediff-v3-adapter",
+    "name": "AnimateDiff v3 — Domain Adapter LoRA",
+    "category": "lora",
+    "description": "Повышает резкость базовой модели под модуль движения v3.",
+    "file": "loras/v3_sd15_adapter.ckpt",
+    "url": "https://huggingface.co/guoyww/animatediff/resolve/main/v3_sd15_adapter.ckpt",
+    "size": 102134097,
+    "license": "Apache-2.0",
+    "homepage": "https://huggingface.co/guoyww/animatediff"
+  },
+  {
+    "id": "wan22-ti2v-5b-q8",
+    "name": "Wan 2.2 TI2V 5B (GGUF Q8_0)",
+    "category": "diffusion",
+    "description": "Видеомодель «текст/картинка → видео» с настоящим движением. На Radeon 890M — часы на ролик.",
+    "file": "diffusion_models/Wan2.2-TI2V-5B-Q8_0.gguf",
+    "url": "https://huggingface.co/QuantStack/Wan2.2-TI2V-5B-GGUF/resolve/main/Wan2.2-TI2V-5B-Q8_0.gguf",
+    "size": 5400179040,
+    "license": "Apache-2.0",
+    "homepage": "https://huggingface.co/Wan-AI/Wan2.2-TI2V-5B"
+  },
+  {
+    "id": "wan22-vae",
+    "name": "Wan 2.2 VAE",
+    "category": "vae",
+    "file": "vae/wan2.2_vae.safetensors",
+    "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/vae/wan2.2_vae.safetensors",
+    "size": 1409400960,
+    "license": "Apache-2.0",
+    "homepage": "https://huggingface.co/Wan-AI/Wan2.2-TI2V-5B"
+  },
+  {
+    "id": "umt5-xxl-q8",
+    "name": "UMT5-XXL encoder (GGUF Q8_0)",
+    "category": "text_encoder",
+    "description": "Текстовый энкодер для Wan 2.x.",
+    "file": "text_encoders/umt5-xxl-encoder-Q8_0.gguf",
+    "url": "https://huggingface.co/city96/umt5-xxl-encoder-gguf/resolve/main/umt5-xxl-encoder-Q8_0.gguf",
+    "size": 6043068256,
+    "license": "Apache-2.0",
+    "homepage": "https://huggingface.co/city96/umt5-xxl-encoder-gguf"
+  },
+  {
+    "id": "wan21-t2v-1.3b",
+    "name": "Wan 2.1 T2V 1.3B (fp16)",
+    "category": "diffusion",
+    "description": "Лёгкая видеомодель Wan 2.1, обучена на 480p.",
+    "file": "diffusion_models/wan2.1_t2v_1.3B_fp16.safetensors",
+    "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.1_t2v_1.3B_fp16.safetensors",
+    "size": 2838303560,
+    "license": "Apache-2.0",
+    "homepage": "https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B"
+  },
+  {
+    "id": "wan21-vae",
+    "name": "Wan 2.1 VAE",
+    "category": "vae",
+    "file": "vae/wan_2.1_vae.safetensors",
+    "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors",
+    "size": 253815318,
+    "license": "Apache-2.0",
+    "homepage": "https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B"
+  }
+]

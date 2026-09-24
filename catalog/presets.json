@@ -1,0 +1,105 @@
+[
+  {
+    "id": "img-realistic-vision",
+    "kind": "image",
+    "name": "Realistic Vision 6 · фото",
+    "description": "Фотореалистичные изображения на SD 1.5. 512×768 за ~1 минуту на Radeon 890M.",
+    "image": "optional",
+    "models": { "model": "realistic-vision-v6", "vae": "sd-vae-ft-mse" },
+    "defaults": {
+      "width": 512, "height": 768, "cfg": 5.5, "sampler": "dpm++2m",
+      "negative": "worst quality, low quality, blurry, deformed, disfigured, bad anatomy, watermark, text, logo",
+      "quality": { "draft": 12, "normal": 25, "high": 40 }
+    },
+    "resolutions": [[512, 512], [512, 768], [768, 512], [640, 896], [896, 640]],
+    "preview": "proj",
+    "imageArgs": ["--strength", "0.6"],
+    "extraArgs": ["--scheduler", "karras", "--diffusion-fa"]
+  },
+  {
+    "id": "vid-animatelcm",
+    "kind": "video",
+    "name": "AnimateLCM · Realistic Vision (быстро)",
+    "description": "Самый быстрый видеорежим: 2 с за ~2.5 минуты на Radeon 890M. CFG 1 — быстрее и мягче; CFG 1.5 — контрастнее и больше движения (~5 мин).",
+    "image": "optional",
+    "models": {
+      "model": "realistic-vision-v6",
+      "vae": "sd-vae-ft-mse",
+      "motion_module": "animatelcm-mm",
+      "lora": "animatelcm-lora"
+    },
+    "loraDir": "loras",
+    "promptSuffix": ", <lora:AnimateLCM_sd15_t2v_lora:0.8>",
+    "defaults": {
+      "width": 512, "height": 512, "cfg": 1.0, "sampler": "lcm",
+      "negative": "worst quality, low quality, blurry, deformed, disfigured, bad anatomy, watermark, text, logo",
+      "nativeFps": 8, "outFps": 24, "frameRule": "exact", "minFrames": 8, "maxFrames": 32, "duration": 2,
+      "quality": { "draft": 4, "normal": 6, "high": 8 }
+    },
+    "resolutions": [[512, 512], [768, 512], [512, 768]],
+    "preview": "proj",
+    "imageArgs": ["--strength", "0.75"],
+    "extraArgs": ["--scheduler", "discrete", "--diffusion-fa", "--offload-to-cpu"]
+  },
+  {
+    "id": "vid-animatediff-v3",
+    "kind": "video",
+    "name": "AnimateDiff v3 · Realistic Vision (детально)",
+    "description": "Классический AnimateDiff v3 с Domain Adapter: детальнее AnimateLCM, но ~16 минут на 2 с на Radeon 890M.",
+    "image": "optional",
+    "models": {
+      "model": "realistic-vision-v6",
+      "vae": "sd-vae-ft-mse",
+      "motion_module": "animatediff-v3-mm",
+      "lora": "animatediff-v3-adapter"
+    },
+    "loraDir": "loras",
+    "promptSuffix": ", <lora:v3_sd15_adapter:1.0>",
+    "defaults": {
+      "width": 512, "height": 512, "cfg": 8.0, "sampler": "euler",
+      "negative": "worst quality, low quality, blurry, deformed, disfigured, bad anatomy, watermark, text, logo",
+      "nativeFps": 8, "outFps": 24, "frameRule": "exact", "minFrames": 8, "maxFrames": 32, "duration": 2,
+      "quality": { "draft": 12, "normal": 20, "high": 30 }
+    },
+    "resolutions": [[512, 512], [768, 512], [512, 768]],
+    "preview": "proj",
+    "imageArgs": ["--strength", "0.75"],
+    "extraArgs": ["--scheduler", "discrete", "--diffusion-fa", "--offload-to-cpu"]
+  },
+  {
+    "id": "vid-wan22-5b",
+    "kind": "video",
+    "name": "Wan 2.2 TI2V 5B (настоящее движение, медленно)",
+    "description": "Полноценная видеомодель: связное движение, текст и картинка → видео. На Radeon 890M — часы на ролик; разумна на Strix Halo.",
+    "image": "optional",
+    "minGtt": 22,
+    "models": { "diffusion": "wan22-ti2v-5b-q8", "vae": "wan22-vae", "t5xxl": "umt5-xxl-q8" },
+    "defaults": {
+      "width": 832, "height": 480, "cfg": 5.0, "flowShift": 3.0, "sampler": "euler",
+      "negative": "blurry, low quality, distorted, deformed, static, overexposed, watermark, text, subtitles",
+      "nativeFps": 24, "maxFrames": 121, "duration": 2,
+      "quality": { "draft": 12, "normal": 25, "high": 40 }
+    },
+    "resolutions": [[832, 480], [480, 832], [640, 640], [1280, 704], [704, 1280]],
+    "preview": "proj",
+    "extraArgs": ["--diffusion-fa", "--vae-tiling", "--offload-to-cpu"]
+  },
+  {
+    "id": "vid-wan21-1.3b",
+    "kind": "video",
+    "name": "Wan 2.1 T2V 1.3B (экспериментально)",
+    "description": "Лёгкая Wan 2.1, только текст → видео. На этой платформе ещё не проверялась.",
+    "experimental": true,
+    "image": "none",
+    "models": { "diffusion": "wan21-t2v-1.3b", "vae": "wan21-vae", "t5xxl": "umt5-xxl-q8" },
+    "defaults": {
+      "width": 832, "height": 480, "cfg": 6.0, "flowShift": 3.0, "sampler": "euler",
+      "negative": "blurry, low quality, distorted, deformed, static, overexposed, watermark, text, subtitles",
+      "nativeFps": 16, "maxFrames": 81, "duration": 2,
+      "quality": { "draft": 12, "normal": 20, "high": 30 }
+    },
+    "resolutions": [[832, 480], [480, 832], [640, 640]],
+    "preview": "proj",
+    "extraArgs": ["--diffusion-fa", "--vae-tiling", "--offload-to-cpu"]
+  }
+]
