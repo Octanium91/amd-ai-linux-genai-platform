@@ -84,18 +84,28 @@ function stageDuration(job, key) {
   return (st.endedAt - st.startedAt) / 1000;
 }
 
-// Rough time estimate from the latest successful job of the same mode:
-// sampling ~ steps × pixels × frames, the rest ~ pixels × frames.
-export function estimate(jobs, params) {
-  const ref = jobs
+// Scales a measured run to other parameters: sampling ~ steps × pixels × frames × CFG passes
+// (CFG > 1 adds a negative pass), decoding ~ pixels × frames, loading stays the same.
+const vol = (p) => p.width * p.height * (p.frames || p.count || 1) * (p.segments || 1);
+const passes = (p) => (p.cfg > 1 ? 2 : 1);
+const scaleRun = (r, p, gpuFactor = 1) =>
+  ((r.samplingSec * p.steps * vol(p) * passes(p)) / (r.steps * vol(r) * passes(r)) + (r.decodeSec * vol(p)) / vol(r)) * gpuFactor +
+  r.otherSec;
+
+// Time estimate: from the latest successful job of the same mode on this machine; before the first
+// one, from the mode's reference measurement scaled by the relative power of this GPU.
+export function estimate(jobs, params, preset, gpuPower) {
+  const job = jobs
     .filter((j) => j.status === 'done' && j.params.presetId === params.presetId && j.progress)
     .sort((a, b) => b.finishedAt - a.finishedAt)[0];
-  if (!ref) return null;
-  const vol = (p) => p.width * p.height * (p.frames || p.count || 1) * (p.segments || 1);
-  const samp = stageDuration(ref, 'sampling');
-  if (!samp) return null;
-  const dec = stageDuration(ref, 'decoding') || 0;
-  const r = ref.params;
-  const other = Math.max(0, (ref.durationSec || 0) - samp - dec);
-  return (samp * (params.steps * vol(params))) / (r.steps * vol(r)) + (dec * vol(params)) / vol(r) + other;
+  const samplingSec = job && stageDuration(job, 'sampling');
+  if (samplingSec) {
+    const decodeSec = stageDuration(job, 'decoding') || 0;
+    const otherSec = Math.max(0, (job.durationSec || 0) - samplingSec - decodeSec);
+    return { sec: scaleRun({ ...job.params, samplingSec, decodeSec, otherSec }, params), source: 'history' };
+  }
+  if (preset?.reference && gpuPower?.score) {
+    return { sec: scaleRun(preset.reference, params, 1 / gpuPower.score), source: 'reference', gpu: gpuPower.name };
+  }
+  return null;
 }

@@ -312,5 +312,6 @@ export default {
   "{time} left": "осталось {time}",
   "−1 gives a new variant every time. The same seed with the same settings gives the same result: handy for changing one detail and comparing.": "−1 — каждый раз новый вариант. Тот же seed с теми же настройками даёт тот же результат: удобно, чтобы менять одну деталь и сравнивать.",
   "≈ {time} based on the previous generation": "≈ {time} по прошлой генерации",
+  "≈ {time}, a rough estimate for the {gpu}": "≈ {time}, приблизительная оценка для {gpu}",
   "≈ {time} left": "осталось ≈ {time}",
 };

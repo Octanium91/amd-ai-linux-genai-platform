@@ -44,3 +44,5 @@ The main levers are the number of steps and CFG. That is why AnimateLCM (6 steps
 ## Other machines
 
 On a Ryzen AI MAX+ 395 (Radeon 8060S, 40 CU, 256-bit memory) expect a multiple speed-up: 2.5× the CUs and roughly twice the memory bandwidth. If you run another machine from the lineup, please contribute measurements to this table.
+
+The generation form scales the measurements above to the local GPU by compute units × clock until the machine has its own history, see [models.md](models.md). Memory bandwidth is not part of that formula, so on Strix Halo the real speed-up may be larger than the estimate.

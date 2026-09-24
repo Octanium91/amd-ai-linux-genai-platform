@@ -51,7 +51,37 @@ function platformFamily(gpu = '', cpu = '') {
   return null;
 }
 
-const info = { cpu: cpuModel(), gpu: null, driver: null, npu: npuInfo(), family: null };
+// Relative GPU power for time estimates: compute units × maximum shader clock, compared with the
+// reference machine the `reference` timings in catalog/presets.json were measured on (Radeon 890M).
+// Neither Vulkan nor sysfs reports the CU count, but on Ryzen AI the CPU model names the iGPU
+// ("… w/ Radeon 890M"), so the count comes from the lineup table.
+const IGPU_CU = { '890M': 16, '880M': 12, '860M': 8, '840M': 4, '8060S': 40, '8050S': 32, '8040S': 16 };
+const REFERENCE_GPU = { name: 'Radeon 890M', cu: 16, clockMhz: 2900 };
+
+function maxShaderClock() {
+  try {
+    const mhz = [...fs.readFileSync(`${gpuDir}/pp_dpm_sclk`, 'utf8').matchAll(/(\d+)\s*Mhz/gi)].map((m) => Number(m[1]));
+    return mhz.length ? Math.max(...mhz) : null;
+  } catch {
+    return null;
+  }
+}
+
+function gpuPower(gpu = '', cpu = '') {
+  const name = `${gpu} ${cpu}`.match(/Radeon\s+(\d{3,4}[MS])\b/i)?.[1]?.toUpperCase();
+  const cu = name ? IGPU_CU[name] : null;
+  if (!cu) return null;
+  const clockMhz = maxShaderClock() || REFERENCE_GPU.clockMhz;
+  return {
+    name: `Radeon ${name}`,
+    cu,
+    clockMhz,
+    score: (cu * clockMhz) / (REFERENCE_GPU.cu * REFERENCE_GPU.clockMhz),
+    reference: REFERENCE_GPU.name,
+  };
+}
+
+const info = { cpu: cpuModel(), gpu: null, driver: null, npu: npuInfo(), family: null, gpuPower: null };
 
 // Take the GPU name from Vulkan itself: it is exactly the device sd.cpp will run on
 execFile('vulkaninfo', ['--summary'], { timeout: 20000 }, (err, stdout = '') => {
@@ -61,6 +91,7 @@ execFile('vulkaninfo', ['--summary'], { timeout: 20000 }, (err, stdout = '') => 
   info.gpu = i >= 0 ? devs[i] : devs[0] || null;
   info.driver = i >= 0 ? drivers[i] : null;
   info.family = platformFamily(info.gpu, info.cpu);
+  if (info.gpu && !/llvmpipe/i.test(info.gpu)) info.gpuPower = gpuPower(info.gpu, info.cpu);
   if (!info.gpu || /llvmpipe/i.test(info.gpu)) {
     console.warn('[system] Vulkan sees no GPU (llvmpipe only): check the /dev/dri passthrough and the render/video groups');
   } else {

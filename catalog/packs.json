@@ -25,7 +25,7 @@
   {
     "id": "video-animatelcm",
     "name": "Video · AnimateLCM — fast",
-    "description": "The recommended video mode: a 2 s clip in 2–5 minutes on a Radeon 890M. The motion module is converted automatically.",
+    "description": "The recommended video mode, the fastest one. The motion module is converted automatically.",
     "recommended": true,
     "models": [
       "animatelcm-mm",
@@ -40,18 +40,18 @@
     "i18n": {
       "uk": {
         "name": "Відео · AnimateLCM — швидко",
-        "description": "Рекомендований відеорежим: ролик 2 с за 2–5 хвилин на Radeon 890M. Модуль руху конвертується автоматично."
+        "description": "Рекомендований відеорежим, найшвидший. Модуль руху конвертується автоматично."
       },
       "ru": {
         "name": "Видео · AnimateLCM — быстро",
-        "description": "Рекомендуемый видеорежим: ролик 2 с за 2–5 минут на Radeon 890M. Модуль движения конвертируется платформой автоматически."
+        "description": "Рекомендуемый видеорежим, самый быстрый. Модуль движения конвертируется платформой автоматически."
       }
     }
   },
   {
     "id": "video-animatediff-v3",
     "name": "Video · AnimateDiff v3 — detailed",
-    "description": "Classic AnimateDiff: more detailed than AnimateLCM but about 6× slower (~16 minutes per 2 s on a Radeon 890M).",
+    "description": "Classic AnimateDiff: more detailed than AnimateLCM but about 6× slower.",
     "models": [
       "animatediff-v3-mm",
       "animatediff-v3-adapter"
@@ -65,18 +65,18 @@
     "i18n": {
       "uk": {
         "name": "Відео · AnimateDiff v3 — детально",
-        "description": "Класичний AnimateDiff: детальніший за AnimateLCM, але приблизно в 6 разів повільніший (~16 хвилин на 2 с на Radeon 890M)."
+        "description": "Класичний AnimateDiff: детальніший за AnimateLCM, але приблизно в 6 разів повільніший."
       },
       "ru": {
         "name": "Видео · AnimateDiff v3 — детально",
-        "description": "Классический AnimateDiff: детальнее AnimateLCM, но примерно в 6 раз медленнее (~16 минут на 2 с на Radeon 890M)."
+        "description": "Классический AnimateDiff: детальнее AnimateLCM, но примерно в 6 раз медленнее."
       }
     }
   },
   {
     "id": "video-wan22",
     "name": "Video · Wan 2.2 TI2V 5B — coherent motion",
-    "description": "A full video model with real motion. Practical on Strix Halo (Radeon 8060S); hours per clip on Strix Point. Needs ~22 GB of GTT.",
+    "description": "A full video model with real motion, more than 10× slower than AnimateLCM; best on Strix Halo (Radeon 8060S). Needs ~22 GB of GTT.",
     "recommendedFamilies": [
       "Strix Halo"
     ],
@@ -91,11 +91,11 @@
     "i18n": {
       "uk": {
         "name": "Відео · Wan 2.2 TI2V 5B — зв'язний рух",
-        "description": "Повноцінна відеомодель зі справжнім рухом. На Strix Halo (Radeon 8060S) — робочий варіант, на Strix Point — години на ролик. Потрібно ~22 ГБ GTT."
+        "description": "Повноцінна відеомодель зі справжнім рухом, у понад 10 разів повільніша за AnimateLCM; найкраще — на Strix Halo (Radeon 8060S). Потрібно ~22 ГБ GTT."
       },
       "ru": {
         "name": "Видео · Wan 2.2 TI2V 5B — связное движение",
-        "description": "Полноценная видеомодель с настоящим движением. На Strix Halo (Radeon 8060S) — рабочий вариант, на Strix Point — часы на ролик. Нужно ~22 ГБ GTT."
+        "description": "Полноценная видеомодель с настоящим движением, более чем в 10 раз медленнее AnimateLCM; лучше всего — на Strix Halo (Radeon 8060S). Нужно ~22 ГБ GTT."
       }
     }
   },

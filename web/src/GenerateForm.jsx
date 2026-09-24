@@ -170,7 +170,7 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
   const plan = planFrames(preset, form.duration);
   const steps = qualitySteps(d, form.quality) ?? 20;
   const extraDuration = isVideo && plan.segments > 1;
-  const eta = estimate(jobs, isVideo ? { ...form, frames: plan.frames * plan.segments, steps } : { ...form, frames: form.count, steps });
+  const eta = estimate(jobs, isVideo ? { ...form, frames: plan.frames * plan.segments, steps } : { ...form, frames: form.count, steps }, preset, system?.gpuPower);
   const interpolated = form.outFps !== plan.nativeFps;
 
   const onFile = (f) => {
@@ -373,7 +373,11 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
         <span className="muted small">
           {summary}
           <br />
-          {eta ? t('≈ {time} based on the previous generation', { time: fmtDuration(eta) }) : t('A time estimate appears after the first generation')}
+          {eta?.source === 'history'
+            ? t('≈ {time} based on the previous generation', { time: fmtDuration(eta.sec) })
+            : eta
+              ? t('≈ {time}, a rough estimate for the {gpu}', { time: fmtDuration(eta.sec), gpu: eta.gpu })
+              : t('A time estimate appears after the first generation')}
         </span>
       </div>
     </form>

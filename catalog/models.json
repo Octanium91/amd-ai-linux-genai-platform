@@ -118,7 +118,7 @@
     "id": "wan22-ti2v-5b-q8",
     "name": "Wan 2.2 TI2V 5B (GGUF Q8_0)",
     "category": "diffusion",
-    "description": "Text/image-to-video model with real motion. Hours per clip on a Radeon 890M.",
+    "description": "Text/image-to-video model with real motion; much heavier than AnimateDiff.",
     "file": "diffusion_models/Wan2.2-TI2V-5B-Q8_0.gguf",
     "url": "https://huggingface.co/QuantStack/Wan2.2-TI2V-5B-GGUF/resolve/main/Wan2.2-TI2V-5B-Q8_0.gguf",
     "size": 5400179040,
@@ -126,10 +126,10 @@
     "homepage": "https://huggingface.co/Wan-AI/Wan2.2-TI2V-5B",
     "i18n": {
       "uk": {
-        "description": "Відеомодель «текст/картинка → відео» зі справжнім рухом. На Radeon 890M — години на ролик."
+        "description": "Відеомодель «текст/картинка → відео» зі справжнім рухом; значно важча за AnimateDiff."
       },
       "ru": {
-        "description": "Видеомодель «текст/картинка → видео» с настоящим движением. На Radeon 890M — часы на ролик."
+        "description": "Видеомодель «текст/картинка → видео» с настоящим движением; значительно тяжелее AnimateDiff."
       }
     }
   },
