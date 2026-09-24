@@ -5,7 +5,7 @@ import { ActiveJob, QueueList } from './Jobs.jsx';
 import Gallery from './Gallery.jsx';
 
 // Студия одного типа контента. GPU общий, поэтому текущая генерация видна в любом разделе.
-export default function Studio({ kind, user, jobs, presets, now, refresh, reloadPresets, goModels }) {
+export default function Studio({ kind, user, jobs, presets, templates, now, refresh, reloadPresets, goModels }) {
   const [reuse, setReuse] = useState(null);
   const running = jobs.find((j) => j.status === 'running');
   const queuedAll = jobs.filter((j) => j.status === 'queued').sort((a, b) => a.createdAt - b.createdAt);
@@ -37,6 +37,7 @@ export default function Studio({ kind, user, jobs, presets, now, refresh, reload
           kind={kind}
           user={user}
           presets={presets}
+          templates={templates}
           jobs={jobs}
           reuse={reuse}
           queueSize={queuedAll.length + (running ? 1 : 0)}

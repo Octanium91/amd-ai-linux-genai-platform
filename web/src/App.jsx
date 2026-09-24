@@ -98,6 +98,7 @@ export default function App() {
   const [jobs, setJobs] = useState([]);
   const [system, setSystem] = useState(null);
   const [presets, setPresets] = useState([]);
+  const [templates, setTemplates] = useState(null);
   const [online, setOnline] = useState(true);
   const [now, setNow] = useState(Date.now());
   const skew = useRef(0);
@@ -127,6 +128,7 @@ export default function App() {
     if (!user) return;
     refresh();
     loadPresets();
+    api('/api/templates').then(setTemplates).catch(() => setTemplates({}));
     const a = setInterval(refresh, 2000);
     const b = setInterval(loadPresets, 15000);
     const c = setInterval(() => setNow(Date.now()), 1000);
@@ -173,6 +175,7 @@ export default function App() {
           user={user}
           jobs={jobs}
           presets={presets.filter((p) => (p.kind || 'video') === tab)}
+          templates={templates ? templates[tab] || [] : undefined}
           now={now + skew.current}
           refresh={refresh}
           reloadPresets={loadPresets}

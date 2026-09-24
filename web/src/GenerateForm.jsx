@@ -109,7 +109,7 @@ function MissingModels({ preset, user, goModels, reloadPresets }) {
   );
 }
 
-export default function GenerateForm({ kind, user, presets, jobs, reuse, queueSize, onCreated, reloadPresets, goModels }) {
+export default function GenerateForm({ kind, user, presets, templates, jobs, reuse, queueSize, onCreated, reloadPresets, goModels }) {
   const [form, setForm] = useState(null);
   const [image, setImage] = useState(null); // File
   const [imageRef, setImageRef] = useState(null); // имя уже загруженного файла
@@ -122,9 +122,17 @@ export default function GenerateForm({ kind, user, presets, jobs, reuse, queueSi
 
   const preset = presets.find((p) => p.id === form?.presetId);
 
+  // Стартовое заполнение: случайный скрытый шаблон (предпочтительно для режима, модели которого уже скачаны)
   useEffect(() => {
-    if (!form && presets.length) setForm(fromPreset(presets.find((p) => p.available) || presets[0]));
-  }, [presets, form]);
+    if (form || !presets.length || templates === undefined) return;
+    const usable = (templates || []).filter((t) => presets.some((p) => p.id === t.presetId));
+    const ready = usable.filter((t) => presets.find((p) => p.id === t.presetId)?.available);
+    const pool = ready.length ? ready : usable;
+    const t = pool[Math.floor(Math.random() * pool.length)];
+    if (!t) return setForm(fromPreset(presets.find((p) => p.available) || presets[0]));
+    const { kind: _k, category, presetId, ...params } = t;
+    setForm({ ...fromPreset(presets.find((p) => p.id === presetId)), ...params, seed: -1 });
+  }, [presets, templates, form]);
 
   useEffect(() => {
     if (!reuse || (reuse.kind || 'video') !== kind) return;

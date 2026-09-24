@@ -39,3 +39,25 @@ export function presetsWithAvailability() {
     };
   });
 }
+
+// Скрытые стартовые шаблоны (catalog/templates.json): промпт + проверенные параметры.
+// Интерфейс подставляет случайный шаблон при открытии; выбрать шаблон вручную нельзя.
+export function loadTemplates() {
+  const t = readJson(path.join(config.catalogDir, 'templates.json'), {});
+  const neg = t.negatives || {};
+  const out = {};
+  for (const kind of ['image', 'video']) {
+    const d = t.defaults?.[kind] || {};
+    out[kind] = (t[kind] || []).map(({ negative, preset, ...x }) => {
+      const n = negative ?? d.negative;
+      return {
+        ...d,
+        ...x,
+        kind,
+        presetId: preset || d.preset,
+        negative: neg[n] ?? n ?? '',
+      };
+    }).map(({ preset, ...x }) => x);
+  }
+  return out;
+}

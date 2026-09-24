@@ -12,7 +12,7 @@ import {
 import {
   cancelDownload, deleteModel, diskUsage, enqueueDownloads, loadCatalog, modelStatus,
 } from './models.js';
-import { loadPresets, presetsWithAvailability } from './presets.js';
+import { loadPresets, loadTemplates, presetsWithAvailability } from './presets.js';
 import { systemInfo } from './system.js';
 
 const { dirs } = config;
@@ -55,6 +55,7 @@ api.get('/state', (req, res) => {
 });
 
 api.get('/presets', (req, res) => res.json(presetsWithAvailability()));
+api.get('/templates', (req, res) => res.json(loadTemplates()));
 
 api.post('/jobs', upload.single('image'), (req, res) => {
   const b = req.body || {};
