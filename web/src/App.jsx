@@ -66,11 +66,20 @@ function SystemBar({ system, online }) {
         <span className="sys-label">CPU</span><span className="sys-val">{system.cpuBusy ?? '—'}%</span>
       </div>
       <div className="sys-item" title={t('iGPU load')}><span className="sys-label">GPU</span><span className="sys-val">{system.gpuBusy ?? '—'}%</span></div>
-      <div className="sys-item" title={t('GPU memory (GTT), allocated from the shared system RAM')}>
-        <span className="sys-label">GTT</span>
-        <Meter value={gttPct} />
-        <span className="sys-val">{fmtBytes(system.gttUsed)} / {fmtBytes(system.gttTotal)}</span>
-      </div>
+      {system.vramTotal > 0 && (
+        <div className="sys-item" title={t('Dedicated GPU memory (VRAM): the UMA carve-out reserved in the BIOS')}>
+          <span className="sys-label">VRAM</span>
+          <Meter value={pct(system.vramUsed, system.vramTotal)} />
+          <span className="sys-val">{fmtBytes(system.vramUsed)} / {fmtBytes(system.vramTotal)}</span>
+        </div>
+      )}
+      {system.gttTotal > 0 && (
+        <div className="sys-item" title={t('GPU memory (GTT), allocated from the shared system RAM')}>
+          <span className="sys-label">GTT</span>
+          <Meter value={gttPct} />
+          <span className="sys-val">{fmtBytes(system.gttUsed)} / {fmtBytes(system.gttTotal)}</span>
+        </div>
+      )}
       <div className="sys-item" title={t('RAM: {used} used of {total}', { used: fmtBytes(system.memTotal - system.memAvailable), total: fmtBytes(system.memTotal) })}>
         <span className="sys-label">RAM</span>
         <Meter value={ramPct} />

@@ -168,6 +168,7 @@ export function systemInfo() {
   if (gpuDir) {
     s.gttUsed = readNum(`${gpuDir}/mem_info_gtt_used`);
     s.gttTotal = readNum(`${gpuDir}/mem_info_gtt_total`);
+    s.vramUsed = readNum(`${gpuDir}/mem_info_vram_used`);
     s.vramTotal = readNum(`${gpuDir}/mem_info_vram_total`);
     s.gpuBusy = readNum(`${gpuDir}/gpu_busy_percent`);
   }

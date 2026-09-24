@@ -105,6 +105,7 @@ export default {
   "GPU is idle": "GPU вільний",
   "GPU memory (GTT)": "Пам'ять GPU (GTT)",
   "GPU memory (GTT), allocated from the shared system RAM": "Пам'ять GPU (GTT) — виділяється із загальної оперативної пам'яті",
+  "Dedicated GPU memory (VRAM): the UMA carve-out reserved in the BIOS": "Виділена пам'ять GPU (VRAM): UMA-область, зарезервована в BIOS",
   "Hardware:": "Залізо:",
   "Height": "Висота",
   "High": "Висока",
