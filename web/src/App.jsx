@@ -23,18 +23,46 @@ function readTab() {
 function SystemBar({ system, online }) {
   if (!online) return <div className="sys"><span className="dot bad" /> нет связи с сервером</div>;
   if (!system) return null;
-  const gttPct = system.gttTotal ? (system.gttUsed / system.gttTotal) * 100 : 0;
+  const pct = (a, b) => (b ? (a / b) * 100 : 0);
+  const gttPct = pct(system.gttUsed, system.gttTotal);
+  const ramPct = pct(system.memTotal - system.memAvailable, system.memTotal);
+  const st = system.storage || {};
+  const disk = st.models || st.data;
+  const diskPct = disk ? pct(disk.total - disk.free, disk.total) : 0;
+  const diskTitle = [
+    st.models && `Диск с моделями: свободно ${fmtBytes(st.models.free)} из ${fmtBytes(st.models.total)}; модели занимают ${fmtBytes(st.models.used)}`,
+    st.data && (st.data.sameDisk
+      ? `Результаты на том же диске: ${fmtBytes(st.data.used)}`
+      : `Диск с результатами: свободно ${fmtBytes(st.data.free)} из ${fmtBytes(st.data.total)}; результаты занимают ${fmtBytes(st.data.used)}`),
+  ].filter(Boolean).join('\n');
   const hw = [system.family, system.gpu?.replace(/\s*\(RADV.*\)/, '')].filter(Boolean).join(' · ');
+  const Meter = ({ value }) => (
+    <div className="meter"><div style={{ width: value + '%' }} className={value > 90 ? 'hot' : ''} /></div>
+  );
   return (
     <div className="sys">
       {hw && <div className="sys-item sys-hw" title={`${system.cpu || ''}\n${system.driver || ''}`}>{hw}</div>}
-      <div className="sys-item" title="Загрузка GPU"><span className="sys-label">GPU</span><span className="sys-val">{system.gpuBusy ?? '—'}%</span></div>
-      <div className="sys-item sys-gtt" title="Память GPU (GTT) из общей оперативной памяти">
+      <div className="sys-item" title={`Загрузка процессора${system.cpu ? `\n${system.cpu}` : ''}${system.threads ? `, ${system.threads} потоков` : ''}`}>
+        <span className="sys-label">CPU</span><span className="sys-val">{system.cpuBusy ?? '—'}%</span>
+      </div>
+      <div className="sys-item" title="Загрузка iGPU"><span className="sys-label">GPU</span><span className="sys-val">{system.gpuBusy ?? '—'}%</span></div>
+      <div className="sys-item" title="Память GPU (GTT) — выделяется из общей оперативной памяти">
         <span className="sys-label">GTT</span>
-        <div className="meter"><div style={{ width: gttPct + '%' }} className={gttPct > 90 ? 'hot' : ''} /></div>
+        <Meter value={gttPct} />
         <span className="sys-val">{fmtBytes(system.gttUsed)} / {fmtBytes(system.gttTotal)}</span>
       </div>
-      <div className="sys-item" title="Свободная оперативная память"><span className="sys-label">RAM своб.</span><span className="sys-val">{fmtBytes(system.memAvailable)}</span></div>
+      <div className="sys-item" title={`Оперативная память: занято ${fmtBytes(system.memTotal - system.memAvailable)} из ${fmtBytes(system.memTotal)}`}>
+        <span className="sys-label">RAM</span>
+        <Meter value={ramPct} />
+        <span className="sys-val">{fmtBytes(system.memAvailable)} своб.</span>
+      </div>
+      {disk && (
+        <div className="sys-item" title={diskTitle}>
+          <span className="sys-label">Диск</span>
+          <Meter value={diskPct} />
+          <span className="sys-val">{fmtBytes(disk.free)} своб.</span>
+        </div>
+      )}
     </div>
   );
 }

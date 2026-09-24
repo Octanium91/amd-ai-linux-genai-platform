@@ -32,6 +32,7 @@ export function fmtDuration(sec) {
 
 export function fmtBytes(b) {
   if (b == null || !Number.isFinite(b)) return '—';
+  if (b >= 1024 ** 4) return (b / 1024 ** 4).toFixed(1) + ' ТБ';
   if (b >= 1024 ** 3) return (b / 1024 ** 3).toFixed(1) + ' ГБ';
   if (b >= 1024 ** 2) return (b / 1024 ** 2).toFixed(1) + ' МБ';
   return Math.round(b / 1024) + ' КБ';

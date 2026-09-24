@@ -52,11 +52,11 @@ h3 { font-size: 15px; margin: 0; font-weight: 650; }
 .brand { display: flex; align-items: center; gap: 10px; color: var(--accent); }
 .brand-name { color: var(--text); font-weight: 700; font-size: 16px; letter-spacing: -0.01em; }
 .brand-sub { color: var(--muted); font-size: 12px; }
-.sys { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; font-size: 12.5px; }
+.sys { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 12.5px; }
 .sys-item { display: flex; align-items: center; gap: 8px; }
 .sys-label { color: var(--muted); }
 .sys-val { font-variant-numeric: tabular-nums; }
-.meter { width: 110px; height: 6px; background: var(--panel-2); border-radius: 99px; overflow: hidden; border: 1px solid var(--line); }
+.meter { width: 64px; height: 6px; background: var(--panel-2); border-radius: 99px; overflow: hidden; border: 1px solid var(--line); }
 .meter > div { height: 100%; background: var(--accent); transition: width 0.6s; }
 .meter > div.hot { background: var(--warn); }
 

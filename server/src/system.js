@@ -1,6 +1,8 @@
 // Сведения о железе: APU, iGPU (через Vulkan), унифицированная память, GTT и NPU.
 import { execFile } from 'node:child_process';
 import fs from 'node:fs';
+import path from 'node:path';
+import { config } from './config.js';
 
 const readNum = (f) => {
   try {
@@ -66,8 +68,72 @@ execFile('vulkaninfo', ['--summary'], { timeout: 20000 }, (err, stdout = '') => 
   }
 });
 
+// Загрузка CPU — по разнице счётчиков /proc/stat между двумя опросами
+let prevCpu = null;
+function cpuUsage() {
+  try {
+    const line = fs.readFileSync('/proc/stat', 'utf8').split('\n')[0];
+    const v = line.trim().split(/\s+/).slice(1).map(Number);
+    const idle = v[3] + (v[4] || 0);
+    const total = v.reduce((a, b) => a + b, 0);
+    const prev = prevCpu;
+    prevCpu = { idle, total };
+    if (!prev || total === prev.total) return null;
+    return Math.round((1 - (idle - prev.idle) / (total - prev.total)) * 100);
+  } catch {
+    return null;
+  }
+}
+cpuUsage();
+
+// Размер каталога считаем редко: обход тысяч файлов на каждый опрос не нужен
+const dirSizeCache = new Map();
+function dirSize(dir) {
+  const c = dirSizeCache.get(dir);
+  if (c && Date.now() - c.at < 60000) return c.size;
+  let size = 0;
+  const walk = (d) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.isFile()) size += fs.statSync(p).size;
+    }
+  };
+  try {
+    walk(dir);
+  } catch {}
+  dirSizeCache.set(dir, { at: Date.now(), size });
+  return size;
+}
+
+function disk(dir) {
+  try {
+    const s = fs.statfsSync(dir);
+    return { dev: fs.statSync(dir).dev, free: s.bavail * s.bsize, total: s.blocks * s.bsize };
+  } catch {
+    return null;
+  }
+}
+
+function storageInfo() {
+  const models = disk(config.dirs.models);
+  const data = disk(config.dirs.output);
+  return {
+    models: models && { free: models.free, total: models.total, used: dirSize(config.dirs.models) },
+    data: data && { free: data.free, total: data.total, used: dirSize(config.dirs.output), sameDisk: models?.dev === data.dev },
+  };
+}
+
+const threads = (() => {
+  try {
+    return (fs.readFileSync('/proc/cpuinfo', 'utf8').match(/^processor\s*:/gm) || []).length || null;
+  } catch {
+    return null;
+  }
+})();
+
 export function systemInfo() {
-  const s = { ...info };
+  const s = { ...info, cpuBusy: cpuUsage(), threads, storage: storageInfo() };
   if (gpuDir) {
     s.gttUsed = readNum(`${gpuDir}/mem_info_gtt_used`);
     s.gttTotal = readNum(`${gpuDir}/mem_info_gtt_total`);
