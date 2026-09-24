@@ -1,5 +1,5 @@
 # AMD AI Linux GenAI Platform
-# Запуск: ./scripts/setup.sh (один раз), затем docker compose up -d --build
+# Run: ./scripts/setup.sh (once), then docker compose up -d --build
 name: genai-platform
 
 services:
@@ -14,29 +14,29 @@ services:
     init: true
     ports:
       - "${BIND_ADDR:-0.0.0.0}:${PORT:-7860}:7860"
-    # iGPU Radeon через Vulkan: render node + числовые GID групп render/video хоста (пишет setup.sh)
+    # Radeon iGPU via Vulkan: render node + numeric GIDs of the host render/video groups (written by setup.sh)
     devices:
       - /dev/dri:/dev/dri
     group_add:
-      - "${RENDER_GID:?запустите scripts/setup.sh — нужен RENDER_GID в .env}"
-      - "${VIDEO_GID:?запустите scripts/setup.sh — нужен VIDEO_GID в .env}"
+      - "${RENDER_GID:?run scripts/setup.sh — RENDER_GID is missing in .env}"
+      - "${VIDEO_GID:?run scripts/setup.sh — VIDEO_GID is missing in .env}"
     environment:
       HF_TOKEN: ${HF_TOKEN:-}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       TRUST_PROXY: ${TRUST_PROXY:-false}
-      # Одна DEVICE_LOCAL-куча Vulkan на весь GTT вместо маленького UMA carve-out (512 МБ и т.п.)
+      # One DEVICE_LOCAL Vulkan heap spanning the whole GTT instead of the small UMA carve-out (512 MB etc.)
       radv_enable_unified_heap_on_apu: "true"
-      # Только драйвер RADV, без программного llvmpipe
+      # RADV only, no software llvmpipe
       VK_DRIVER_FILES: /usr/share/vulkan/icd.d/radeon_icd.json
     ipc: host
     ulimits:
       memlock: -1
     volumes:
-      # Состояние платформы: пользователи, история, логи, загруженные картинки
+      # Platform state: users, job history, logs, uploaded images
       - ${DATA_PATH:-./data}:/data
-      # Скачанные модели — отдельный том: не зависят от образа и переживают любые пересборки
+      # Downloaded models: a separate volume, independent of the image, survives any rebuild
       - ${MODELS_PATH:-./models}:/data/models
-      # Готовые видео и изображения — отдельный том по той же причине
+      # Generated videos and images: a separate volume for the same reason
       - ${OUTPUT_PATH:-./output}:/data/output
       - ./config/drirc:/etc/drirc:ro
       - /etc/localtime:/etc/localtime:ro

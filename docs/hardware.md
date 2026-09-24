@@ -1,67 +1,67 @@
-# Железо: Ryzen AI под Linux
+# Hardware: Ryzen AI on Linux
 
-## Линейка Ryzen AI
+## The Ryzen AI lineup
 
-Платформа ориентирована на APU AMD с архитектурой **Zen 5 + RDNA 3.5 + XDNA 2**. Встроенная графика не имеет своей памяти: ей выделяется часть общей оперативной памяти (UMA/GTT). Поэтому объём RAM и её пропускная способность определяют, какие модели влезут и как быстро они будут работать.
+The platform targets AMD APUs built on **Zen 5 + RDNA 3.5 + XDNA 2**. The integrated graphics has no memory of its own: it gets a share of the system RAM (UMA/GTT). So the amount of RAM and its bandwidth decide which models fit and how fast they run.
 
-| Семейство | Процессоры (примеры) | iGPU | CU | Память | Чего ждать |
+| Family | CPUs (examples) | iGPU | CU | Memory | What to expect |
 |---|---|---|---|---|---|
-| **Strix Halo** | Ryzen AI MAX+ 395, MAX 390/385 | Radeon 8060S / 8050S | 40 / 32 | до 128 ГБ, 256-бит LPDDR5X | Wan 2.2 5B реально использовать, AnimateLCM — быстро |
-| **Strix Point** | Ryzen AI 9 HX 370, 365 | Radeon 890M / 880M | 16 / 12 | до 96 ГБ, 128-бит LPDDR5X/DDR5 | AnimateLCM и изображения — комфортно, Wan — часами |
-| **Krackan Point** | Ryzen AI 7 350, Ryzen AI 5 340 | Radeon 860M / 840M | 8 / 4 | 128-бит | изображения и короткие AnimateLCM-ролики, медленнее Strix Point |
+| **Strix Halo** | Ryzen AI MAX+ 395, MAX 390/385 | Radeon 8060S / 8050S | 40 / 32 | up to 128 GB, 256-bit LPDDR5X | Wan 2.2 5B is practical, AnimateLCM is fast |
+| **Strix Point** | Ryzen AI 9 HX 370, 365 | Radeon 890M / 880M | 16 / 12 | up to 96 GB, 128-bit LPDDR5X/DDR5 | AnimateLCM and images are comfortable, Wan takes hours |
+| **Krackan Point** | Ryzen AI 7 350, Ryzen AI 5 340 | Radeon 860M / 840M | 8 / 4 | 128-bit | images and short AnimateLCM clips, slower than Strix Point |
 
-Число CU и шина памяти — по данным AMD и обзоров ([TechPowerUp](https://www.techpowerup.com/324874/amd-details-the-radeon-890m-rdna-3-5-igpu-of-strix-point-a-bit-more), [Tom's Hardware](https://www.tomshardware.com/pc-components/cpus/amd-unwraps-ryzen-ai-300-series-strix-point-processors-50-tops-of-ai-performance-zen-5c-density-cores-come-to-ryzen-9-for-the-first-time)). Точные характеристики конкретной модели смотрите на [amd.com](https://www.amd.com/en/products/processors/laptop/ryzen.html). Оценки «чего ждать» экстраполированы по числу CU и пропускной способности памяти; замерена только Strix Point (см. [benchmarks.md](benchmarks.md)).
+CU counts and memory buses come from AMD and reviews ([TechPowerUp](https://www.techpowerup.com/324874/amd-details-the-radeon-890m-rdna-3-5-igpu-of-strix-point-a-bit-more), [Tom's Hardware](https://www.tomshardware.com/pc-components/cpus/amd-unwraps-ryzen-ai-300-series-strix-point-processors-50-tops-of-ai-performance-zen-5c-density-cores-come-to-ryzen-9-for-the-first-time)). Check exact specs of a particular model on [amd.com](https://www.amd.com/en/products/processors/laptop/ryzen.html). The "what to expect" column is extrapolated from CU count and memory bandwidth; only Strix Point has been measured (see [benchmarks.md](benchmarks.md)).
 
-Вся линейка — RDNA 3.5 (gfx1150/gfx1151/gfx1152), в Mesa RADV она поддерживается с версии 24.x. Для iGPU нужно ядро **6.10+**, лучше **6.12+**.
+The whole lineup is RDNA 3.5 (gfx1150/gfx1151/gfx1152), supported by Mesa RADV since 24.x. The iGPU needs kernel **6.10+**, **6.12+** recommended.
 
-## Тестовая машина
+## Reference machine
 
 | | |
 |---|---|
-| Модель | Sapphire EDGE AI 370 (мини-ПК) |
-| Процессор | AMD Ryzen AI 9 HX 370 (4× Zen 5 + 8× Zen 5c, 24 потока) |
-| iGPU | Radeon 890M (RDNA 3.5, 16 CU, gfx1150), в Vulkan — `AMD Radeon Graphics (RADV GFX1150)` |
-| NPU | XDNA 2 (`1022:17f0`), не используется, см. ниже |
-| Память | 32 ГБ LPDDR5X, общая с GPU |
-| BIOS | UMA Frame Buffer = 512 МБ (минимум; остальное GPU берёт динамически через GTT) |
-| Ядро | Debian 13 `6.12.x`, параметр `amdgpu.gttsize=24576` → GTT 24 ГБ |
-| Mesa | 25.0.7 (RADV), `mesa-vulkan-drivers` из Debian 13 |
-| Диск | NVMe 4 ТБ (модели и результаты) |
+| Model | Sapphire EDGE AI 370 (mini PC) |
+| CPU | AMD Ryzen AI 9 HX 370 (4× Zen 5 + 8× Zen 5c, 24 threads) |
+| iGPU | Radeon 890M (RDNA 3.5, 16 CU, gfx1150), reported by Vulkan as `AMD Radeon Graphics (RADV GFX1150)` |
+| NPU | XDNA 2 (`1022:17f0`), not used, see below |
+| Memory | 32 GB LPDDR5X, shared with the GPU |
+| BIOS | UMA Frame Buffer = 512 MB (the minimum; the GPU takes the rest dynamically through GTT) |
+| Kernel | Debian 13 `6.12.x`, parameter `amdgpu.gttsize=24576` → 24 GB GTT |
+| Mesa | 25.0.7 (RADV), `mesa-vulkan-drivers` from Debian 13 |
+| Disk | 4 TB NVMe (models and results) |
 
-## Память: UMA, GTT и куча Vulkan {#память-gtt}
+## Memory: UMA, GTT and the Vulkan heap
 
-У APU два пула памяти для GPU:
+An APU has two memory pools for the GPU:
 
-- **UMA carve-out** (в BIOS: UMA Frame Buffer / iGPU Memory) — жёстко отрезанный кусок RAM, «VRAM». На тестовой машине 512 МБ.
-- **GTT** — динамически выделяемая системная память, доступная GPU. Именно она нужна для моделей.
+- **UMA carve-out** (BIOS: UMA Frame Buffer / iGPU Memory) — a fixed slice of RAM, the "VRAM". 512 MB on the reference machine.
+- **GTT** — system memory the GPU allocates dynamically. This is what models need.
 
-Два обязательных шага:
+Two steps are required:
 
-1. **Увеличить GTT.** По умолчанию ядро даёт GPU около половины RAM. Рекомендуем ~¾ RAM (для 32 ГБ — 24 ГБ; для 64 ГБ — ~48 ГБ; для 128 ГБ — ~96 ГБ). Параметр ядра в `/etc/default/grub` → `GRUB_CMDLINE_LINUX_DEFAULT`:
+1. **Enlarge GTT.** By default the kernel gives the GPU about half of the RAM. We recommend ~¾ of RAM (24 GB for 32 GB; ~48 GB for 64 GB; ~96 GB for 128 GB). Kernel parameter in `/etc/default/grub` → `GRUB_CMDLINE_LINUX_DEFAULT`:
    ```
-   amdgpu.gttsize=24576                                  # МиБ; работает на 6.12 (на новых ядрах помечен устаревшим)
-   ttm.pages_limit=6291456 ttm.page_pool_size=6291456     # современный способ: страницы по 4 КиБ (24 ГБ = 6291456)
+   amdgpu.gttsize=24576                                  # MiB; works on 6.12 (deprecated on newer kernels)
+   ttm.pages_limit=6291456 ttm.page_pool_size=6291456     # current way: 4 KiB pages (24 GB = 6291456)
    ```
-   Затем `sudo update-grub` и перезагрузка. Проверка: `cat /sys/class/drm/card*/device/mem_info_gtt_total`. `scripts/setup.sh` сам посчитает значения под вашу RAM.
-2. **Объединить кучи Vulkan.** RADV на APU по умолчанию показывает маленькую DEVICE_LOCAL-кучу (≈ UMA) и отдельно часть GTT. Опция Mesa `radv_enable_unified_heap_on_apu=true` делает одну DEVICE_LOCAL-кучу размером с GTT. В платформе она включена и через переменную окружения, и через `config/drirc`. Проверка: `./scripts/check-gpu.sh` — на тестовой машине куча `24.50 GiB`, а не 512 МБ.
+   Then `sudo update-grub` and reboot. Check with `cat /sys/class/drm/card*/device/mem_info_gtt_total`. `scripts/setup.sh` computes the values for your RAM.
+2. **Unify the Vulkan heaps.** On APUs, RADV exposes a small DEVICE_LOCAL heap (≈ UMA) plus part of GTT separately by default. The Mesa option `radv_enable_unified_heap_on_apu=true` makes a single DEVICE_LOCAL heap the size of GTT. The platform enables it both through an environment variable and through `config/drirc`. Check with `./scripts/check-gpu.sh`: the reference machine shows a `24.50 GiB` heap, not 512 MB.
 
-UMA в BIOS можно оставить минимальным: с объединённой кучей он не нужен, а RAM остаётся системе.
+The UMA size in the BIOS can stay at the minimum: with the unified heap it is not needed, and the RAM stays available to the system.
 
-Помните, что GTT и RAM — одна и та же физическая память. Генерация видео на Wan забирает до ~22 ГБ, поэтому на 32-гигабайтной машине одновременно с ней не стоит запускать другие тяжёлые сервисы. Своп или zram (8–16 ГБ) — хорошая страховка от OOM-killer.
+Keep in mind that GTT and RAM are the same physical memory. Wan video generation takes up to ~22 GB, so on a 32 GB machine do not run other heavy services at the same time. Swap or zram (8–16 GB) is good insurance against the OOM killer.
 
-## Vulkan вместо ROCm
+## Vulkan instead of ROCm
 
-- Встроенная графика Ryzen AI в ROCm поддерживается ограниченно и нестабильно. Vulkan (Mesa RADV) работает из коробки в любом свежем дистрибутиве.
-- PyTorch не умеет Vulkan, поэтому ComfyUI и diffusers на iGPU без ROCm работают только на CPU. Платформа использует [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp) (ggml): у него зрелый Vulkan-бэкенд и поддержка SD 1.5/SDXL/Flux, AnimateDiff, Wan, LTX и других моделей.
-- Контейнеру нужен только `/dev/dri` (render node) и числовые GID групп `render`/`video` хоста. `/dev/kfd` (ROCm) не нужен.
+- ROCm support for Ryzen AI integrated graphics is limited and unstable. Vulkan (Mesa RADV) works out of the box on any recent distribution.
+- PyTorch has no Vulkan backend, so without ROCm ComfyUI and diffusers only run on the CPU. The platform uses [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp) (ggml): it has a mature Vulkan backend and supports SD 1.5/SDXL/Flux, AnimateDiff, Wan, LTX and other models.
+- The container only needs `/dev/dri` (the render node) and the numeric GIDs of the host `render`/`video` groups. `/dev/kfd` (ROCm) is not needed.
 
-## NPU (XDNA) {#npu-xdna}
+## NPU (XDNA)
 
-NPU XDNA 2 (~50 TOPS) есть во всей линейке, но платформа его пока не использует:
+The whole lineup has an XDNA 2 NPU (~50 TOPS), but the platform does not use it yet:
 
-- Драйвер `amdxdna` вошёл в ядро только с 6.14. В Debian 13 (6.12) его нет, нужен DKMS из [xdna-driver](https://github.com/amd/xdna-driver) плюс XRT.
-- [Ryzen AI Software для Linux](https://ryzenai.docs.amd.com/en/latest/linux.html) поддерживает только сценарий «NPU-only» для CNN/NLP и LLM, пакеты собраны под Ubuntu 24.04.
-- Диффузионные видеомодели на NPU под Linux не запускаются. Для SD есть энтузиастский проект [amd-npu-stable-diffusion-linux](https://github.com/mcolsen/amd-npu-stable-diffusion-linux), только картинки.
-- В Windows-приложении AMD Amuse NPU используется для ускорения части моделей и для «XDNA Super Resolution». На Linux этот апскейл дешевле сделать на iGPU (ESRGAN через Vulkan).
+- The `amdxdna` driver landed in the kernel only in 6.14. Debian 13 (6.12) does not have it; it needs DKMS from [xdna-driver](https://github.com/amd/xdna-driver) plus XRT.
+- [Ryzen AI Software for Linux](https://ryzenai.docs.amd.com/en/latest/linux.html) supports only the "NPU-only" flow for CNN/NLP models and LLMs, with packages built for Ubuntu 24.04.
+- Diffusion video models do not run on the NPU under Linux. For SD there is the community project [amd-npu-stable-diffusion-linux](https://github.com/mcolsen/amd-npu-stable-diffusion-linux), images only.
+- The AMD Amuse app on Windows uses the NPU to accelerate some models and for "XDNA Super Resolution". On Linux that upscale is cheaper on the iGPU (ESRGAN via Vulkan).
 
-Платформа показывает, найден ли NPU (`/api/state` → `system.npu`). Вернуться к нему имеет смысл, когда `amdxdna` появится в стандартном ядре дистрибутива и появятся Linux-рантаймы для диффузионных моделей.
+The platform reports whether an NPU is present (`/api/state` → `system.npu`). It makes sense to revisit it once `amdxdna` ships in the stock distribution kernel and Linux runtimes for diffusion models appear.

@@ -1,4 +1,4 @@
-<!-- Mesa driconf: одна DEVICE_LOCAL куча на весь GTT (~24 ГБ) вместо 512 МБ carve-out -->
+<!-- Mesa driconf: one DEVICE_LOCAL heap spanning the whole GTT instead of the small UMA carve-out -->
 <driconf>
   <device driver="radv">
     <application name="Default">

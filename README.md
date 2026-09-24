@@ -1,64 +1,67 @@
 # AMD AI Linux GenAI Platform
 
-Self-hosted platform for local generative content (video, images, and more to come) on **AMD Ryzen AI** APUs under **Linux**, accelerated purely through **Vulkan** (Mesa RADV) on the integrated Radeon GPU — no ROCm required.
+A self-hosted platform for local generative content (video, images, and more to come) on **AMD Ryzen AI** mini PCs and laptops running **Linux**. Everything runs on the integrated Radeon GPU through **Vulkan (Mesa RADV)** — no ROCm required. It ships a web UI with sign-in, a job queue, live progress, a gallery, and a model manager that downloads and removes models by itself.
 
-Платформа для локальной генерации контента на мини-ПК и ноутбуках с **AMD Ryzen AI** под **Linux**. Всё считается на встроенной графике Radeon через **Vulkan (Mesa RADV)**, ROCm не нужен. Веб-интерфейс с авторизацией, очередью задач, прогрессом в реальном времени, галереей и менеджером моделей, который сам скачивает и удаляет модели.
+The UI is available in English (default), Ukrainian and Russian.
 
-## Что умеет
+## Features
 
-- **Видео:** текст → видео и картинка → видео. AnimateLCM (быстро, ~2.5 мин на 2 с на Radeon 890M), AnimateDiff v3 (детальнее), Wan 2.2 5B (связное движение, для Strix Halo). Итоговый FPS 24/30/50/60/120 получается интерполяцией. **Экстра-длительность** (до 2× предела модели) собирается из двух сегментов, **экстра-качество** — вдвое больше шагов, чем «Высокое».
-- **Изображения:** фотореалистичные картинки на Realistic Vision 6 (SD 1.5), по несколько вариантов за раз, картинка → картинка.
-- **Очередь и прогресс:** генерации идут строго по одной (GPU один). Видны этапы, шаги, скорость, оставшееся время, превью латентов и живой лог.
-- **Модели:** каталог с источниками, размерами и лицензиями. Загрузка в один клик с докачкой, конвертация в формат stable-diffusion.cpp, удаление. Режим без моделей сам предлагает их скачать.
-- **Пользователи:** при первом запуске создаётся администратор, дальше только вход по паролю (scrypt). Администратор добавляет пользователей; роли администратор/пользователь, у каждого свои задачи.
-- **Стартовые шаблоны:** при открытии форма заполняется случайным из 10 скрытых шаблонов (автомобиль, животное, человек, архитектура, природа…) с параметрами, подобранными под максимальное качество.
-- **Расширяемость:** режимы и модели описываются JSON-файлами (`catalog/`), свои добавляются без пересборки через `data/state/*.local.json`.
+- **Video:** text-to-video and image-to-video. AnimateLCM (fast, ~2.5 min per 2 s on a Radeon 890M), AnimateDiff v3 (more detailed), Wan 2.2 5B (coherent motion, for Strix Halo). Output FPS of 24/30/50/60/120 via motion interpolation. **Extra duration** (up to 2× the model limit) is built from two chained segments; **Extra quality** uses twice the steps of High.
+- **Images:** photorealistic images with Realistic Vision 6 (SD 1.5), several variants at once, image-to-image.
+- **Queue and progress:** jobs run strictly one at a time (there is one GPU). Stages, steps, speed, time left, a latent preview and a live log are shown.
+- **Models:** a catalog with sources, sizes and licenses. One-click downloads with resume, conversion into the stable-diffusion.cpp format, deletion. A mode without its models offers to download them.
+- **First-run setup:** while nothing is usable yet, the administrator gets a checklist of model packs with sizes and explanations; the required base is locked, recommendations depend on the hardware.
+- **Users:** the first administrator is created on first start, then it is sign-in only (scrypt passwords). The administrator adds users; admin/user roles, everyone owns their jobs.
+- **Start templates:** on open, the form is filled with one of 10 hidden templates (car, animal, person, architecture, nature…) with settings tuned for maximum quality.
+- **Extensible:** modes and models are described in JSON (`catalog/`); your own are added without a rebuild via `data/state/*.local.json`.
 
-## Железо
+## Hardware
 
-Рассчитано на линейку **Ryzen AI** (RDNA 3.5 + XDNA 2): Strix Point (Ryzen AI 9 HX 370/365 — Radeon 890M/880M), Krackan Point (Ryzen AI 7/5 — Radeon 860M/840M), Strix Halo (Ryzen AI MAX/MAX+ — Radeon 8040S/8050S/8060S). Работает на любом GPU с Vulkan, но настройки и замеры сделаны под эти APU.
+Built for the **Ryzen AI** lineup (RDNA 3.5 + XDNA 2): Strix Point (Ryzen AI 9 HX 370/365 — Radeon 890M/880M), Krackan Point (Ryzen AI 7/5 — Radeon 860M/840M), Strix Halo (Ryzen AI MAX/MAX+ — Radeon 8040S/8050S/8060S). It works on any GPU with Vulkan, but the settings and measurements target these APUs.
 
-Отлажено и замерено на **Sapphire EDGE AI 370**: Ryzen AI 9 HX 370, Radeon 890M, 32 ГБ LPDDR5X, UMA 512 МБ, GTT 24 ГБ, Debian 13, ядро 6.12, Mesa 25.0.7. Подробнее — в [docs/hardware.md](docs/hardware.md), замеры — в [docs/benchmarks.md](docs/benchmarks.md).
+Developed and measured on a **Sapphire EDGE AI 370**: Ryzen AI 9 HX 370, Radeon 890M, 32 GB LPDDR5X, 512 MB UMA, 24 GB GTT, Debian 13, kernel 6.12, Mesa 25.0.7. Details in [docs/hardware.md](docs/hardware.md), measurements in [docs/benchmarks.md](docs/benchmarks.md).
 
-NPU (XDNA) пока не используется: под Linux для него нет поддержки диффузионных видеомоделей. Причины — в [docs/hardware.md](docs/hardware.md#npu-xdna).
+The NPU (XDNA) is not used yet: on Linux it has no support for diffusion video models. See [docs/hardware.md](docs/hardware.md#npu-xdna).
 
-## Быстрый старт
+## Quick start
 
-Нужны Linux (проверено на Debian 13; Ubuntu 24.04+ тоже подойдёт), ядро 6.10+, Docker с compose и ~20–40 ГБ на диске под модели.
+Requirements: Linux (tested on Debian 13; Ubuntu 24.04+ works too), kernel 6.10+, Docker with compose, ~20–40 GB of disk for models.
 
 ```bash
 git clone https://github.com/Octanium91/amd-ai-linux-genai-platform.git
 cd amd-ai-linux-genai-platform
-./scripts/setup.sh --install     # проверка хоста, пакеты Mesa/Vulkan, .env
-docker compose up -d --build     # первая сборка ~5–10 минут (компилируется stable-diffusion.cpp)
-./scripts/check-gpu.sh           # контейнер должен видеть RADV и кучу Vulkan размером с GTT
+./scripts/setup.sh --install     # host checks, Mesa/Vulkan packages, .env
+docker compose up -d --build     # the first build takes ~5–10 minutes (stable-diffusion.cpp is compiled)
+./scripts/check-gpu.sh           # the container must see RADV and a Vulkan heap the size of GTT
 ```
 
-Откройте `http://<адрес>:7860`. При первом запуске пользователей нет, и платформа предложит **создать администратора** (имя и пароль). Сделайте это сразу после запуска: пока администратора нет, эту форму видит любой в сети. Дальше доступен только вход, а других пользователей добавляет администратор в разделе «Пользователи». Пока моделей нет, администратор видит **экран первичной настройки**: список наборов с объяснением, что каждый даёт, и размером. Базовая модель Realistic Vision 6 + VAE нужна любому режиму, её галочка серая и не снимается. Рекомендуемые наборы отмечены заранее с учётом железа: Wan 2.2 — только на Strix Halo. После «Скачать выбранное» открывается раздел «Модели» с прогрессом; добавить или удалить модели можно там же позже.
+Open `http://<host>:7860`. On first start there are no users, so the platform offers to **create the administrator** (username and password). Do it right after starting: until then, anyone on the network can see that form. After that only sign-in is available; the administrator adds other users in the Users section.
 
-На хосте три независимых каталога, их задают в `.env`: модели — `MODELS_PATH` (`./models`), готовые видео и изображения — `OUTPUT_PATH` (`./output`), пользователи, история и логи — `DATA_PATH` (`./data`). В образе ничего из этого нет, поэтому пересборка и обновление их не трогают. Каждый каталог можно вынести на свой диск.
+While no models are installed, the administrator sees the **first-run setup screen**: model packs with an explanation of what each enables and its size. The Realistic Vision 6 + VAE base is needed by every mode, so its checkbox is grey and cannot be cleared. Recommended packs are pre-selected for the hardware (Wan 2.2 only on Strix Halo). After "Download selected" the Models section opens with the progress; models can be added or removed there later.
 
-GTT (память, доступная GPU) — главный параметр для видео. Если `setup.sh` предупреждает, что он мал, увеличьте его параметром ядра, см. [docs/hardware.md](docs/hardware.md#память-gtt).
+There are three independent host directories, set in `.env`: models — `MODELS_PATH` (`./models`), generated videos and images — `OUTPUT_PATH` (`./output`), users, history and logs — `DATA_PATH` (`./data`). None of them are in the image, so rebuilds and updates never touch them. Each can live on its own disk.
 
-## Документация
+GTT (the memory the GPU can use) is the key parameter for video. If `setup.sh` warns that it is too small, enlarge it with a kernel parameter, see [docs/hardware.md](docs/hardware.md#memory-uma-gtt-and-the-vulkan-heap).
 
-| Документ | О чём |
+## Documentation
+
+| Document | Contents |
 |---|---|
-| [docs/hardware.md](docs/hardware.md) | Линейка Ryzen AI, тестовая машина, BIOS, GTT, Vulkan, NPU |
-| [docs/models.md](docs/models.md) | Каталог моделей и режимов, лицензии, как добавить свои |
-| [docs/benchmarks.md](docs/benchmarks.md) | Замеры скорости и что на неё влияет |
-| [docs/architecture.md](docs/architecture.md) | Устройство платформы, данные, API, безопасность |
-| [docs/troubleshooting.md](docs/troubleshooting.md) | Типичные проблемы и решения |
+| [docs/hardware.md](docs/hardware.md) | Ryzen AI lineup, reference machine, BIOS, GTT, Vulkan, NPU |
+| [docs/models.md](docs/models.md) | Model and mode catalog, licenses, templates, adding your own |
+| [docs/benchmarks.md](docs/benchmarks.md) | Speed measurements and what affects them |
+| [docs/architecture.md](docs/architecture.md) | How the platform works, data layout, API, security, i18n |
+| [docs/troubleshooting.md](docs/troubleshooting.md) | Common problems and fixes |
 
-## Безопасность
+## Security
 
-Интерфейс защищён паролем, но рассчитан на домашнюю или офисную сеть. Для доступа из интернета поставьте перед ним HTTPS-прокси (Caddy, nginx, Traefik) и включите `COOKIE_SECURE=true`, `TRUST_PROXY=true`. Подробности — в [docs/architecture.md](docs/architecture.md#безопасность).
+The UI is password-protected but meant for a home or office network. For internet access, put an HTTPS proxy (Caddy, nginx, Traefik) in front of it and set `COOKIE_SECURE=true`, `TRUST_PROXY=true`. See [docs/architecture.md](docs/architecture.md#security).
 
-## Лицензия
+## License
 
-Код платформы распространяется по [MIT](LICENSE). Модели, которые она скачивает, распространяются по своим лицензиям (CreativeML OpenRAIL-M, Apache-2.0, MIT и др.), см. [docs/models.md](docs/models.md). Ответственность за соблюдение этих лицензий при использовании результатов лежит на пользователе.
+The platform code is licensed under [MIT](LICENSE). The models it downloads come under their own licenses (CreativeML OpenRAIL-M, Apache-2.0, MIT and others), see [docs/models.md](docs/models.md). Complying with those licenses when using the results is the user's responsibility.
 
-## Благодарности
+## Acknowledgements
 
-- [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp) (ggml, Vulkan-бэкенд) — движок генерации.
-- Модели принадлежат их авторам и распространяются по своим лицензиям. Платформа скачивает их с Hugging Face по ссылкам из [catalog/models.json](catalog/models.json), см. [docs/models.md](docs/models.md).
+- [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp) (ggml, Vulkan backend) — the generation engine.
+- The models belong to their authors and are distributed under their licenses. The platform downloads them from Hugging Face using the links in [catalog/models.json](catalog/models.json), see [docs/models.md](docs/models.md).

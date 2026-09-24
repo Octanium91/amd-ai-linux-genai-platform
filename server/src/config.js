@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
-// Всё состояние платформы живёт в одном томе /data (на хосте — DATA_DIR из .env)
+// All platform state lives under /data (host paths come from DATA_PATH / MODELS_PATH / OUTPUT_PATH in .env)
 const DATA = process.env.DATA_DIR || '/data';
 
 export const config = {

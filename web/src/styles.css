@@ -227,7 +227,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
 .field-label-row b { color: var(--text); font-size: 14px; font-variant-numeric: tabular-nums; }
 input[type="range"] { padding: 0; border: 0; background: none; accent-color: var(--accent); height: 22px; box-shadow: none; }
 
-/* ---------- платформа: шапка, навигация, вход ---------- */
+/* ---------- platform: header, navigation, sign-in ---------- */
 .logo { color: var(--accent); flex: none; }
 .top { flex-wrap: wrap; row-gap: 10px; }
 .top-right { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-left: auto; }
@@ -254,12 +254,12 @@ input[type="range"] { padding: 0; border: 0; background: none; accent-color: var
 .page p { margin: 8px 0 0; }
 code { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--panel-2); padding: 1px 5px; border-radius: 5px; }
 
-/* недостающие модели в форме */
+/* missing models in the form */
 .missing { border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line)); background: color-mix(in srgb, var(--warn) 8%, transparent); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
 .missing-title { font-size: 13px; font-weight: 600; }
 .missing ul { margin: 0; padding-left: 18px; font-size: 13px; }
 
-/* модели */
+/* models */
 .models { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .model { display: flex; gap: 14px; justify-content: space-between; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); }
 .model-main { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 4px; }
@@ -274,7 +274,7 @@ code { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; back
 .pill.error { background: color-mix(in srgb, var(--bad) 20%, transparent); color: var(--bad); }
 @media (max-width: 640px) { .model { flex-direction: column; } }
 
-/* изображения в галерее и просмотре */
+/* images in the gallery and viewer */
 .grid-img { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
 .thumb-img { aspect-ratio: 1 / 1; }
 .thumb-img img { object-fit: cover; }
@@ -285,7 +285,7 @@ code { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; back
 .strip-item img { width: 72px; height: 72px; object-fit: cover; border-radius: 6px; display: block; }
 .modal-sm { width: min(420px, 100%); }
 
-/* пользователи */
+/* users */
 .users { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13.5px; }
 .users th { text-align: left; color: var(--muted); font-weight: 550; font-size: 12.5px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
 .users td { padding: 8px; border-bottom: 1px solid var(--line); }
@@ -295,7 +295,7 @@ code { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; back
 @media (max-width: 640px) { .grid3 { grid-template-columns: 1fr; } .users-actions { white-space: normal; } }
 .setup-note { font-size: 13px; line-height: 1.5; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line)); }
 
-/* экстра-зона: длительность сверх предела модели и качество «Экстра» */
+/* extra zone: duration beyond the model limit and the Extra quality */
 .extra-text { color: var(--bad) !important; }
 .extra-badge { margin-left: 6px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #fff; background: var(--bad); padding: 1px 6px; border-radius: 99px; }
 .range-wrap { position: relative; }
@@ -307,7 +307,7 @@ input[type="range"].extra { accent-color: var(--bad); }
 .chip.extra { border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); color: var(--bad); }
 .chip.extra.on { background: var(--bad); border-color: var(--bad); color: #fff; }
 
-/* первичная настройка */
+/* first-run setup */
 .setup { max-width: 900px; }
 .setup p { line-height: 1.55; }
 .packs { display: flex; flex-direction: column; gap: 10px; }
@@ -324,3 +324,8 @@ input[type="range"].extra { accent-color: var(--bad); }
 .pack-models { display: flex; gap: 4px 14px; flex-wrap: wrap; }
 .pack-models .done { color: var(--ok); }
 .setup-foot { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; position: sticky; bottom: 12px; }
+
+/* language switch */
+.lang-switch { width: auto; padding: 4px 8px; font-size: 12.5px; border-radius: 8px; }
+.menu-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 10px; }
+.login-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }

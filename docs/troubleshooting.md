@@ -1,45 +1,45 @@
-# Типичные проблемы
+# Troubleshooting
 
-## Vulkan видит только `llvmpipe`
+## Vulkan only sees `llvmpipe`
 
-`vulkaninfo --summary` на хосте показывает `llvmpipe` вместо `RADV`:
+`vulkaninfo --summary` on the host shows `llvmpipe` instead of `RADV`:
 
-- Пользователь не в группе `render`: `sudo usermod -aG render,video $USER` и перелогиниться. Контейнеру это не мешает, он получает группы через `group_add`.
-- Не установлены `mesa-vulkan-drivers` или `firmware-amd-graphics` (в Debian — компонент `non-free-firmware`): `./scripts/setup.sh --install`.
-- Старое ядро: для RDNA 3.5 нужно 6.10+.
+- The user is not in the `render` group: `sudo usermod -aG render,video $USER` and log in again. The container is not affected, it gets the groups through `group_add`.
+- `mesa-vulkan-drivers` or `firmware-amd-graphics` is missing (on Debian the latter is in `non-free-firmware`): `./scripts/setup.sh --install`.
+- The kernel is too old: RDNA 3.5 needs 6.10+.
 
-Внутри контейнера проверьте `./scripts/check-gpu.sh`: там должно быть `RADV GFX115x`.
+Inside the container, run `./scripts/check-gpu.sh`: it must report `RADV GFX115x`.
 
-## Куча Vulkan 512 МБ вместо GTT
+## The Vulkan heap is 512 MB instead of GTT
 
-Если `check-gpu.sh` показывает кучу размером с UMA carve-out, значит, не применилась опция `radv_enable_unified_heap_on_apu`. Проверьте, что в `docker-compose.yml` она есть в `environment`, а `config/drirc` смонтирован. Предупреждение Mesa `option value ... ignored` при этом нормально: переменная окружения имеет приоритет над drirc.
+If `check-gpu.sh` shows a heap the size of the UMA carve-out, the `radv_enable_unified_heap_on_apu` option was not applied. Check that it is in `environment` in `docker-compose.yml` and that `config/drirc` is mounted. The Mesa warning `option value ... ignored` is expected here: the environment variable takes precedence over drirc.
 
-## GTT маленький
+## GTT is small
 
-`cat /sys/class/drm/card*/device/mem_info_gtt_total` — если там около половины RAM, увеличьте GTT параметром ядра, см. [hardware.md](hardware.md#память-gtt).
+Check `cat /sys/class/drm/card*/device/mem_info_gtt_total`. If it is about half of the RAM, enlarge GTT with a kernel parameter, see [hardware.md](hardware.md#memory-uma-gtt-and-the-vulkan-heap).
 
-## Нехватка памяти (OOM) и падения
+## Out of memory (OOM) and crashes
 
-- Одна генерация за раз — очередь это гарантирует. Не запускайте рядом другие тяжёлые GPU-сервисы (например, LLM в Ollama).
-- Для Wan используйте GGUF Q8_0/Q5 и текстовый энкодер Q8_0, начинайте с 832×480 и 2 секунд.
-- Режимы уже включают `--offload-to-cpu`, `--diffusion-fa` (без flash attention в 2 раза медленнее и прожорливее) и для Wan `--vae-tiling`.
-- Включите swap или zram на хосте: GTT и RAM физически одна память.
+- One generation at a time — the queue guarantees it. Do not run other heavy GPU services next to it (for example an LLM in Ollama).
+- For Wan use GGUF Q8_0/Q5 and the Q8_0 text encoder; start with 832×480 and 2 seconds.
+- The modes already include `--offload-to-cpu`, `--diffusion-fa` (without flash attention it is 2× slower and hungrier) and, for Wan, `--vae-tiling`.
+- Enable swap or zram on the host: GTT and RAM are the same physical memory.
 
-## Очень долго декодируется видео Wan
+## Wan video decoding takes very long
 
-На Radeon 890M декодирование плитками Wan VAE занимает десятки минут, порой дольше самого сэмплирования. Это ожидаемо для этого железа. Для быстрого результата используйте AnimateLCM.
+On a Radeon 890M, tiled Wan VAE decoding takes tens of minutes, sometimes longer than sampling itself. That is expected on this hardware. Use AnimateLCM for quick results.
 
 ## `tensor ... pos_encoder.pe not in model metadata`
 
-Модуль AnimateDiff в формате, который sd.cpp не понимает (например, оригинальный `.ckpt` AnimateLCM). Скачайте модуль через раздел «Модели»: платформа загрузит правильный файл и сконвертирует его.
+The AnimateDiff motion module is in a layout sd.cpp does not understand (for example the original AnimateLCM `.ckpt`). Download the module through the Models section: the platform fetches the right file and converts it.
 
-## Загрузка модели оборвалась
+## A model download was interrupted
 
-Нажмите «Скачать» ещё раз: загрузка продолжится с места обрыва (`.part`-файл в `MODELS_PATH`). Если размер не совпал, файл нужно скачать заново: удалите модель и начните загрузку снова.
+Click Download again: the download resumes where it stopped (a `.part` file in `MODELS_PATH`). If the size does not match, the file has to be downloaded again: delete the model and start the download over.
 
-## Не помню пароль администратора
+## Forgot the administrator password
 
-Если есть другой администратор, он сменит пароль в разделе «Пользователи». Если нет, сбросьте пользователей: платформа снова предложит создать администратора. Задачи, результаты и модели при этом сохраняются.
+If there is another administrator, they can change the password in the Users section. Otherwise reset the users: the platform will offer to create the administrator again. Jobs, results and models are kept.
 
 ```bash
 docker compose down
@@ -47,6 +47,10 @@ sudo rm data/state/users.json data/state/sessions.json
 docker compose up -d
 ```
 
-## Регрессии stable-diffusion.cpp
+## stable-diffusion.cpp regressions
 
-Версия движка закреплена в `SD_CPP_REF` (`.env`, по умолчанию проверенный коммит `88411ef`). После её смены пересоберите образ (`docker compose build --no-cache`) и прогоните короткие задачи в каждом режиме: между сборками бывали регрессии Vulkan-видео (например, [#1976](https://github.com/leejet/stable-diffusion.cpp/issues/1976)).
+The engine version is pinned in `SD_CPP_REF` (`.env`, the tested commit `88411ef` by default). After changing it, rebuild the image (`docker compose build --no-cache`) and run short jobs in every mode: Vulkan video regressions have happened between builds (for example [#1976](https://github.com/leejet/stable-diffusion.cpp/issues/1976)).
+
+## A UI string is not translated
+
+Run `node scripts/i18n-keys.mjs`: it lists keys missing from `web/src/locales/uk.js` or `ru.js`. Add the translation and rebuild the image.

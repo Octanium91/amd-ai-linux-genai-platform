@@ -1,85 +1,96 @@
-# Архитектура
+# Architecture
 
 ```
-Браузер ──HTTP──▶ genai-platform (один контейнер)
-                   ├─ Node.js сервер (server/src)
-                   │   ├─ auth.js      пользователи, сессии, CSRF, защита от перебора
-                   │   ├─ jobs.js      очередь: одна задача на GPU, разбор прогресса sd-cli
-                   │   ├─ models.js    каталог, загрузка с докачкой, удаление
-                   │   ├─ safetensors.js  потоковая конвертация моделей
-                   │   ├─ presets.js   режимы генерации
-                   │   └─ system.js    APU, iGPU (Vulkan), GTT, NPU
-                   ├─ React-интерфейс (web/, собирается в образ)
-                   └─ sd-cli — stable-diffusion.cpp, собран с -DSD_VULKAN=ON
+Browser ──HTTP──▶ genai-platform (a single container)
+                   ├─ Node.js server (server/src)
+                   │   ├─ auth.js         users, sessions, CSRF, brute-force protection
+                   │   ├─ jobs.js         queue: one job on the GPU, sd-cli progress parsing, segments
+                   │   ├─ models.js       catalog, resumable downloads, deletion
+                   │   ├─ safetensors.js  streaming model conversion
+                   │   ├─ presets.js      generation modes and start templates
+                   │   └─ system.js       APU, iGPU (Vulkan), GTT, NPU, CPU and disk usage
+                   ├─ React UI (web/, built into the image)
+                   └─ sd-cli — stable-diffusion.cpp built with -DSD_VULKAN=ON
                            │
                            ▼  /dev/dri/renderD128 (Mesa RADV)
-                     Radeon iGPU  ◀── GTT (общая RAM)
+                     Radeon iGPU  ◀── GTT (shared RAM)
 ```
 
-Контейнер один: движок генерации вызывается как процесс `sd-cli` рядом с сервером, поэтому доступ к Docker-сокету не нужен. Образ основан на Debian 13, как и хост, поэтому версии Mesa/RADV в контейнере и на хосте совпадают.
+There is one container: the generation engine runs as an `sd-cli` process next to the server, so no Docker socket access is needed. The image is based on Debian 13 like the host, so Mesa/RADV versions match between the container and the host.
 
-Новый тип контента (например, апскейл, аудио, LLM) добавляется так:
-- режим с новым `kind` в `catalog/presets.json`;
-- ветка сборки команды в `jobs.js` (`buildArgs` и финализация);
-- раздел в интерфейсе.
+A new content type (upscaling, audio, LLM…) is added by:
+- a mode with a new `kind` in `catalog/presets.json`;
+- a command-building and finalization branch in `jobs.js` (`buildArgs`, `finalize*`);
+- a section in the UI.
 
-Очередь, модели, пользователи и галерея общие.
+The queue, models, users and gallery are shared.
 
-## Данные на хосте
+## Data on the host
 
-| Путь (в контейнере) | На хосте | Что |
+| Path (in the container) | On the host | Contents |
 |---|---|---|
-| `/data/models` | `MODELS_PATH` (`./models`) | скачанные модели, отдельный том |
-| `/data/output` | `OUTPUT_PATH` (`./output`) | готовые видео и изображения, отдельный том |
-| `/data/input/uploads` | `DATA_PATH/input/uploads` | стартовые картинки |
-| `/data/state/jobs.json` | | история и очередь |
-| `/data/state/users.json`, `sessions.json` | | пользователи (scrypt) и сессии (хранятся хеши токенов), права 600 |
-| `/data/state/models.local.json`, `presets.local.json` | | свои модели и режимы |
-| `/data/state/{logs,thumbs,previews}` | | логи sd-cli, миниатюры, превью |
+| `/data/models` | `MODELS_PATH` (`./models`) | downloaded models, a separate volume |
+| `/data/output` | `OUTPUT_PATH` (`./output`) | generated videos and images, a separate volume |
+| `/data/input/uploads` | `DATA_PATH/input/uploads` | uploaded init images |
+| `/data/state/jobs.json` | `DATA_PATH/state` | history and queue |
+| `/data/state/users.json`, `sessions.json` | | users (scrypt) and sessions (token hashes only), mode 600 |
+| `/data/state/models.local.json`, `presets.local.json` | | your own models and modes |
+| `/data/state/{logs,thumbs,previews}` | | sd-cli logs, thumbnails, previews |
 
-Образ можно пересобирать и обновлять сколько угодно: ничего из этого в нём не хранится.
+The image can be rebuilt and updated at will: none of this is stored in it.
 
-## Генерация
+## Generation
 
-1. `POST /api/jobs` проверяет режим и наличие моделей, нормализует параметры и ставит задачу в очередь. Для Wan число кадров приводится к 4n+1, для AnimateDiff берётся ровно `длительность × nativeFps`; размеры кратны 16, seed −1 заменяется случайным.
-2. Очередь запускает `sd-cli` строго по одному процессу: GPU и GTT общие.
-3. Вывод `sd-cli` разбирается построчно:
-   - этапы: `generate_video` / `generating image` → сэмплирование, `sampling completed` / `latent images completed` → декодирование, `decode_first_stage completed` → сохранение;
-   - строки прогресса `i/N - X s/it`;
-   - загрузка весов;
-   - сохранённые файлы.
-4. Видео: AVI (MJPEG) из `sd-cli` → H.264 mp4 через ffmpeg. Если итоговый FPS выше родного, кадры досчитывает `minterpolate`. Изображения: PNG переименовываются. Для галереи делается миниатюра.
-5. Если контейнер перезапустить во время генерации, текущая задача помечается ошибкой, остальная очередь продолжается.
+1. `POST /api/jobs` validates the mode and its models, normalizes the parameters and queues the job. Wan frame counts are rounded to 4n+1; AnimateDiff uses exactly `duration × nativeFps`; sizes are multiples of 16; seed −1 is replaced with a random one. A duration above the model limit becomes two segments.
+2. The queue runs `sd-cli` strictly one process at a time: the GPU and GTT are shared.
+3. `sd-cli` output is parsed line by line:
+   - stages: `generate_video` / `generating image` → sampling, `sampling completed` / `latent images completed` → decoding, `decode_first_stage completed` → saving;
+   - progress lines `i/N - X s/it`;
+   - weight loading;
+   - saved files.
+4. For extra-length videos, ffmpeg extracts the last frame of a segment, and the next segment is generated from it as image-to-video with the mode's `continueArgs`.
+5. Video: the MJPEG AVI(s) from `sd-cli` → an H.264 mp4 via ffmpeg (segments are concatenated without the duplicated seam frame). If the output FPS is above the native one, `minterpolate` synthesizes the frames. Images: the PNGs are renamed. A thumbnail is made for the gallery.
+6. If the container restarts during a generation, the current job is marked as failed and the rest of the queue continues.
 
 ## API
 
-Все маршруты, кроме входа, требуют сессию. Изменяющие запросы требуют заголовок `X-Requested-With: genai-platform`.
+Every route except sign-in requires a session. Mutating requests require the `X-Requested-With: genai-platform` header.
 
-| Метод | Путь | Кто | Что |
+| Method | Path | Who | What |
 |---|---|---|---|
-| GET | `/api/auth/status` | все | `{setup: true}`, если пользователей ещё нет |
-| POST | `/api/auth/setup` | все, пока нет пользователей | создание первого администратора |
-| POST | `/api/auth/login` · `/logout` | все | вход/выход (cookie `gp_session`) |
-| GET | `/api/auth/me` | все | текущий пользователь |
-| POST | `/api/auth/password` | пользователь | смена своего пароля |
-| GET/POST/DELETE | `/api/users[/:name[/password]]` | admin | управление пользователями |
-| GET | `/api/state` | пользователь | задачи, сведения о железе |
-| GET | `/api/presets` | пользователь | режимы с признаком доступности и списком недостающих моделей |
-| POST | `/api/jobs` | пользователь | новая задача (multipart, опционально `image`) |
-| POST/DELETE | `/api/jobs/:id/cancel` · `/api/jobs/:id` | владелец или admin | отмена/удаление вместе с файлами |
-| GET | `/api/jobs/:id/log` · `/api/jobs/:id/download/:n` | пользователь | лог sd-cli, скачивание результата |
-| GET | `/api/models` | пользователь | каталог, статусы, прогресс загрузок, место на диске |
-| POST | `/api/models/download` `{ids}` · `/api/models/:id/cancel` | admin | загрузка/отмена |
-| DELETE | `/api/models/:id` | admin | удаление (запрещено, пока модель занята генерацией) |
-| GET | `/files/{output,thumbs,previews,uploads}/…` | пользователь | файлы (с поддержкой Range для видео) |
+| GET | `/api/auth/status` | anyone | `{setup: true}` while there are no users |
+| POST | `/api/auth/setup` | anyone, while there are no users | create the first administrator |
+| POST | `/api/auth/login` · `/logout` | anyone | sign in/out (cookie `gp_session`) |
+| GET | `/api/auth/me` | anyone | the current user |
+| POST | `/api/auth/password` | user | change your own password |
+| GET/POST/DELETE | `/api/users[/:name[/password]]` | admin | user management |
+| GET | `/api/state` | user | jobs, hardware info |
+| GET | `/api/presets` | user | modes with availability and the list of missing models |
+| GET | `/api/templates` | user | hidden start templates |
+| GET | `/api/packs` | user | model packs for first-run setup |
+| POST | `/api/jobs` | user | a new job (multipart, optional `image`) |
+| POST/DELETE | `/api/jobs/:id/cancel` · `/api/jobs/:id` | owner or admin | cancel / delete together with files |
+| GET | `/api/jobs/:id/log` · `/api/jobs/:id/download/:n` | user | sd-cli log, download a result |
+| GET | `/api/models` | user | catalog, statuses, download progress, disk space |
+| POST | `/api/models/download` `{ids}` · `/api/models/:id/cancel` | admin | download / cancel |
+| DELETE | `/api/models/:id` | admin | delete (refused while the model is in use) |
+| GET | `/files/{output,thumbs,previews,uploads}/…` | user | files (with Range support for video) |
 
-## Безопасность {#безопасность}
+## Internationalization
 
-- **Пароли:** scrypt (N=16384, r=8, p=1) с солью, сравнение за постоянное время, минимум 8 символов.
-- **Сессии:** случайный 256-битный токен в cookie `HttpOnly; SameSite=Lax` (`Secure` при `COOKIE_SECURE=true`). На диске хранится только SHA-256 токена. Сессия живёт `SESSION_DAYS` дней (30 по умолчанию). Смена пароля завершает остальные сессии пользователя.
-- **CSRF:** SameSite-cookie плюс обязательный нестандартный заголовок на изменяющих запросах (браузер не отправит его на чужой сайт без CORS-разрешения).
-- **Перебор:** после 10 неудачных входов с одного IP вход блокируется на 15 минут. За прокси включите `TRUST_PROXY=true`, чтобы учитывался реальный IP.
-- **Первый администратор:** пока пользователей нет, интерфейс показывает регистрацию, а `POST /api/auth/setup` создаёт администратора и сразу открывает сессию. Как только есть хотя бы один пользователь, этот маршрут отвечает 409, и остаётся только вход. Пока администратора нет, форму видит любой в сети, поэтому создайте его сразу после первого запуска.
-- **Права:** администратор скачивает и удаляет модели, управляет пользователями и чужими задачами. Пользователь генерирует и управляет своими задачами. Результаты видны всем вошедшим.
-- **Файлы:** результаты, миниатюры и загрузки отдаются только авторизованным. Имена загрузок генерируются сервером, в модель принимаются только изображения до 25 МБ.
-- **Периметр:** платформа рассчитана на локальную сеть. Для доступа из интернета нужен HTTPS-прокси. Порт можно привязать к конкретному интерфейсу через `BIND_ADDR`.
+- The UI defaults to English; Ukrainian and Russian are additional. The choice is stored in the browser (`localStorage`, key `gp_lang`).
+- `web/src/i18n.js` implements a gettext-style `t()`: the English text is the key, `web/src/locales/uk.js` and `ru.js` hold the translations, a missing translation falls back to English, `{name}` placeholders are substituted.
+- Server error messages are plain English. The UI translates them through the same dictionaries (`tError()`), including messages with a variable tail matched by their `Prefix:`.
+- Catalog entries carry optional translations in an `i18n` field; the UI reads them with `loc(entry, field)`.
+- `node scripts/i18n-keys.mjs` lists every key used in the UI and on the server and fails if the `uk` or `ru` dictionary misses one.
+
+## Security
+
+- **Passwords:** scrypt (N=16384, r=8, p=1) with a salt, constant-time comparison, at least 8 characters.
+- **Sessions:** a random 256-bit token in an `HttpOnly; SameSite=Lax` cookie (`Secure` with `COOKIE_SECURE=true`). Only the SHA-256 of the token is stored on disk. Sessions last `SESSION_DAYS` days (30 by default). Changing a password signs out the user's other sessions.
+- **CSRF:** the SameSite cookie plus a mandatory non-standard header on mutating requests (a browser will not send it cross-site without a CORS grant).
+- **Brute force:** after 10 failed sign-ins from one IP, sign-in is blocked for 15 minutes. Behind a proxy, set `TRUST_PROXY=true` so the real IP is used.
+- **First administrator:** while there are no users, the UI shows registration and `POST /api/auth/setup` creates the administrator and opens a session. Once any user exists the route answers 409 and only sign-in remains. Until then anyone on the network can see the form, so create the administrator right after the first start.
+- **Permissions:** administrators download and delete models and manage users and other users' jobs. Users generate content and manage their own jobs. Results are visible to every signed-in user.
+- **Files:** results, thumbnails and uploads are served to signed-in users only. Upload names are generated by the server; only images up to 25 MB are accepted.
+- **Perimeter:** the platform is meant for a local network. Internet access needs an HTTPS proxy. The port can be bound to a specific interface with `BIND_ADDR`.

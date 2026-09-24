@@ -1,4 +1,4 @@
-// Сведения о железе: APU, iGPU (через Vulkan), унифицированная память, GTT и NPU.
+// Hardware info: APU, iGPU (via Vulkan), unified memory, GTT and NPU.
 import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -28,7 +28,7 @@ function cpuModel() {
   }
 }
 
-// NPU XDNA (Ryzen AI) виден на PCI как 1022:1502 / 1022:17f0; драйвер amdxdna даёт /dev/accel
+// The XDNA NPU (Ryzen AI) shows up on PCI as 1022:1502 / 1022:17f0; the amdxdna driver provides /dev/accel
 function npuInfo() {
   let present = false;
   try {
@@ -42,7 +42,7 @@ function npuInfo() {
   return { present, driver: fs.existsSync('/dev/accel') };
 }
 
-// Семейство Ryzen AI по имени iGPU — для подсказок в интерфейсе и документации
+// Ryzen AI family derived from the iGPU name, used for UI hints and recommendations
 function platformFamily(gpu = '', cpu = '') {
   const s = `${gpu} ${cpu}`;
   if (/8060S|8050S|8040S|Ryzen AI MAX/i.test(s)) return 'Strix Halo';
@@ -53,7 +53,7 @@ function platformFamily(gpu = '', cpu = '') {
 
 const info = { cpu: cpuModel(), gpu: null, driver: null, npu: npuInfo(), family: null };
 
-// Имя GPU берём у самого Vulkan: это ровно то устройство, на котором будет считать sd.cpp
+// Take the GPU name from Vulkan itself: it is exactly the device sd.cpp will run on
 execFile('vulkaninfo', ['--summary'], { timeout: 20000 }, (err, stdout = '') => {
   const devs = [...stdout.matchAll(/deviceName\s*=\s*(.+)/g)].map((m) => m[1].trim());
   const drivers = [...stdout.matchAll(/driverInfo\s*=\s*(.+)/g)].map((m) => m[1].trim());
@@ -62,13 +62,13 @@ execFile('vulkaninfo', ['--summary'], { timeout: 20000 }, (err, stdout = '') => 
   info.driver = i >= 0 ? drivers[i] : null;
   info.family = platformFamily(info.gpu, info.cpu);
   if (!info.gpu || /llvmpipe/i.test(info.gpu)) {
-    console.warn('[system] Vulkan не видит GPU (только llvmpipe): проверьте проброс /dev/dri и группы render/video');
+    console.warn('[system] Vulkan sees no GPU (llvmpipe only): check the /dev/dri passthrough and the render/video groups');
   } else {
     console.log(`[system] ${info.cpu} · ${info.gpu} · ${info.driver}`);
   }
 });
 
-// Загрузка CPU — по разнице счётчиков /proc/stat между двумя опросами
+// CPU load from the difference of /proc/stat counters between two polls
 let prevCpu = null;
 function cpuUsage() {
   try {
@@ -86,7 +86,7 @@ function cpuUsage() {
 }
 cpuUsage();
 
-// Размер каталога считаем редко: обход тысяч файлов на каждый опрос не нужен
+// Directory sizes are cached: walking thousands of files on every poll is unnecessary
 const dirSizeCache = new Map();
 function dirSize(dir) {
   const c = dirSizeCache.get(dir);

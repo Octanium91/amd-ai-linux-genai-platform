@@ -1,5 +1,5 @@
-// Потоковая переупаковка .safetensors без загрузки файла в память.
-// Используется для приведения моделей к виду, который понимает stable-diffusion.cpp.
+// Streaming .safetensors repacking without loading the file into memory.
+// Used to convert models into the layout stable-diffusion.cpp expects.
 import fs from 'node:fs';
 
 export function readHeader(file) {
@@ -19,7 +19,7 @@ export function readHeader(file) {
   }
 }
 
-// entries: [{ name, src }] — src это имя тензора в исходном файле (можно повторять)
+// entries: [{ name, src }] — src is the tensor name in the source file (may repeat)
 export function rewrite(srcFile, dstFile, entries, meta) {
   const { header, dataStart } = readHeader(srcFile);
   const out = {};
@@ -27,13 +27,13 @@ export function rewrite(srcFile, dstFile, entries, meta) {
   let offset = 0;
   for (const e of entries) {
     const t = header[e.src];
-    if (!t) throw new Error(`нет тензора ${e.src}`);
+    if (!t) throw new Error(`missing tensor ${e.src}`);
     const size = t.data_offsets[1] - t.data_offsets[0];
     out[e.name] = { dtype: t.dtype, shape: t.shape, data_offsets: [offset, offset + size] };
     offset += size;
   }
   let json = Buffer.from(JSON.stringify(out), 'utf8');
-  const pad = (8 - (json.length % 8)) % 8; // выравнивание, как у эталонной реализации
+  const pad = (8 - (json.length % 8)) % 8; // padding, as in the reference implementation
   json = Buffer.concat([json, Buffer.alloc(pad, 0x20)]);
 
   const src = fs.openSync(srcFile, 'r');
@@ -58,16 +58,16 @@ export function rewrite(srcFile, dstFile, entries, meta) {
   }
 }
 
-// AnimateDiff-модуль в формате diffusers (MotionAdapter) -> исходный формат AnimateDiff,
-// который ожидает sd.cpp: префикс temporal_transformer, attention_blocks.N, norms.N, ff_norm
-// и отдельная таблица pos_encoder.pe у каждого из двух блоков внимания.
+// AnimateDiff motion module in diffusers (MotionAdapter) format -> original AnimateDiff layout
+// expected by sd.cpp: temporal_transformer prefix, attention_blocks.N, norms.N, ff_norm
+// and a separate pos_encoder.pe table for each of the two attention blocks.
 export function animatediffFromDiffusers(srcFile, dstFile) {
   const { header, meta } = readHeader(srcFile);
   const entries = [];
   const re = /^((?:down_blocks|up_blocks)\.\d+\.motion_modules\.\d+|mid_block\.motion_modules\.\d+)\.(.+)$/;
   for (const name of Object.keys(header)) {
     const m = name.match(re);
-    if (!m) throw new Error(`неожиданный тензор ${name}`);
+    if (!m) throw new Error(`unexpected tensor ${name}`);
     const [, prefix, rest] = m;
     const tb = 'transformer_blocks.0.';
     let mapped;

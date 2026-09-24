@@ -1,41 +1,46 @@
-# Замеры
+# Benchmarks
 
-Машина: Sapphire EDGE AI 370 — Ryzen AI 9 HX 370, **Radeon 890M (16 CU)**, 32 ГБ LPDDR5X, GTT 24 ГБ, Debian 13, ядро 6.12, Mesa 25.0.7 (RADV), stable-diffusion.cpp `88411ef` (Vulkan). Промпт в видеотестах: «A cute raccoon playing guitar in the beach».
+Machine: Sapphire EDGE AI 370 — Ryzen AI 9 HX 370, **Radeon 890M (16 CU)**, 32 GB LPDDR5X, 24 GB GTT, Debian 13, kernel 6.12, Mesa 25.0.7 (RADV), stable-diffusion.cpp `88411ef` (Vulkan). Video test prompt: "A cute raccoon playing guitar in the beach".
 
-## Видео
+All numbers are measured, not estimated, unless marked as an estimate.
 
-| Режим | Параметры | Сэмплирование | Декодирование | Всего |
+## Video
+
+| Mode | Parameters | Sampling | Decoding | Total |
 |---|---|---|---|---|
-| **AnimateLCM**, CFG 1 | 512×512, 16 кадров, 6 шагов, lcm | 101 с (~14–17 с/шаг) | 46 с | **150 с** (через интерфейс, с интерполяцией 8→24 fps) |
-| AnimateLCM, CFG 1.5 | то же | ~49 с/шаг | 53 с | 296 с |
-| AnimateDiff v3 | 512×512, 16 кадров, 20 шагов, CFG 8 | 899 с (~45 с/шаг) | 57 с | 957 с |
-| AnimateLCM, **экстра 5 с** | 2 сегмента × 20 кадров, 4 шага (черновик) | 208 с + ~214 с | — | 531 с (через интерфейс, с интерполяцией 8→24 fps) |
-| Wan 2.2 TI2V 5B Q8_0 | 832×480, 17 кадров, 10 шагов | 676 с (~63 с/шаг) | 2027 с (VAE плитками) | 45 мин |
-| Wan 2.2 TI2V 5B Q8_0 | 832×480, 49 кадров, 25 шагов | ~172 с/шаг | — | ≈ 2.5–3 ч (оценка) |
-| Wan 2.2 TI2V 5B Q8_0 | 832×480, 65 кадров, 40 шагов | ~207 с/шаг | — | > 3 ч (оценка) |
+| **AnimateLCM**, CFG 1 | 512×512, 16 frames, 6 steps, lcm | 101 s (~14–17 s/step) | 46 s | **150 s** (through the UI, with 8→24 fps interpolation) |
+| AnimateLCM, CFG 1.5 | same | ~49 s/step | 53 s | 296 s |
+| AnimateDiff v3 | 512×512, 16 frames, 20 steps, CFG 8 | 899 s (~45 s/step) | 57 s | 957 s |
+| AnimateLCM, **extra 5 s** | 2 segments × 20 frames, 4 steps (Draft), continuation strength 0.55 | — | — | 402 s (through the UI, with 8→24 fps interpolation) |
+| AnimateLCM, extra 5 s | same, continuation strength 0.75 | 208 s + ~214 s | — | 531 s |
+| Wan 2.2 TI2V 5B Q8_0 | 832×480, 17 frames, 10 steps | 676 s (~63 s/step) | 2027 s (tiled VAE) | 45 min |
+| Wan 2.2 TI2V 5B Q8_0 | 832×480, 49 frames, 25 steps | ~172 s/step | — | ≈ 2.5–3 h (estimate) |
+| Wan 2.2 TI2V 5B Q8_0 | 832×480, 65 frames, 40 steps | ~207 s/step | — | > 3 h (estimate) |
 
-Пиковое потребление GTT: AnimateDiff и AnimateLCM — ~8 ГБ; Wan 2.2 5B — ~16 ГБ на сэмплировании и до 22.3 ГБ на декодировании VAE.
+Peak GTT usage: AnimateDiff and AnimateLCM ~8 GB; Wan 2.2 5B ~16 GB during sampling and up to 22.3 GB during VAE decoding.
 
-## Изображения
+With continuation strength 0.55 the second segment of an extra-length clip keeps the composition of the first one; with 0.75 it drifted into a different scene.
 
-| Режим | Параметры | Всего |
+## Images
+
+| Mode | Parameters | Total |
 |---|---|---|
-| Realistic Vision 6 | 512×768, 25 шагов, dpm++2m karras, CFG 5.5, **2 варианта** | **85 с** (сэмплирование 43 с, декодирование 8 с) — ~40 с на картинку |
+| Realistic Vision 6 | 512×768, 25 steps, dpm++2m karras, CFG 5.5, **2 variants** | **85 s** (sampling 43 s, decoding 8 s) — ~40 s per image |
 
-## Что влияет на скорость
+## What affects speed
 
-Замер на AnimateDiff v3 — по 2 шага, 16 кадров 512×512:
+Measured on AnimateDiff v3, 2 steps each, 16 frames at 512×512:
 
-| Вариант | с/шаг | Вывод |
+| Variant | s/step | Takeaway |
 |---|---|---|
-| базовый (`--diffusion-fa --offload-to-cpu`, CFG 8) | 41.5 | |
-| без `--offload-to-cpu` | 45.4 | выгрузка весов в RAM на APU не мешает: память общая |
-| без `--diffusion-fa` | 93.5 | **flash attention обязателен** |
-| CFG 1 | 23.7 | CFG > 1 удваивает работу (второй, негативный проход) |
-| 384×384 | 22.2 | время ~ пропорционально числу пикселей |
+| baseline (`--diffusion-fa --offload-to-cpu`, CFG 8) | 41.5 | |
+| without `--offload-to-cpu` | 45.4 | offloading weights to RAM costs nothing on an APU: the memory is shared |
+| without `--diffusion-fa` | 93.5 | **flash attention is essential** |
+| CFG 1 | 23.7 | CFG > 1 doubles the work (a second, negative pass) |
+| 384×384 | 22.2 | time is roughly proportional to the pixel count |
 
-Главный рычаг — число шагов и CFG. Поэтому AnimateLCM (6 шагов, CFG 1) в 6 раз быстрее AnimateDiff v3 (20 шагов, CFG 8) при сопоставимой картинке. У Wan на этом железе узкое место — декодирование VAE плитками.
+The main levers are the number of steps and CFG. That is why AnimateLCM (6 steps, CFG 1) is 6× faster than AnimateDiff v3 (20 steps, CFG 8) with a comparable picture. For Wan on this hardware the bottleneck is tiled VAE decoding.
 
-## Сравнение с другими машинами
+## Other machines
 
-На Ryzen AI MAX+ 395 (Radeon 8060S, 40 CU, 256-битная память) стоит ожидать кратного ускорения: CU в 2.5 раза больше, пропускная способность памяти примерно вдвое выше. Если у вас другая машина из линейки, пришлите замеры: их можно добавить в эту таблицу.
+On a Ryzen AI MAX+ 395 (Radeon 8060S, 40 CU, 256-bit memory) expect a multiple speed-up: 2.5× the CUs and roughly twice the memory bandwidth. If you run another machine from the lineup, please contribute measurements to this table.

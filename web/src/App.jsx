@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, fmtBytes, setUnauthorizedHandler } from './util.js';
+import { t, useLang } from './i18n.js';
+import { LangSwitch } from './LangSwitch.jsx';
 import { Logo } from './Logo.jsx';
 import Login from './Login.jsx';
 import Studio from './Studio.jsx';
@@ -7,22 +9,20 @@ import Models from './Models.jsx';
 import Users, { ChangePassword } from './Users.jsx';
 import Setup from './Setup.jsx';
 
-export { Logo };
-
 const TABS = [
-  { key: 'video', label: 'Видео' },
-  { key: 'image', label: 'Изображения' },
-  { key: 'models', label: 'Модели' },
-  { key: 'users', label: 'Пользователи', admin: true },
+  { key: 'video', label: 'Video' },
+  { key: 'image', label: 'Images' },
+  { key: 'models', label: 'Models' },
+  { key: 'users', label: 'Users', admin: true },
 ];
 
 function readTab() {
-  const t = location.hash.replace('#', '');
-  return TABS.some((x) => x.key === t) ? t : 'video';
+  const tab = location.hash.replace('#', '');
+  return TABS.some((x) => x.key === tab) ? tab : 'video';
 }
 
 function SystemBar({ system, online }) {
-  if (!online) return <div className="sys"><span className="dot bad" /> нет связи с сервером</div>;
+  if (!online) return <div className="sys"><span className="dot bad" /> {t('no connection to the server')}</div>;
   if (!system) return null;
   const pct = (a, b) => (b ? (a / b) * 100 : 0);
   const gttPct = pct(system.gttUsed, system.gttTotal);
@@ -31,10 +31,14 @@ function SystemBar({ system, online }) {
   const disk = st.models || st.data;
   const diskPct = disk ? pct(disk.total - disk.free, disk.total) : 0;
   const diskTitle = [
-    st.models && `Диск с моделями: свободно ${fmtBytes(st.models.free)} из ${fmtBytes(st.models.total)}; модели занимают ${fmtBytes(st.models.used)}`,
+    st.models && t('Models disk: {free} free of {total}; models take {used}', {
+      free: fmtBytes(st.models.free), total: fmtBytes(st.models.total), used: fmtBytes(st.models.used),
+    }),
     st.data && (st.data.sameDisk
-      ? `Результаты на том же диске: ${fmtBytes(st.data.used)}`
-      : `Диск с результатами: свободно ${fmtBytes(st.data.free)} из ${fmtBytes(st.data.total)}; результаты занимают ${fmtBytes(st.data.used)}`),
+      ? t('Results on the same disk: {used}', { used: fmtBytes(st.data.used) })
+      : t('Results disk: {free} free of {total}; results take {used}', {
+        free: fmtBytes(st.data.free), total: fmtBytes(st.data.total), used: fmtBytes(st.data.used),
+      })),
   ].filter(Boolean).join('\n');
   const hw = [system.family, system.gpu?.replace(/\s*\(RADV.*\)/, '')].filter(Boolean).join(' · ');
   const Meter = ({ value }) => (
@@ -43,25 +47,25 @@ function SystemBar({ system, online }) {
   return (
     <div className="sys">
       {hw && <div className="sys-item sys-hw" title={`${system.cpu || ''}\n${system.driver || ''}`}>{hw}</div>}
-      <div className="sys-item" title={`Загрузка процессора${system.cpu ? `\n${system.cpu}` : ''}${system.threads ? `, ${system.threads} потоков` : ''}`}>
+      <div className="sys-item" title={[t('CPU load'), system.cpu, system.threads && t('{n} threads', { n: system.threads })].filter(Boolean).join('\n')}>
         <span className="sys-label">CPU</span><span className="sys-val">{system.cpuBusy ?? '—'}%</span>
       </div>
-      <div className="sys-item" title="Загрузка iGPU"><span className="sys-label">GPU</span><span className="sys-val">{system.gpuBusy ?? '—'}%</span></div>
-      <div className="sys-item" title="Память GPU (GTT) — выделяется из общей оперативной памяти">
+      <div className="sys-item" title={t('iGPU load')}><span className="sys-label">GPU</span><span className="sys-val">{system.gpuBusy ?? '—'}%</span></div>
+      <div className="sys-item" title={t('GPU memory (GTT), allocated from the shared system RAM')}>
         <span className="sys-label">GTT</span>
         <Meter value={gttPct} />
         <span className="sys-val">{fmtBytes(system.gttUsed)} / {fmtBytes(system.gttTotal)}</span>
       </div>
-      <div className="sys-item" title={`Оперативная память: занято ${fmtBytes(system.memTotal - system.memAvailable)} из ${fmtBytes(system.memTotal)}`}>
+      <div className="sys-item" title={t('RAM: {used} used of {total}', { used: fmtBytes(system.memTotal - system.memAvailable), total: fmtBytes(system.memTotal) })}>
         <span className="sys-label">RAM</span>
         <Meter value={ramPct} />
-        <span className="sys-val">{fmtBytes(system.memAvailable)} своб.</span>
+        <span className="sys-val">{t('{size} free', { size: fmtBytes(system.memAvailable) })}</span>
       </div>
       {disk && (
         <div className="sys-item" title={diskTitle}>
-          <span className="sys-label">Диск</span>
+          <span className="sys-label">{t('Disk')}</span>
           <Meter value={diskPct} />
-          <span className="sys-val">{fmtBytes(disk.free)} своб.</span>
+          <span className="sys-val">{t('{size} free', { size: fmtBytes(disk.free) })}</span>
         </div>
       )}
     </div>
@@ -84,8 +88,12 @@ function UserMenu({ user, onLogout }) {
       </button>
       {open && (
         <div className="menu">
-          <button onClick={() => { setPwd(true); setOpen(false); }}>Сменить пароль</button>
-          <button onClick={onLogout}>Выйти</button>
+          <div className="menu-row">
+            <span className="muted small">{t('Language')}</span>
+            <LangSwitch />
+          </div>
+          <button onClick={() => { setPwd(true); setOpen(false); }}>{t('Change password')}</button>
+          <button onClick={onLogout}>{t('Sign out')}</button>
         </div>
       )}
       {pwd && <ChangePassword onClose={() => setPwd(false)} />}
@@ -94,13 +102,14 @@ function UserMenu({ user, onLogout }) {
 }
 
 export default function App() {
-  const [user, setUser] = useState(undefined); // undefined — проверяем сессию, null — не вошли
+  useLang(); // re-render the whole tree when the language changes
+  const [user, setUser] = useState(undefined); // undefined — checking the session, null — signed out
   const [tab, setTab] = useState(readTab);
   const [jobs, setJobs] = useState([]);
   const [system, setSystem] = useState(null);
   const [presets, setPresets] = useState([]);
   const [templates, setTemplates] = useState(null);
-  const [setup, setSetup] = useState(null); // состояние первичной настройки (наборы моделей)
+  const [setup, setSetup] = useState(null); // first-run setup state (model packs)
   const [setupSkipped, setSetupSkipped] = useState(false);
   const [online, setOnline] = useState(true);
   const [now, setNow] = useState(Date.now());
@@ -122,7 +131,7 @@ export default function App() {
       setSystem(s.system);
       setOnline(true);
     } catch (e) {
-      if (!/Требуется вход/.test(e.message)) setOnline(false);
+      if (e.status !== 401) setOnline(false);
     }
   }, []);
   const loadPresets = useCallback(() => {
@@ -141,7 +150,7 @@ export default function App() {
     return () => [a, b, c].forEach(clearInterval);
   }, [user, refresh, loadPresets]);
 
-  if (user === undefined) return <div className="login-wrap muted">Загрузка…</div>;
+  if (user === undefined) return <div className="login-wrap muted">{t('Loading…')}</div>;
   if (!user) return <Login onLogin={setUser} />;
 
   const logout = async () => {
@@ -152,7 +161,7 @@ export default function App() {
     location.hash = key;
     setTab(key);
   };
-  const tabs = TABS.filter((t) => !t.admin || user.role === 'admin');
+  const tabs = TABS.filter((x) => !x.admin || user.role === 'admin');
 
   return (
     <div className="app">
@@ -165,8 +174,8 @@ export default function App() {
           </div>
         </div>
         <nav className="nav">
-          {tabs.map((t) => (
-            <button key={t.key} className={`nav-tab ${tab === t.key ? 'on' : ''}`} onClick={() => go(t.key)}>{t.label}</button>
+          {tabs.map((x) => (
+            <button key={x.key} className={`nav-tab ${tab === x.key ? 'on' : ''}`} onClick={() => go(x.key)}>{t(x.label)}</button>
           ))}
         </nav>
         <div className="top-right">

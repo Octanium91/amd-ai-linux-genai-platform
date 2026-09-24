@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config } from './config.js';
 
-// Маленькие JSON-файлы состояния в /data/state с атомарной записью
+// Small JSON state files in /data/state with atomic writes
 export function statePath(name) {
   return path.join(config.dirs.state, name);
 }
@@ -21,7 +21,7 @@ export function writeJson(file, value, mode) {
   fs.renameSync(tmp, file);
 }
 
-// Отложенная запись для часто меняющихся данных (прогресс задач)
+// Debounced writes for frequently changing data (job progress)
 export function debouncedWriter(file, getValue, delay = 2000) {
   let timer = null;
   return (now = false) => {

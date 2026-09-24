@@ -1,19 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, estimate, fmtBytes, fmtDuration } from './util.js';
+import { loc, t } from './i18n.js';
 
 const FALLBACK_RES = [[512, 512], [768, 512], [512, 768]];
 const OUT_FPS = [24, 30, 50, 60, 120];
 const COUNTS = [1, 2, 4];
 const QUALITY = [
-  { key: 'draft', label: 'Черновик' },
-  { key: 'normal', label: 'Стандарт' },
-  { key: 'high', label: 'Высокое' },
-  { key: 'extra', label: 'Экстра', extra: true },
+  { key: 'draft', label: 'Draft' },
+  { key: 'normal', label: 'Standard' },
+  { key: 'high', label: 'High' },
+  { key: 'extra', label: 'Extra', extra: true },
 ];
-
-// «Экстра» — вдвое больше шагов, чем «Высокое» (как на сервере)
-const qualitySteps = (d, q) => (q === 'extra' ? d.quality?.extra ?? (d.quality?.high ? d.quality.high * 2 : null) : d.quality?.[q]);
 const SAMPLERS = ['euler', 'euler_a', 'dpm++2m', 'dpm++2m_sde', 'res_multistep', 'lcm', 'ddim_trailing', 'tcd'];
+
+// "Extra" is twice the steps of "High" (same rule as the server)
+const qualitySteps = (d, q) => (q === 'extra' ? d.quality?.extra ?? (d.quality?.high ? d.quality.high * 2 : null) : d.quality?.[q]);
 
 function fromPreset(p) {
   const d = p?.defaults || {};
@@ -34,8 +35,8 @@ function fromPreset(p) {
   };
 }
 
-// Та же формула, что на сервере: Wan — 4n+1 кадров, AnimateDiff — ровно duration × fps.
-// Длиннее предела модели (экстра) — два сегмента, второй продолжает последний кадр первого.
+// Same formula as the server: Wan takes 4n+1 frames, AnimateDiff exactly duration × fps.
+// Longer than the model limit (extra): two segments, the second continues from the last frame of the first.
 function planFrames(preset, duration) {
   const d = preset?.defaults || {};
   const nativeFps = d.nativeFps ?? 24;
@@ -75,7 +76,7 @@ function Chips({ items, value, onChange, render = (x) => x }) {
   );
 }
 
-// Режим без скачанных моделей: список недостающего и кнопка загрузки (только admin)
+// A mode without downloaded models: the missing files and a download button (admin only)
 function MissingModels({ preset, user, goModels, reloadPresets }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
@@ -84,7 +85,7 @@ function MissingModels({ preset, user, goModels, reloadPresets }) {
     setBusy(true);
     try {
       await api('/api/models/download', { method: 'POST', json: { ids: preset.missing.map((m) => m.id) } });
-      setMsg('Загрузка поставлена в очередь — прогресс в разделе «Модели».');
+      setMsg(t('Download queued — progress is in the Models section.'));
       reloadPresets();
     } catch (e) {
       setMsg(e.message);
@@ -94,15 +95,15 @@ function MissingModels({ preset, user, goModels, reloadPresets }) {
   };
   return (
     <div className="missing">
-      <div className="missing-title">Для этого режима нужно скачать модели ({fmtBytes(total)}):</div>
+      <div className="missing-title">{t('This mode needs models to be downloaded ({size}):', { size: fmtBytes(total) })}</div>
       <ul>{preset.missing.map((m) => <li key={m.id}>{m.name} <span className="muted">· {fmtBytes(m.size)}</span></li>)}</ul>
       {user.role === 'admin' ? (
         <div className="row">
-          <button type="button" className="btn primary" disabled={busy} onClick={start}>Скачать ({fmtBytes(total)})</button>
-          <button type="button" className="btn ghost" onClick={goModels}>Модели →</button>
+          <button type="button" className="btn primary" disabled={busy} onClick={start}>{t('Download ({size})', { size: fmtBytes(total) })}</button>
+          <button type="button" className="btn ghost" onClick={goModels}>{t('Models →')}</button>
         </div>
       ) : (
-        <div className="muted small">Попросите администратора скачать модели.</div>
+        <div className="muted small">{t('Ask an administrator to download the models.')}</div>
       )}
       {msg && <div className="muted small">{msg}</div>}
     </div>
@@ -112,7 +113,7 @@ function MissingModels({ preset, user, goModels, reloadPresets }) {
 export default function GenerateForm({ kind, user, presets, templates, jobs, reuse, queueSize, onCreated, reloadPresets, goModels }) {
   const [form, setForm] = useState(null);
   const [image, setImage] = useState(null); // File
-  const [imageRef, setImageRef] = useState(null); // имя уже загруженного файла
+  const [imageRef, setImageRef] = useState(null); // name of an already uploaded file
   const [advanced, setAdvanced] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -122,21 +123,21 @@ export default function GenerateForm({ kind, user, presets, templates, jobs, reu
 
   const preset = presets.find((p) => p.id === form?.presetId);
 
-  // Стартовое заполнение: случайный скрытый шаблон (предпочтительно для режима, модели которого уже скачаны)
+  // Initial fill: a random hidden template, preferring modes whose models are already downloaded
   useEffect(() => {
     if (form || !presets.length || templates === undefined) return;
-    const usable = (templates || []).filter((t) => presets.some((p) => p.id === t.presetId));
-    const ready = usable.filter((t) => presets.find((p) => p.id === t.presetId)?.available);
+    const usable = (templates || []).filter((x) => presets.some((p) => p.id === x.presetId));
+    const ready = usable.filter((x) => presets.find((p) => p.id === x.presetId)?.available);
     const pool = ready.length ? ready : usable;
-    const t = pool[Math.floor(Math.random() * pool.length)];
-    if (!t) return setForm(fromPreset(presets.find((p) => p.available) || presets[0]));
-    const { kind: _k, category, presetId, ...params } = t;
+    const tpl = pool[Math.floor(Math.random() * pool.length)];
+    if (!tpl) return setForm(fromPreset(presets.find((p) => p.available) || presets[0]));
+    const { kind: _k, category, presetId, ...params } = tpl;
     setForm({ ...fromPreset(presets.find((p) => p.id === presetId)), ...params, seed: -1 });
   }, [presets, templates, form]);
 
   useEffect(() => {
     if (!reuse || (reuse.kind || 'video') !== kind) return;
-    const { _t, image: img, presetName, frames, steps, fps, kind: _k, ...params } = reuse;
+    const { _t, image: img, presetName, frames, steps, fps, segments, kind: _k, ...params } = reuse;
     params.quality ??= 'normal';
     setForm((f) => ({ ...(f || {}), ...params }));
     setImage(null);
@@ -150,8 +151,8 @@ export default function GenerateForm({ kind, user, presets, templates, jobs, reu
   }, [image, imageRef]);
   useEffect(() => () => image && previewUrl && URL.revokeObjectURL(previewUrl), [image, previewUrl]);
 
-  if (!presets.length) return <div className="card"><div className="muted">Нет режимов этого типа.</div></div>;
-  if (!form) return <div className="card"><div className="muted">Загрузка…</div></div>;
+  if (!presets.length) return <div className="card"><div className="muted">{t('No modes of this type.')}</div></div>;
+  if (!form) return <div className="card"><div className="muted">{t('Loading…')}</div></div>;
 
   const set = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
   const pickPreset = (id) => {
@@ -197,20 +198,27 @@ export default function GenerateForm({ kind, user, presets, templates, jobs, reu
     }
   };
 
+  const summary = isVideo
+    ? (plan.segments > 1
+      ? t('2 segments × {frames} frames at {fps} fps', { frames: plan.frames, fps: plan.nativeFps })
+      : t('{frames} frames at {fps} fps', { frames: plan.frames, fps: plan.nativeFps }))
+      + (interpolated ? ` → ${form.outFps} fps` : '') + ` · ${form.width}×${form.height}`
+    : `${form.count} × ${form.width}×${form.height}`;
+
   return (
     <form className="card form" onSubmit={submit}>
-      <h2>{isVideo ? 'Новое видео' : 'Новое изображение'}</h2>
+      <h2>{isVideo ? t('New video') : t('New image')}</h2>
 
       <label className="field">
-        <span className="field-label">Режим</span>
+        <span className="field-label">{t('Mode')}</span>
         <select value={form.presetId} onChange={(e) => pickPreset(e.target.value)}>
           {presets.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.name}{p.available ? '' : ' — нужно скачать модели'}
+              {loc(p, 'name')}{p.available ? '' : ` — ${t('models need to be downloaded')}`}
             </option>
           ))}
         </select>
-        {preset?.description && <span className="field-hint">{preset.description}</span>}
+        {preset?.description && <span className="field-hint">{loc(preset, 'description')}</span>}
       </label>
 
       {preset && !preset.available && (
@@ -218,19 +226,21 @@ export default function GenerateForm({ kind, user, presets, templates, jobs, reu
       )}
 
       <label className="field">
-        <span className="field-label">Что сгенерировать</span>
+        <span className="field-label">{t('What to generate')}</span>
         <textarea rows={5} value={form.prompt} required
           placeholder={isVideo ? 'a red fox running through fresh snow, cinematic lighting, slow motion' : 'portrait photo of an old fisherman, golden hour, 85mm, detailed skin'}
           onChange={(e) => set('prompt')(e.target.value)}
           onKeyDown={(e) => (e.ctrlKey || e.metaKey) && e.key === 'Enter' && e.currentTarget.form.requestSubmit()} />
-        <span className="field-hint">Лучше на английском. Ctrl+Enter — отправить.</span>
+        <span className="field-hint">{t('English prompts work best. Ctrl+Enter submits.')}</span>
       </label>
 
       {acceptsImage && (
         <div className="field">
           <span className="field-label">
-            {isVideo ? 'Стартовый кадр' : 'Исходная картинка'}{' '}
-            <span className="muted">{preset.image === 'required' ? '(обязательно)' : isVideo ? '(необязательно: картинка → видео)' : '(необязательно: картинка → картинка)'}</span>
+            {isVideo ? t('Start frame') : t('Source image')}{' '}
+            <span className="muted">
+              {preset.image === 'required' ? t('(required)') : isVideo ? t('(optional: image → video)') : t('(optional: image → image)')}
+            </span>
           </span>
           <div
             className={`drop ${drag ? 'drag' : ''} ${previewUrl ? 'has' : ''}`}
@@ -242,11 +252,11 @@ export default function GenerateForm({ kind, user, presets, templates, jobs, reu
             {previewUrl ? (
               <>
                 <img src={previewUrl} alt="" />
-                <button type="button" className="btn-icon drop-clear" title="Убрать"
+                <button type="button" className="btn-icon drop-clear" title={t('Remove')}
                   onClick={(e) => { e.stopPropagation(); setImage(null); setImageRef(null); }}>×</button>
               </>
             ) : (
-              <span className="muted">Перетащите картинку или нажмите</span>
+              <span className="muted">{t('Drop an image here or click')}</span>
             )}
           </div>
           <input ref={fileInput} type="file" accept="image/*" hidden onChange={(e) => onFile(e.target.files[0])} />
@@ -254,7 +264,7 @@ export default function GenerateForm({ kind, user, presets, templates, jobs, reu
       )}
 
       <div className="field">
-        <span className="field-label">Разрешение</span>
+        <span className="field-label">{t('Resolution')}</span>
         <Chips
           items={resolutions.map(([w, h]) => ({ key: `${w}x${h}`, w, h }))}
           value={`${form.width}x${form.height}`}
@@ -267,8 +277,8 @@ export default function GenerateForm({ kind, user, presets, templates, jobs, reu
         <>
           <label className="field">
             <span className="field-label field-label-row">
-              <span>Длительность {extraDuration && <span className="extra-badge">экстра</span>}</span>
-              <b className={extraDuration ? 'extra-text' : ''}>{Number(form.duration).toFixed(1)} с</b>
+              <span>{t('Duration')} {extraDuration && <span className="extra-badge">{t('extra')}</span>}</span>
+              <b className={extraDuration ? 'extra-text' : ''}>{t('{s} s', { s: Number(form.duration).toFixed(1) })}</b>
             </span>
             <div className="range-wrap" style={{ '--base': `${((plan.baseDuration - 0.5) / (plan.maxDuration - 0.5 || 1)) * 100}%` }}>
               <input type="range" className={`${extraDuration ? 'extra' : ''} ${plan.extendable ? 'has-extra' : ''}`}
@@ -277,68 +287,68 @@ export default function GenerateForm({ kind, user, presets, templates, jobs, reu
             </div>
             <span className={`field-hint ${extraDuration ? 'extra-text' : ''}`}>
               {extraDuration
-                ? `Экстра: длиннее предела модели (${plan.baseDuration} с). Видео собирается из 2 сегментов — второй продолжает последний кадр первого. Время ×2, на стыке возможен скачок движения.`
+                ? t('Extra: longer than the model limit ({base} s). The video is built from 2 segments, the second continues from the last frame of the first. Time ×2; a motion jump at the seam is possible.', { base: plan.baseDuration })
                 : plan.extendable
-                  ? `До ${plan.baseDuration} с — за один проход модели. Дальше, до ${plan.maxDuration} с, — экстра-зона (красная).`
-                  : `До ${plan.maxDuration} с за одну генерацию — предел модели.`}
+                  ? t('Up to {base} s in a single model pass. Beyond that, up to {max} s, is the extra zone (red).', { base: plan.baseDuration, max: plan.maxDuration })
+                  : t('Up to {max} s per generation — the model limit.', { max: plan.maxDuration })}
             </span>
           </label>
           <div className="field">
-            <span className="field-label">Кадров в секунду (FPS)</span>
+            <span className="field-label">{t('Frames per second (FPS)')}</span>
             <Chips items={OUT_FPS} value={form.outFps} onChange={set('outFps')} />
             <span className="field-hint">
               {interpolated
-                ? `Модель рисует ${plan.nativeFps} к/с, до ${form.outFps} к/с кадры досчитываются интерполяцией: движение плавнее, деталей не прибавится. Почти не влияет на время.`
-                : 'Родная частота модели, без интерполяции.'}
+                ? t('The model renders {native} fps; up to {out} fps the frames are interpolated: smoother motion, no extra detail. Barely affects the time.', { native: plan.nativeFps, out: form.outFps })
+                : t('The native frame rate of the model, no interpolation.')}
             </span>
           </div>
         </>
       ) : (
         <div className="field">
-          <span className="field-label">Количество вариантов</span>
+          <span className="field-label">{t('Number of variants')}</span>
           <Chips items={COUNTS} value={form.count} onChange={set('count')} />
-          <span className="field-hint">Каждый вариант — отдельная генерация с новым seed; время растёт пропорционально.</span>
+          <span className="field-hint">{t('Each variant is a separate generation with a new seed; the time grows proportionally.')}</span>
         </div>
       )}
 
       <div className="field">
-        <span className="field-label">Качество</span>
-        <Chips items={QUALITY} value={form.quality} onChange={set('quality')} render={(q) => q.label} />
+        <span className="field-label">{t('Quality')}</span>
+        <Chips items={QUALITY} value={form.quality} onChange={set('quality')} render={(q) => t(q.label)} />
         <span className={`field-hint ${form.quality === 'extra' ? 'extra-text' : ''}`}>
           {form.quality === 'extra'
-            ? `Экстра: ${steps} проходов — вдвое больше «Высокого». Время ×2; прирост качества уже небольшой.`
-            : `Больше проходов модели (${steps}) — чище картинка, но дольше. Черновик подходит, чтобы проверить идею.`}
+            ? t('Extra: {steps} passes — twice as many as High. Time ×2; the quality gain is already small.', { steps })
+            : t('More model passes ({steps}) give a cleaner picture but take longer. Draft is good for trying an idea.', { steps })}
         </span>
       </div>
 
-      <button type="button" className="link" onClick={() => setAdvanced((a) => !a)}>{advanced ? '▾' : '▸'} Дополнительно</button>
+      <button type="button" className="link" onClick={() => setAdvanced((a) => !a)}>{advanced ? '▾' : '▸'} {t('Advanced')}</button>
       {advanced && (
         <div className="advanced">
           <label className="field">
-            <span className="field-label">Чего избегать (негативный промпт)</span>
+            <span className="field-label">{t('What to avoid (negative prompt)')}</span>
             <textarea rows={2} value={form.negative} onChange={(e) => set('negative')(e.target.value)} />
-            {form.cfg <= 1 && <span className="field-hint">При CFG 1 негативный промпт не используется.</span>}
+            {form.cfg <= 1 && <span className="field-hint">{t('At CFG 1 the negative prompt is not used.')}</span>}
           </label>
-          <Num label="Строгость следования описанию (CFG)" value={form.cfg} onChange={set('cfg')} step={0.5} min={0} max={30}
-            hint="Насколько буквально модель выполняет описание. Выше — точнее, но появляются пересвет и артефакты; ниже — свободнее и мягче. Значение по умолчанию подобрано под режим." />
+          <Num label={t('Prompt adherence (CFG)')} value={form.cfg} onChange={set('cfg')} step={0.5} min={0} max={30}
+            hint={t('How literally the model follows the prompt. Higher is more precise but adds overexposure and artifacts; lower is freer and softer. The default is tuned for the mode.')} />
           <label className="field">
-            <span className="field-label">Зерно случайности (Seed)</span>
+            <span className="field-label">{t('Random seed')}</span>
             <div className="row">
               <input type="number" value={form.seed} onChange={(e) => set('seed')(e.target.value === '' ? -1 : Number(e.target.value))} />
-              <button type="button" className="btn-icon" title="Случайное (-1)" onClick={() => set('seed')(-1)}>⚄</button>
+              <button type="button" className="btn-icon" title={t('Random (-1)')} onClick={() => set('seed')(-1)}>⚄</button>
             </div>
-            <span className="field-hint">−1 — каждый раз новый вариант. Тот же seed с теми же настройками даёт тот же результат: удобно, чтобы менять одну деталь и сравнивать.</span>
+            <span className="field-hint">{t('−1 gives a new variant every time. The same seed with the same settings gives the same result: handy for changing one detail and comparing.')}</span>
           </label>
           <div className="grid2">
-            <Num label="Ширина" value={form.width} onChange={set('width')} step={16} min={128} max={2048} />
-            <Num label="Высота" value={form.height} onChange={set('height')} step={16} min={128} max={2048} />
+            <Num label={t('Width')} value={form.width} onChange={set('width')} step={16} min={128} max={2048} />
+            <Num label={t('Height')} value={form.height} onChange={set('height')} step={16} min={128} max={2048} />
           </div>
           {d.flowShift != null && (
             <Num label="Flow shift" value={form.flowShift} onChange={set('flowShift')} step={0.5} min={0} max={30}
-              hint="Тонкая настройка расписания шумов Wan. Обычно 3; для 720p можно 5." />
+              hint={t('Fine-tunes the Wan noise schedule. Usually 3; 5 for 720p.')} />
           )}
           <label className="field">
-            <span className="field-label">Сэмплер</span>
+            <span className="field-label">{t('Sampler')}</span>
             <select value={form.sampler} onChange={(e) => set('sampler')(e.target.value)}>
               {SAMPLERS.map((s) => <option key={s}>{s}</option>)}
             </select>
@@ -350,14 +360,12 @@ export default function GenerateForm({ kind, user, presets, templates, jobs, reu
 
       <div className="submit-row">
         <button className="btn primary" disabled={busy || !preset?.available || !form.prompt.trim()}>
-          {busy ? 'Отправка…' : queueSize ? `В очередь (${queueSize} перед вами)` : 'Сгенерировать'}
+          {busy ? t('Submitting…') : queueSize ? t('Add to queue ({n} ahead of you)', { n: queueSize }) : t('Generate')}
         </button>
         <span className="muted small">
-          {isVideo
-            ? `${plan.segments > 1 ? `2 сегмента × ${plan.frames}` : plan.frames} кадр. при ${plan.nativeFps} к/с${interpolated ? ` → ${form.outFps} к/с` : ''} · ${form.width}×${form.height}`
-            : `${form.count} × ${form.width}×${form.height}`}
+          {summary}
           <br />
-          {eta ? `≈ ${fmtDuration(eta)} по прошлой генерации` : 'оценка времени появится после первой генерации'}
+          {eta ? t('≈ {time} based on the previous generation', { time: fmtDuration(eta) }) : t('A time estimate appears after the first generation')}
         </span>
       </div>
     </form>

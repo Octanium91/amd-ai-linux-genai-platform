@@ -1,5 +1,5 @@
 {
-  "_about": "Скрытые шаблоны: при открытии интерфейса форма заполняется случайным шаблоном своего типа. Выбрать шаблон в интерфейсе нельзя — это стартовые примеры с проверенными параметрами. Изображения: рекомендации автора Realistic Vision 6 (негатив, DPM++ Karras, крупные разрешения). Видео: эталонные конфиги AnimateDiff для Realistic Vision (явные слова движения, 16 кадров) под AnimateLCM.",
+  "_about": "Hidden start templates: when the web UI opens, the form is filled with a random template of its kind. Templates cannot be picked in the UI — they are start examples with tested parameters. Images follow the Realistic Vision 6 author recommendations (negative prompt, DPM++ Karras, larger resolutions). Videos follow the reference AnimateDiff RealisticVision configs (explicit motion cues, 16 frames) adapted to AnimateLCM.",
   "negatives": {
     "rv6": "(deformed iris, deformed pupils, semi-realistic, cgi, 3d, render, sketch, cartoon, drawing, anime), text, cropped, out of frame, worst quality, low quality, jpeg artifacts, ugly, duplicate, morbid, mutilated, extra fingers, mutated hands, poorly drawn hands, poorly drawn face, mutation, deformed, blurry, dehydrated, bad anatomy, bad proportions, extra limbs, cloned face, disfigured, gross proportions, malformed limbs, missing arms, missing legs, extra arms, extra legs, fused fingers, too many fingers, long neck",
     "rv6-scene": "(semi-realistic, cgi, 3d, render, sketch, cartoon, drawing, anime), text, watermark, logo, cropped, out of frame, worst quality, low quality, jpeg artifacts, blurry, deformed, duplicate, oversaturated",
@@ -7,110 +7,162 @@
   },
   "image": [
     {
-      "category": "автомобиль",
+      "category": "car",
       "prompt": "RAW photo, a red vintage sports car parked on a wet cobblestone street at dusk, chrome details, reflections on the paint, city lights bokeh, 8k uhd, dslr, soft lighting, high quality, film grain, Fujifilm XT3",
-      "negative": "rv6-scene", "width": 1024, "height": 768, "cfg": 6
+      "negative": "rv6-scene",
+      "width": 1024,
+      "height": 768,
+      "cfg": 6
     },
     {
-      "category": "животное",
+      "category": "animal",
       "prompt": "RAW photo, close up portrait of a red fox sitting in fresh snow, detailed fur, amber eyes, snowflakes, soft winter light, shallow depth of field, 8k uhd, dslr, high quality, film grain",
-      "negative": "rv6-scene", "width": 896, "height": 896, "cfg": 5.5
+      "negative": "rv6-scene",
+      "width": 896,
+      "height": 896,
+      "cfg": 5.5
     },
     {
-      "category": "человек",
+      "category": "person",
       "prompt": "RAW photo, portrait of a 30 y.o. woman with freckles and auburn hair, natural makeup, looking at camera, golden hour backlight, detailed skin texture, 85mm lens, 8k uhd, dslr, soft lighting, high quality, film grain, Fujifilm XT3",
-      "negative": "rv6", "width": 768, "height": 1024, "cfg": 5
+      "negative": "rv6",
+      "width": 768,
+      "height": 1024,
+      "cfg": 5
     },
     {
-      "category": "человек",
+      "category": "person",
       "prompt": "RAW photo, half body portrait of an old fisherman in a knitted sweater on a harbor pier, weathered face, grey beard, overcast sky, detailed skin, 8k uhd, dslr, soft lighting, high quality, film grain",
-      "negative": "rv6", "width": 768, "height": 1024, "cfg": 5
+      "negative": "rv6",
+      "width": 768,
+      "height": 1024,
+      "cfg": 5
     },
     {
-      "category": "архитектура",
+      "category": "architecture",
       "prompt": "RAW photo, modern minimalist concrete villa with floor to ceiling glass walls on a hillside, infinity pool, pine trees, sunset, architectural photography, 8k uhd, dslr, soft lighting, high quality",
-      "negative": "rv6-scene", "width": 1152, "height": 640, "cfg": 6
+      "negative": "rv6-scene",
+      "width": 1152,
+      "height": 640,
+      "cfg": 6
     },
     {
-      "category": "архитектура",
+      "category": "architecture",
       "prompt": "RAW photo, interior of a gothic cathedral, tall stained glass windows, sun rays through the dust, stone columns, wide angle, 8k uhd, dslr, dramatic lighting, high quality, film grain",
-      "negative": "rv6-scene", "width": 768, "height": 1024, "cfg": 6
+      "negative": "rv6-scene",
+      "width": 768,
+      "height": 1024,
+      "cfg": 6
     },
     {
-      "category": "природа",
+      "category": "nature",
       "prompt": "RAW photo, alpine lake at sunrise, mirror reflection of snowy mountain peaks, morning mist over the water, pine forest shore, landscape photography, 8k uhd, dslr, soft lighting, high quality",
-      "negative": "rv6-scene", "width": 1152, "height": 640, "cfg": 5.5
+      "negative": "rv6-scene",
+      "width": 1152,
+      "height": 640,
+      "cfg": 5.5
     },
     {
-      "category": "город",
+      "category": "city",
       "prompt": "RAW photo, narrow Tokyo alley at night after rain, neon signs reflecting in puddles, small ramen shop, lanterns, cinematic, 8k uhd, dslr, high quality, film grain",
-      "negative": "rv6-scene", "width": 768, "height": 1024, "cfg": 6
+      "negative": "rv6-scene",
+      "width": 768,
+      "height": 1024,
+      "cfg": 6
     },
     {
-      "category": "макро",
+      "category": "macro",
       "prompt": "RAW photo, macro shot of dew drops on a green leaf, a small ladybug, morning backlight, extreme detail, shallow depth of field, 8k uhd, dslr, soft lighting, high quality",
-      "negative": "rv6-scene", "width": 896, "height": 896, "cfg": 5.5
+      "negative": "rv6-scene",
+      "width": 896,
+      "height": 896,
+      "cfg": 5.5
     },
     {
-      "category": "еда",
+      "category": "food",
       "prompt": "RAW photo, rustic breakfast on a wooden table, fresh croissants, cup of cappuccino with latte art, berries, morning window light, food photography, 8k uhd, dslr, soft lighting, high quality",
-      "negative": "rv6-scene", "width": 1024, "height": 768, "cfg": 5.5
+      "negative": "rv6-scene",
+      "width": 1024,
+      "height": 768,
+      "cfg": 5.5
     }
   ],
   "video": [
     {
-      "category": "автомобиль",
+      "category": "car",
       "prompt": "a red sports car driving along a coastal mountain road at sunset, camera tracking, motion blur, waves below, cinematic, 8k uhd, dslr, soft lighting, high quality, film grain",
-      "width": 768, "height": 512
+      "width": 768,
+      "height": 512
     },
     {
-      "category": "животное",
+      "category": "animal",
       "prompt": "a white horse galloping through a meadow at golden hour, mane flowing in the wind, dust, slow motion, cinematic, 8k uhd, dslr, high quality, film grain",
-      "width": 768, "height": 512
+      "width": 768,
+      "height": 512
     },
     {
-      "category": "животное",
+      "category": "animal",
       "prompt": "close up of a fluffy ginger cat blinking and looking around, whiskers moving, sunlight through a window, cozy room, 8k uhd, dslr, soft lighting, high quality",
-      "width": 512, "height": 512
+      "width": 512,
+      "height": 512
     },
     {
-      "category": "человек",
+      "category": "person",
       "prompt": "portrait of a young woman on a windy beach, hair blowing in the wind, waves in the background, overcast weather, 8k uhd, dslr, soft lighting, high quality, film grain",
-      "width": 512, "height": 768
+      "width": 512,
+      "height": 768
     },
     {
-      "category": "человек",
+      "category": "person",
       "prompt": "b&w photo of 42 y.o man in black clothes, bald, face, half body, coastline, overcast weather, wind, waves, 8k uhd, dslr, soft lighting, high quality, film grain",
-      "width": 512, "height": 512
+      "width": 512,
+      "height": 512
     },
     {
-      "category": "архитектура",
+      "category": "architecture",
       "prompt": "old stone castle on a cliff, storm clouds moving fast over the towers, flags waving, rain, lightning, dramatic, 8k uhd, dslr, high quality, film grain",
-      "width": 768, "height": 512
+      "width": 768,
+      "height": 512
     },
     {
-      "category": "природа",
+      "category": "nature",
       "prompt": "photo of coastline, rocks, storm weather, wind, waves crashing, sea spray, lightning, 8k uhd, dslr, soft lighting, high quality, film grain",
-      "width": 768, "height": 512
+      "width": 768,
+      "height": 512
     },
     {
-      "category": "природа",
+      "category": "nature",
       "prompt": "waterfall in a green rainforest, flowing water, mist, sunlight rays through the leaves, ferns swaying, 8k uhd, dslr, soft lighting, high quality",
-      "width": 512, "height": 768
+      "width": 512,
+      "height": 768
     },
     {
-      "category": "город",
+      "category": "city",
       "prompt": "busy city street at night in the rain, cars with headlights passing by, neon reflections on wet asphalt, people with umbrellas walking, cinematic, 8k uhd, dslr, high quality, film grain",
-      "width": 768, "height": 512
+      "width": 768,
+      "height": 512
     },
     {
-      "category": "атмосфера",
+      "category": "atmosphere",
       "prompt": "campfire in a forest at night, flames flickering, sparks rising, smoke, warm light on the trees, 8k uhd, dslr, high quality, film grain",
-      "width": 512, "height": 512
+      "width": 512,
+      "height": 512
     }
   ],
   "defaults": {
-    "image": { "preset": "img-realistic-vision", "quality": "high", "sampler": "dpm++2m" },
-    "video": { "preset": "vid-animatelcm", "quality": "high", "cfg": 1.5, "sampler": "lcm", "duration": 2, "outFps": 24, "negative": "video" }
+    "image": {
+      "preset": "img-realistic-vision",
+      "quality": "high",
+      "sampler": "dpm++2m"
+    },
+    "video": {
+      "preset": "vid-animatelcm",
+      "quality": "high",
+      "cfg": 1.5,
+      "sampler": "lcm",
+      "duration": 2,
+      "outFps": 24,
+      "negative": "video"
+    }
   }
 }

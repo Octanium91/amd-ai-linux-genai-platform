@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { api, jobKind } from './util.js';
+import { t } from './i18n.js';
 import GenerateForm from './GenerateForm.jsx';
 import { ActiveJob, QueueList } from './Jobs.jsx';
 import Gallery from './Gallery.jsx';
 
-// Студия одного типа контента. GPU общий, поэтому текущая генерация видна в любом разделе.
+// Studio for one content type. The GPU is shared, so the current generation is shown in every section.
 export default function Studio({ kind, user, jobs, presets, templates, now, refresh, reloadPresets, goModels }) {
   const [reuse, setReuse] = useState(null);
   const running = jobs.find((j) => j.status === 'running');
@@ -51,8 +52,8 @@ export default function Studio({ kind, user, jobs, presets, templates, now, refr
           <ActiveJob job={running} now={now} onCancel={canManage(running) ? onCancel : null} />
         ) : (
           <div className="card idle">
-            <div className="idle-title">GPU свободен</div>
-            <div className="muted">Опишите, что сгенерировать, и поставьте задачу в очередь.</div>
+            <div className="idle-title">{t('GPU is idle')}</div>
+            <div className="muted">{t('Describe what to generate and add the job to the queue.')}</div>
           </div>
         )}
         <QueueList jobs={queuedAll} onCancel={onCancel} canManage={canManage} />

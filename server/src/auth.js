@@ -1,5 +1,5 @@
-// Авторизация: пользователи с scrypt-хешами, сессии в HttpOnly-cookie,
-// защита от перебора и от CSRF (SameSite=Lax + обязательный заголовок на изменяющих запросах).
+// Auth: users with scrypt hashes, HttpOnly session cookies,
+// brute-force protection and CSRF protection (SameSite=Lax + a required header on mutating requests).
 import crypto from 'node:crypto';
 import { config } from './config.js';
 import { readJson, statePath, writeJson } from './store.js';
@@ -33,21 +33,21 @@ const tokenKey = (token) => crypto.createHash('sha256').update(token).digest('he
 const publicUser = (u) => ({ username: u.username, role: u.role, createdAt: u.createdAt });
 
 export function validateCredentials(username, password) {
-  if (!USERNAME_RE.test(username || '')) return 'Имя: 2–32 символа, латиница, цифры, . _ -';
+  if (!USERNAME_RE.test(username || '')) return 'Username: 2–32 characters, Latin letters, digits, . _ -';
   if (typeof password !== 'string' || password.length < MIN_PASSWORD) {
-    return `Пароль должен быть не короче ${MIN_PASSWORD} символов`;
+    return `Password must be at least ${MIN_PASSWORD} characters`;
   }
   return null;
 }
 
-// Пока пользователей нет, платформа предлагает создать первого администратора
+// While there are no users, the platform offers to create the first administrator
 export const needsSetup = () => users.length === 0;
 
 export function logStartupHint() {
-  if (needsSetup()) console.log('[auth] пользователей нет — откройте интерфейс и создайте администратора');
+  if (needsSetup()) console.log('[auth] no users yet — open the web UI and create the administrator');
 }
 
-// --- защита от перебора: 10 неудачных попыток за 15 минут с одного IP ---
+// --- brute-force protection: 10 failed attempts per 15 minutes per IP ---
 const failures = new Map();
 const WINDOW = 15 * 60 * 1000;
 function tooManyFailures(ip) {
@@ -85,19 +85,19 @@ function currentUser(req) {
   return users.find((u) => u.username === s.username) || null;
 }
 
-// Middleware: пускает только авторизованных, для изменяющих запросов требует CSRF-заголовок
+// Middleware: signed-in users only; mutating requests must carry the CSRF header
 export function requireAuth(req, res, next) {
   const user = currentUser(req);
-  if (!user) return res.status(401).json({ error: 'Требуется вход' });
+  if (!user) return res.status(401).json({ error: 'Sign-in required' });
   if (req.method !== 'GET' && req.method !== 'HEAD' && req.get(CSRF_HEADER) !== CSRF_VALUE) {
-    return res.status(403).json({ error: 'Запрос отклонён (CSRF)' });
+    return res.status(403).json({ error: 'Request rejected (CSRF)' });
   }
   req.user = user;
   next();
 }
 
 export function requireAdmin(req, res, next) {
-  if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Нужны права администратора' });
+  if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Administrator rights required' });
   next();
 }
 
@@ -111,33 +111,33 @@ export function authRoutes(app) {
     res.setHeader('Set-Cookie', sessionCookie(token, maxAge));
   };
 
-  // Нужна ли регистрация первого администратора
+  // Whether the first administrator still has to be created
   app.get('/api/auth/status', (req, res) => res.json({ setup: needsSetup() }));
 
-  // Первый администратор: разрешено, только пока в системе нет ни одного пользователя
+  // First administrator: allowed only while there are no users at all
   app.post('/api/auth/setup', (req, res) => {
-    if (req.get(CSRF_HEADER) !== CSRF_VALUE) return res.status(403).json({ error: 'Запрос отклонён (CSRF)' });
-    if (!needsSetup()) return res.status(409).json({ error: 'Администратор уже создан — войдите' });
+    if (req.get(CSRF_HEADER) !== CSRF_VALUE) return res.status(403).json({ error: 'Request rejected (CSRF)' });
+    if (!needsSetup()) return res.status(409).json({ error: 'The administrator already exists — sign in' });
     const { username, password } = req.body || {};
     const err = validateCredentials(username, password);
     if (err) return res.status(400).json({ error: err });
     const user = { username, role: 'admin', createdAt: Date.now(), ...hashPassword(password) };
     users.push(user);
     saveUsers();
-    console.log(`[auth] создан администратор "${username}"`);
+    console.log(`[auth] administrator "${username}" created`);
     startSession(res, user);
     res.json(publicUser(user));
   });
 
   app.post('/api/auth/login', (req, res) => {
     const ip = req.ip;
-    if (req.get(CSRF_HEADER) !== CSRF_VALUE) return res.status(403).json({ error: 'Запрос отклонён (CSRF)' });
-    if (tooManyFailures(ip)) return res.status(429).json({ error: 'Слишком много попыток, подождите 15 минут' });
+    if (req.get(CSRF_HEADER) !== CSRF_VALUE) return res.status(403).json({ error: 'Request rejected (CSRF)' });
+    if (tooManyFailures(ip)) return res.status(429).json({ error: 'Too many attempts, wait 15 minutes' });
     const { username, password } = req.body || {};
     const user = users.find((u) => u.username === username);
     if (!user || typeof password !== 'string' || !verifyPassword(user, password)) {
       noteFailure(ip);
-      return res.status(401).json({ error: 'Неверное имя или пароль' });
+      return res.status(401).json({ error: 'Invalid username or password' });
     }
     failures.delete(ip);
     startSession(res, user);
@@ -156,13 +156,13 @@ export function authRoutes(app) {
 
   app.get('/api/auth/me', (req, res) => {
     const user = currentUser(req);
-    if (!user) return res.status(401).json({ error: 'Требуется вход' });
+    if (!user) return res.status(401).json({ error: 'Sign-in required' });
     res.json(publicUser(user));
   });
 
   app.post('/api/auth/password', requireAuth, (req, res) => {
     const { current, next } = req.body || {};
-    if (!verifyPassword(req.user, String(current || ''))) return res.status(400).json({ error: 'Текущий пароль неверен' });
+    if (!verifyPassword(req.user, String(current || ''))) return res.status(400).json({ error: 'Current password is incorrect' });
     const err = validateCredentials(req.user.username, next);
     if (err) return res.status(400).json({ error: err });
     Object.assign(req.user, hashPassword(next));
@@ -171,14 +171,14 @@ export function authRoutes(app) {
     res.json({ ok: true });
   });
 
-  // --- управление пользователями (только admin) ---
+  // --- user management (admin only) ---
   app.get('/api/users', requireAuth, requireAdmin, (req, res) => res.json(users.map(publicUser)));
 
   app.post('/api/users', requireAuth, requireAdmin, (req, res) => {
     const { username, password, role } = req.body || {};
     const err = validateCredentials(username, password);
     if (err) return res.status(400).json({ error: err });
-    if (users.some((u) => u.username === username)) return res.status(400).json({ error: 'Такой пользователь уже есть' });
+    if (users.some((u) => u.username === username)) return res.status(400).json({ error: 'This user already exists' });
     const user = { username, role: role === 'admin' ? 'admin' : 'user', createdAt: Date.now(), ...hashPassword(password) };
     users.push(user);
     saveUsers();
@@ -187,7 +187,7 @@ export function authRoutes(app) {
 
   app.post('/api/users/:username/password', requireAuth, requireAdmin, (req, res) => {
     const user = users.find((u) => u.username === req.params.username);
-    if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+    if (!user) return res.status(404).json({ error: 'User not found' });
     const err = validateCredentials(user.username, req.body?.password);
     if (err) return res.status(400).json({ error: err });
     Object.assign(user, hashPassword(req.body.password));
@@ -198,10 +198,10 @@ export function authRoutes(app) {
 
   app.delete('/api/users/:username', requireAuth, requireAdmin, (req, res) => {
     const user = users.find((u) => u.username === req.params.username);
-    if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
-    if (user === req.user) return res.status(400).json({ error: 'Нельзя удалить самого себя' });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (user === req.user) return res.status(400).json({ error: 'You cannot delete yourself' });
     if (user.role === 'admin' && users.filter((u) => u.role === 'admin').length === 1) {
-      return res.status(400).json({ error: 'Нельзя удалить последнего администратора' });
+      return res.status(400).json({ error: 'You cannot delete the last administrator' });
     }
     users = users.filter((u) => u !== user);
     saveUsers();

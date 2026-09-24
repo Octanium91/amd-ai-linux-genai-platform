@@ -2,8 +2,8 @@
   {
     "id": "img-realistic-vision",
     "kind": "image",
-    "name": "Realistic Vision 6 · фото",
-    "description": "Фотореалистичные изображения на SD 1.5. 512×768 — ~40 с, 768×1024 (рекомендация автора модели) — дольше, зато детальнее.",
+    "name": "Realistic Vision 6 · photo",
+    "description": "Photorealistic images on SD 1.5. 512×768 takes ~40 s; 768×1024 (the model author's recommendation) is slower but more detailed.",
     "image": "optional",
     "models": {
       "model": "realistic-vision-v6",
@@ -56,13 +56,23 @@
       "--scheduler",
       "karras",
       "--diffusion-fa"
-    ]
+    ],
+    "i18n": {
+      "uk": {
+        "name": "Realistic Vision 6 · фото",
+        "description": "Фотореалістичні зображення на SD 1.5. 512×768 — ~40 с; 768×1024 (рекомендація автора моделі) — довше, зате детальніше."
+      },
+      "ru": {
+        "name": "Realistic Vision 6 · фото",
+        "description": "Фотореалистичные изображения на SD 1.5. 512×768 — ~40 с, 768×1024 (рекомендация автора модели) — дольше, зато детальнее."
+      }
+    }
   },
   {
     "id": "vid-animatelcm",
     "kind": "video",
-    "name": "AnimateLCM · Realistic Vision (быстро)",
-    "description": "Самый быстрый видеорежим: 2 с за ~2.5 минуты на Radeon 890M. CFG 1 — быстрее и мягче; CFG 1.5 — контрастнее и больше движения (~5 мин).",
+    "name": "AnimateLCM · Realistic Vision (fast)",
+    "description": "The fastest video mode: 2 s in ~2.5 minutes on a Radeon 890M. CFG 1 is faster and softer; CFG 1.5 gives more contrast and motion (~5 min).",
     "image": "optional",
     "models": {
       "model": "realistic-vision-v6",
@@ -118,13 +128,23 @@
     "continueArgs": [
       "--strength",
       "0.55"
-    ]
+    ],
+    "i18n": {
+      "uk": {
+        "name": "AnimateLCM · Realistic Vision (швидко)",
+        "description": "Найшвидший відеорежим: 2 с приблизно за 2,5 хвилини на Radeon 890M. CFG 1 — швидше й м'якше; CFG 1.5 — контрастніше й більше руху (~5 хв)."
+      },
+      "ru": {
+        "name": "AnimateLCM · Realistic Vision (быстро)",
+        "description": "Самый быстрый видеорежим: 2 с за ~2.5 минуты на Radeon 890M. CFG 1 — быстрее и мягче; CFG 1.5 — контрастнее и больше движения (~5 мин)."
+      }
+    }
   },
   {
     "id": "vid-animatediff-v3",
     "kind": "video",
-    "name": "AnimateDiff v3 · Realistic Vision (детально)",
-    "description": "Классический AnimateDiff v3 с Domain Adapter: детальнее AnimateLCM, но ~16 минут на 2 с на Radeon 890M.",
+    "name": "AnimateDiff v3 · Realistic Vision (detailed)",
+    "description": "Classic AnimateDiff v3 with the Domain Adapter: more detailed than AnimateLCM, but ~16 minutes per 2 s on a Radeon 890M.",
     "image": "optional",
     "models": {
       "model": "realistic-vision-v6",
@@ -180,13 +200,23 @@
     "continueArgs": [
       "--strength",
       "0.55"
-    ]
+    ],
+    "i18n": {
+      "uk": {
+        "name": "AnimateDiff v3 · Realistic Vision (детально)",
+        "description": "Класичний AnimateDiff v3 з Domain Adapter: детальніший за AnimateLCM, але ~16 хвилин на 2 с на Radeon 890M."
+      },
+      "ru": {
+        "name": "AnimateDiff v3 · Realistic Vision (детально)",
+        "description": "Классический AnimateDiff v3 с Domain Adapter: детальнее AnimateLCM, но ~16 минут на 2 с на Radeon 890M."
+      }
+    }
   },
   {
     "id": "vid-wan22-5b",
     "kind": "video",
-    "name": "Wan 2.2 TI2V 5B (настоящее движение, медленно)",
-    "description": "Полноценная видеомодель: связное движение, текст и картинка → видео. На Radeon 890M — часы на ролик; разумна на Strix Halo.",
+    "name": "Wan 2.2 TI2V 5B (real motion, slow)",
+    "description": "A full video model: coherent motion, text and image to video. Hours per clip on a Radeon 890M; practical on Strix Halo.",
     "image": "optional",
     "minGtt": 22,
     "models": {
@@ -237,13 +267,23 @@
       "--diffusion-fa",
       "--vae-tiling",
       "--offload-to-cpu"
-    ]
+    ],
+    "i18n": {
+      "uk": {
+        "name": "Wan 2.2 TI2V 5B (справжній рух, повільно)",
+        "description": "Повноцінна відеомодель: зв'язний рух, текст і картинка → відео. На Radeon 890M — години на ролик; доречна на Strix Halo."
+      },
+      "ru": {
+        "name": "Wan 2.2 TI2V 5B (настоящее движение, медленно)",
+        "description": "Полноценная видеомодель: связное движение, текст и картинка → видео. На Radeon 890M — часы на ролик; разумна на Strix Halo."
+      }
+    }
   },
   {
     "id": "vid-wan21-1.3b",
     "kind": "video",
-    "name": "Wan 2.1 T2V 1.3B (экспериментально)",
-    "description": "Лёгкая Wan 2.1, только текст → видео. На этой платформе ещё не проверялась.",
+    "name": "Wan 2.1 T2V 1.3B (experimental)",
+    "description": "Lightweight Wan 2.1, text to video only. Not yet tested on this platform.",
     "experimental": true,
     "image": "none",
     "models": {
@@ -286,6 +326,16 @@
       "--diffusion-fa",
       "--vae-tiling",
       "--offload-to-cpu"
-    ]
+    ],
+    "i18n": {
+      "uk": {
+        "name": "Wan 2.1 T2V 1.3B (експериментально)",
+        "description": "Легка Wan 2.1, лише текст → відео. На цій платформі ще не перевірялася."
+      },
+      "ru": {
+        "name": "Wan 2.1 T2V 1.3B (экспериментально)",
+        "description": "Лёгкая Wan 2.1, только текст → видео. На этой платформе ещё не проверялась."
+      }
+    }
   }
 ]

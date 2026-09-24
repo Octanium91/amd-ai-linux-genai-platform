@@ -1,43 +1,126 @@
 [
   {
     "id": "base-sd15",
-    "name": "Основа: Realistic Vision 6 (Stable Diffusion 1.5)",
-    "description": "Фотореалистичная базовая модель и её VAE. На ней работают изображения и оба режима AnimateDiff, поэтому она нужна в любом случае.",
+    "name": "Base: Realistic Vision 6 (Stable Diffusion 1.5)",
+    "description": "The photorealistic base model and its VAE. Images and both AnimateDiff modes run on it, so it is always required.",
     "required": true,
-    "models": ["realistic-vision-v6", "sd-vae-ft-mse"],
-    "presets": ["img-realistic-vision"]
+    "models": [
+      "realistic-vision-v6",
+      "sd-vae-ft-mse"
+    ],
+    "presets": [
+      "img-realistic-vision"
+    ],
+    "i18n": {
+      "uk": {
+        "name": "Основа: Realistic Vision 6 (Stable Diffusion 1.5)",
+        "description": "Фотореалістична базова модель та її VAE. На ній працюють зображення й обидва режими AnimateDiff, тому вона потрібна в будь-якому разі."
+      },
+      "ru": {
+        "name": "Основа: Realistic Vision 6 (Stable Diffusion 1.5)",
+        "description": "Фотореалистичная базовая модель и её VAE. На ней работают изображения и оба режима AnimateDiff, поэтому она нужна в любом случае."
+      }
+    }
   },
   {
     "id": "video-animatelcm",
-    "name": "Видео · AnimateLCM — быстро",
-    "description": "Рекомендуемый видеорежим: ролик 2 с за 2–5 минут на Radeon 890M. Модуль движения конвертируется платформой автоматически.",
+    "name": "Video · AnimateLCM — fast",
+    "description": "The recommended video mode: a 2 s clip in 2–5 minutes on a Radeon 890M. The motion module is converted automatically.",
     "recommended": true,
-    "models": ["animatelcm-mm", "animatelcm-lora"],
-    "requires": ["base-sd15"],
-    "presets": ["vid-animatelcm"]
+    "models": [
+      "animatelcm-mm",
+      "animatelcm-lora"
+    ],
+    "requires": [
+      "base-sd15"
+    ],
+    "presets": [
+      "vid-animatelcm"
+    ],
+    "i18n": {
+      "uk": {
+        "name": "Відео · AnimateLCM — швидко",
+        "description": "Рекомендований відеорежим: ролик 2 с за 2–5 хвилин на Radeon 890M. Модуль руху конвертується автоматично."
+      },
+      "ru": {
+        "name": "Видео · AnimateLCM — быстро",
+        "description": "Рекомендуемый видеорежим: ролик 2 с за 2–5 минут на Radeon 890M. Модуль движения конвертируется платформой автоматически."
+      }
+    }
   },
   {
     "id": "video-animatediff-v3",
-    "name": "Видео · AnimateDiff v3 — детально",
-    "description": "Классический AnimateDiff: детальнее AnimateLCM, но примерно в 6 раз медленнее (~16 минут на 2 с на Radeon 890M).",
-    "models": ["animatediff-v3-mm", "animatediff-v3-adapter"],
-    "requires": ["base-sd15"],
-    "presets": ["vid-animatediff-v3"]
+    "name": "Video · AnimateDiff v3 — detailed",
+    "description": "Classic AnimateDiff: more detailed than AnimateLCM but about 6× slower (~16 minutes per 2 s on a Radeon 890M).",
+    "models": [
+      "animatediff-v3-mm",
+      "animatediff-v3-adapter"
+    ],
+    "requires": [
+      "base-sd15"
+    ],
+    "presets": [
+      "vid-animatediff-v3"
+    ],
+    "i18n": {
+      "uk": {
+        "name": "Відео · AnimateDiff v3 — детально",
+        "description": "Класичний AnimateDiff: детальніший за AnimateLCM, але приблизно в 6 разів повільніший (~16 хвилин на 2 с на Radeon 890M)."
+      },
+      "ru": {
+        "name": "Видео · AnimateDiff v3 — детально",
+        "description": "Классический AnimateDiff: детальнее AnimateLCM, но примерно в 6 раз медленнее (~16 минут на 2 с на Radeon 890M)."
+      }
+    }
   },
   {
     "id": "video-wan22",
-    "name": "Видео · Wan 2.2 TI2V 5B — связное движение",
-    "description": "Полноценная видеомодель с настоящим движением. На Strix Halo (Radeon 8060S) — рабочий вариант, на Strix Point — часы на ролик. Нужно ~22 ГБ GTT.",
-    "recommendedFamilies": ["Strix Halo"],
-    "models": ["wan22-ti2v-5b-q8", "wan22-vae", "umt5-xxl-q8"],
-    "presets": ["vid-wan22-5b"]
+    "name": "Video · Wan 2.2 TI2V 5B — coherent motion",
+    "description": "A full video model with real motion. Practical on Strix Halo (Radeon 8060S); hours per clip on Strix Point. Needs ~22 GB of GTT.",
+    "recommendedFamilies": [
+      "Strix Halo"
+    ],
+    "models": [
+      "wan22-ti2v-5b-q8",
+      "wan22-vae",
+      "umt5-xxl-q8"
+    ],
+    "presets": [
+      "vid-wan22-5b"
+    ],
+    "i18n": {
+      "uk": {
+        "name": "Відео · Wan 2.2 TI2V 5B — зв'язний рух",
+        "description": "Повноцінна відеомодель зі справжнім рухом. На Strix Halo (Radeon 8060S) — робочий варіант, на Strix Point — години на ролик. Потрібно ~22 ГБ GTT."
+      },
+      "ru": {
+        "name": "Видео · Wan 2.2 TI2V 5B — связное движение",
+        "description": "Полноценная видеомодель с настоящим движением. На Strix Halo (Radeon 8060S) — рабочий вариант, на Strix Point — часы на ролик. Нужно ~22 ГБ GTT."
+      }
+    }
   },
   {
     "id": "video-wan21",
-    "name": "Видео · Wan 2.1 T2V 1.3B — экспериментально",
-    "description": "Лёгкая Wan 2.1, только текст → видео. На платформе ещё не проверялась.",
+    "name": "Video · Wan 2.1 T2V 1.3B — experimental",
+    "description": "Lightweight Wan 2.1, text to video only. Not yet tested on this platform.",
     "experimental": true,
-    "models": ["wan21-t2v-1.3b", "wan21-vae", "umt5-xxl-q8"],
-    "presets": ["vid-wan21-1.3b"]
+    "models": [
+      "wan21-t2v-1.3b",
+      "wan21-vae",
+      "umt5-xxl-q8"
+    ],
+    "presets": [
+      "vid-wan21-1.3b"
+    ],
+    "i18n": {
+      "uk": {
+        "name": "Відео · Wan 2.1 T2V 1.3B — експериментально",
+        "description": "Легка Wan 2.1, лише текст → відео. На платформі ще не перевірялася."
+      },
+      "ru": {
+        "name": "Видео · Wan 2.1 T2V 1.3B — экспериментально",
+        "description": "Лёгкая Wan 2.1, только текст → видео. На платформе ещё не проверялась."
+      }
+    }
   }
 ]

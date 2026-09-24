@@ -1,5 +1,5 @@
-// Очередь генераций поверх sd-cli: строго одна задача на GPU, прогресс парсится из вывода,
-// история хранится в /data/state/jobs.json и переживает пересоздание контейнера.
+// Generation queue on top of sd-cli: strictly one job on the GPU, progress parsed from its output,
+// history kept in /data/state/jobs.json so it survives container re-creation.
 import { spawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -16,7 +16,7 @@ export let jobs = readJson(JOBS_FILE, []);
 for (const j of jobs) {
   if (j.status === 'running') {
     j.status = 'failed';
-    j.error = 'Прервано перезапуском контейнера';
+    j.error = 'Interrupted by a container restart';
     j.finishedAt ??= Date.now();
   }
 }
@@ -25,7 +25,7 @@ export const save = debouncedWriter(JOBS_FILE, () => jobs);
 let current = null; // { job, proc }
 export const runningJob = () => current?.job || null;
 
-// ---------- разбор вывода sd-cli ----------
+// ---------- sd-cli output parsing ----------
 
 const ANSI = /\x1b\[[0-9;]*[A-Za-z]/g;
 const STEP_BAR = /\|[=>\s]*\|\s*(\d+)\/(\d+)\s*-\s*([\d.]+)\s*(s\/it|it\/s)/;
@@ -52,7 +52,7 @@ function parseLine(job, line) {
     job._saved = [...(job._saved || []), m[1]];
     return;
   }
-  // Wan идёт через video.cpp, SD 1.5 / AnimateDiff — через image.cpp
+  // Wan goes through video.cpp, SD 1.5 / AnimateDiff through image.cpp
   if (/generate_video \d+x\d+x\d+|generating image: \d+\/\d+/.test(line)) return setStage(job, 'sampling');
   if (/sampling completed|generating \d+ latent images completed/.test(line)) return setStage(job, 'decoding');
   if (/decode_first_stage completed/.test(line)) return setStage(job, 'saving');
@@ -69,7 +69,7 @@ function parseLine(job, line) {
   if (/loading tensors completed/.test(line)) pr.loading = null;
 }
 
-// ---------- вспомогательное ----------
+// ---------- helpers ----------
 
 function runCmd(cmd, args) {
   return new Promise((resolve) => {
@@ -109,8 +109,8 @@ async function makeThumb(job, src) {
   if (t.code === 0) job.thumb = job.id + '.jpg';
 }
 
-// segments — AVI сегментов по порядку; начиная со второго, первый кадр сегмента совпадает
-// с последним кадром предыдущего (он был стартовой картинкой) и выбрасывается при склейке
+// segments are the segment AVIs in order; from the second one on, the first frame of a segment
+// duplicates the last frame of the previous one (it was the init image) and is dropped when joining
 async function finalizeVideo(job, segments) {
   const base = baseName(job);
   const mp4 = path.join(dirs.output, base + '.mp4');
@@ -131,18 +131,18 @@ async function finalizeVideo(job, segments) {
   };
   let conv = await encode(true);
   if (conv.code !== 0 && interp) {
-    job.warning = `Интерполяция до ${outFps} fps не удалась, сохранено с ${fps} fps`;
+    job.warning = `Interpolation to ${outFps} fps failed, saved at ${fps} fps`;
     conv = await encode(false);
   }
   if (conv.code === 0) {
     for (const f of segments) fs.rmSync(f, { force: true });
     job.files = [base + '.mp4'];
   } else {
-    // Без ffmpeg оставляем хотя бы первый сегмент как есть
+    // Without ffmpeg keep at least the first segment as is
     fs.renameSync(segments[0], path.join(dirs.output, base + '.avi'));
     for (const f of segments.slice(1)) fs.rmSync(f, { force: true });
     job.files = [base + '.avi'];
-    job.warning = 'Не удалось собрать mp4: ' + conv.err.trim().slice(0, 300);
+    job.warning = 'Could not build the mp4: ' + conv.err.trim().slice(0, 300);
   }
   await makeThumb(job, path.join(dirs.output, job.files[0]));
 }
@@ -151,7 +151,7 @@ async function finalizeImages(job) {
   const base = baseName(job);
   const saved = (job._saved || []).filter((f) => fs.existsSync(f));
   delete job._saved;
-  if (!saved.length) throw new Error('sd-cli не сохранил ни одного изображения');
+  if (!saved.length) throw new Error('sd-cli did not save any image');
   job.files = saved.map((src, i) => {
     const name = saved.length > 1 ? `${base}_${i + 1}.png` : `${base}.png`;
     fs.renameSync(src, path.join(dirs.output, name));
@@ -160,7 +160,7 @@ async function finalizeImages(job) {
   await makeThumb(job, path.join(dirs.output, job.files[0]));
 }
 
-// ---------- сборка команды ----------
+// ---------- command line ----------
 
 const ROLE_FLAGS = {
   model: '--model',
@@ -177,8 +177,8 @@ function buildArgs(job, preset, outBase, initImage) {
   const catalog = loadCatalog();
   const args = ['-M', preset.kind === 'image' ? 'img_gen' : 'vid_gen'];
   for (const { role, id, entry } of presetModels(preset, catalog)) {
-    if (!entry) throw new Error(`В каталоге нет модели ${id}`);
-    if (!fs.existsSync(modelPath(entry))) throw new Error(`Модель не скачана: ${entry.name}`);
+    if (!entry) throw new Error(`Model ${id} is not in the catalog`);
+    if (!fs.existsSync(modelPath(entry))) throw new Error(`Model not downloaded: ${entry.name}`);
     if (ROLE_FLAGS[role]) args.push(ROLE_FLAGS[role], modelPath(entry));
   }
   if (preset.loraDir) args.push('--lora-model-dir', path.join(dirs.models, preset.loraDir));
@@ -192,7 +192,7 @@ function buildArgs(job, preset, outBase, initImage) {
     args.push('--video-frames', String(p.frames), '--fps', String(p.fps));
   }
   if (p.flowShift != null) args.push('--flow-shift', String(p.flowShift));
-  // Продолжение сегмента держится ближе к последнему кадру (continueArgs), чем обычное «картинка → видео»
+  // A continuation segment stays closer to the last frame (continueArgs) than regular image-to-video
   if (initImage) args.push('-i', initImage, ...(preset.continueArgs || preset.imageArgs || []));
   else if (p.image) args.push('-i', path.join(dirs.uploads, p.image), ...(preset.imageArgs || []));
   if (preset.preview && preset.preview !== 'none') {
@@ -204,9 +204,9 @@ function buildArgs(job, preset, outBase, initImage) {
   return args;
 }
 
-// ---------- исполнение ----------
+// ---------- execution ----------
 
-// Один запуск sd-cli: вывод пишется в лог и разбирается на прогресс
+// One sd-cli run: output goes to the log and is parsed into progress
 function runSd(job, args, log) {
   return new Promise((resolve) => {
     log.write('$ ' + [config.sdCli, ...args].map((a) => (/[\s"']/.test(a) ? JSON.stringify(a) : a)).join(' ') + '\n');
@@ -258,17 +258,17 @@ async function run(job) {
   };
 
   try {
-    if (!preset) throw new Error('Пресет не найден: ' + job.params.presetId);
+    if (!preset) throw new Error('Preset not found: ' + job.params.presetId);
     job.status = 'running';
     save(true);
     for (let i = 0; i < segments && job.status === 'running'; i++) {
       let init = null;
       if (i > 0) {
-        // Продолжение: последний кадр предыдущего сегмента становится стартовым кадром следующего
+        // Continuation: the last frame of the previous segment becomes the init image of the next one
         init = `${tmpBase}_s${i - 1}_last.png`;
         const r = await runCmd('ffmpeg', ['-loglevel', 'error', '-y', '-sseof', '-0.5', '-i', outputs[i - 1],
           '-update', '1', '-q:v', '1', init]);
-        if (r.code !== 0 || !fs.existsSync(init)) throw new Error('Не удалось взять последний кадр сегмента: ' + r.err.trim());
+        if (r.code !== 0 || !fs.existsSync(init)) throw new Error('Could not extract the last frame of the segment: ' + r.err.trim());
         const prev = job.progress;
         job.progress = newProgress(i + 1, segments,
           [...prev.doneSegments, { startedAt: prev.stages.prepare.startedAt, endedAt: Date.now() }]);
@@ -280,10 +280,10 @@ async function run(job) {
       if (job.status !== 'running') break;
       if (code !== 0) {
         throw new Error(spawnError?.message || job.lastErrors?.at(-1)
-          || `sd-cli завершился с кодом ${code}${signal ? ` (${signal})` : ''}`);
+          || `sd-cli exited with code ${code}${signal ? ` (${signal})` : ''}`);
       }
       if (preset.kind !== 'image') {
-        if (!fs.existsSync(`${outBase}.avi`)) throw new Error('sd-cli не сохранил видео');
+        if (!fs.existsSync(`${outBase}.avi`)) throw new Error('sd-cli did not save the video');
         outputs.push(`${outBase}.avi`);
       }
     }
@@ -313,7 +313,7 @@ export function nextJob() {
   if (job) run(job);
 }
 
-// ---------- создание, отмена, удаление ----------
+// ---------- create, cancel, delete ----------
 
 const OUT_FPS = [24, 30, 50, 60, 120];
 
@@ -322,7 +322,7 @@ const clamp = (v, lo, hi, def) => {
   return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : def;
 };
 
-// Wan требует 4n+1 кадров; AnimateDiff — ровно duration × fps (лучше всего 16)
+// Wan needs 4n+1 frames; AnimateDiff takes exactly duration × fps (16 works best)
 function planFrames(d, duration) {
   const nativeFps = d.nativeFps ?? 24;
   const raw = duration * nativeFps;
@@ -330,14 +330,14 @@ function planFrames(d, duration) {
   return Math.min(d.maxFrames ?? 121, Math.max(d.minFrames ?? 5, frames));
 }
 
-// «Экстра» — вдвое больше шагов, чем «Высокое», если режим не задал своё значение
+// "Extra" is twice the steps of "High" unless the preset defines its own value
 export function qualitySteps(d, quality) {
   const q = d.quality || {};
   if (quality === 'extra') return q.extra ?? (q.high ? q.high * 2 : null);
   return q[quality] ?? null;
 }
 
-// Предел модели за один проход и экстра-предел (склейка двух сегментов через «картинка → видео»)
+// Single-pass model limit and the extra limit (two segments chained via image-to-video)
 export function durationLimits(preset) {
   const d = preset.defaults || {};
   const nativeFps = d.nativeFps ?? 24;
@@ -377,7 +377,7 @@ export function createJob(preset, body, user, image) {
     const exact = d.frameRule === 'exact';
     const lim = durationLimits(preset);
     const duration = clamp(body.duration, 0.5, lim.max, d.duration ?? 2);
-    // Длиннее предела модели — два сегмента, второй продолжает последний кадр первого
+    // Longer than the model limit: two segments, the second continues from the last frame of the first
     const segments = duration > lim.base + 1e-6 ? 2 : 1;
     const frames = planFrames(d, duration / segments);
     const segSeconds = (exact ? frames : frames - 1) / nativeFps;
@@ -407,7 +407,7 @@ export function cancelJob(job) {
     finish(job, 'cancelled');
   } else if (job.status === 'running' && current?.job === job) {
     finish(job, 'cancelled');
-    // Между сегментами sd-cli не запущен: цикл сам увидит статус cancelled и остановится
+    // Between segments sd-cli is not running: the loop sees the cancelled status and stops by itself
     const { proc } = current;
     if (proc && proc.exitCode === null) {
       proc.kill('SIGTERM');
@@ -461,7 +461,7 @@ export function jobLog(job, tail) {
   return text.replace(ANSI, '').split(/[\r\n]+/).filter((l) => l.trim()).slice(-tail);
 }
 
-// Модели, занятые текущей генерацией, удалять нельзя
+// Models used by the current generation cannot be deleted
 export function modelsInUse() {
   const job = runningJob();
   if (!job) return new Set();
@@ -471,7 +471,7 @@ export function modelsInUse() {
 
 export function shutdownJobs() {
   if (current) {
-    finish(current.job, 'failed', 'Контейнер остановлен во время генерации');
+    finish(current.job, 'failed', 'The container was stopped during generation');
     current.proc?.kill('SIGTERM');
   }
   save(true);

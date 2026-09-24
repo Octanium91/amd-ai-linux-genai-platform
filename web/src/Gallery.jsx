@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react';
 import { clipSeconds, fileUrl, fmtDate, fmtDuration, STATUS_LABEL } from './util.js';
+import { t, tError } from './i18n.js';
 import { LogView, ParamChips } from './Jobs.jsx';
 
 const FILTERS = [
-  { key: 'all', label: 'Все' },
-  { key: 'done', label: 'Готовые' },
-  { key: 'bad', label: 'Ошибки и отмены' },
+  { key: 'all', label: 'All' },
+  { key: 'done', label: 'Done' },
+  { key: 'bad', label: 'Failed and cancelled' },
 ];
 
 function confirmDelete(job, onDelete) {
-  if (confirm('Удалить генерацию вместе с файлами?')) onDelete(job);
+  if (confirm(t('Delete the generation together with its files?'))) onDelete(job);
 }
 
 const isVideoFile = (f) => /\.(mp4|webm)$/i.test(f);
@@ -33,15 +34,15 @@ function Modal({ job, onClose, onDelete, onReuse, canManage }) {
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <button className="btn-icon modal-x" onClick={onClose} title="Закрыть">×</button>
+        <button className="btn-icon modal-x" onClick={onClose} title={t('Close')}>×</button>
         {file && isVideoFile(file) ? (
           <video key={file} src={fileUrl(file)} controls autoPlay loop playsInline />
         ) : file && isImageFile(file) ? (
           <img className="modal-img" key={file} src={fileUrl(file)} alt="" />
         ) : file ? (
-          <div className="novideo">Файл {file} не отображается в браузере, его можно скачать.</div>
+          <div className="novideo">{t('The file {file} cannot be shown in the browser, but it can be downloaded.', { file })}</div>
         ) : (
-          <div className="novideo">{STATUS_LABEL[job.status]}{job.error ? `: ${job.error}` : ''}</div>
+          <div className="novideo">{t(STATUS_LABEL[job.status])}{job.error ? `: ${tError(job.error)}` : ''}</div>
         )}
         {files.length > 1 && (
           <div className="strip">
@@ -54,21 +55,21 @@ function Modal({ job, onClose, onDelete, onReuse, canManage }) {
         )}
         <div className="modal-info">
           <div className="prompt">{job.params.prompt}</div>
-          {job.params.negative && <div className="muted small">Негативный: {job.params.negative}</div>}
+          {job.params.negative && <div className="muted small">{t('Negative:')} {job.params.negative}</div>}
           <ParamChips p={job.params} user={job.user} />
           <div className="muted small">
             {fmtDate(job.createdAt)}
-            {job.durationSec ? ` · генерация ${fmtDuration(job.durationSec)}` : ''}
+            {job.durationSec ? ` · ${t('generated in {time}', { time: fmtDuration(job.durationSec) })}` : ''}
           </div>
-          {job.warning && <div className="warn small">{job.warning}</div>}
+          {job.warning && <div className="warn small">{tError(job.warning)}</div>}
           <div className="modal-actions">
-            {file && <a className="btn primary" href={`/api/jobs/${job.id}/download/${idx}`}>Скачать{files.length > 1 ? ` (${idx + 1}/${files.length})` : ''}</a>}
-            <button className="btn" onClick={() => { onReuse(job); onClose(); }}>Повторить с этими параметрами</button>
+            {file && <a className="btn primary" href={`/api/jobs/${job.id}/download/${idx}`}>{t('Download')}{files.length > 1 ? ` (${idx + 1}/${files.length})` : ''}</a>}
+            <button className="btn" onClick={() => { onReuse(job); onClose(); }}>{t('Repeat with these settings')}</button>
             {canManage(job) && (
-              <button className="btn ghost danger" onClick={() => confirmDelete(job, (j) => { onDelete(j); onClose(); })}>Удалить</button>
+              <button className="btn ghost danger" onClick={() => confirmDelete(job, (j) => { onDelete(j); onClose(); })}>{t('Delete')}</button>
             )}
           </div>
-          <button className="link" onClick={() => setShowLog((v) => !v)}>{showLog ? '▾' : '▸'} Лог sd-cli</button>
+          <button className="link" onClick={() => setShowLog((v) => !v)}>{showLog ? '▾' : '▸'} {t('sd-cli log')}</button>
           {showLog && <LogView jobId={job.id} />}
         </div>
       </div>
@@ -86,37 +87,39 @@ export default function Gallery({ kind, jobs, onDelete, onReuse, canManage }) {
   return (
     <div className="card">
       <div className="gal-head">
-        <h3>Результаты · {jobs.filter((j) => j.status === 'done').length}</h3>
+        <h3>{t('Results')} · {jobs.filter((j) => j.status === 'done').length}</h3>
         <div className="tabs">
           {FILTERS.map((f) => (
-            <button key={f.key} className={`tab ${filter === f.key ? 'on' : ''}`} onClick={() => setFilter(f.key)}>{f.label}</button>
+            <button key={f.key} className={`tab ${filter === f.key ? 'on' : ''}`} onClick={() => setFilter(f.key)}>{t(f.label)}</button>
           ))}
         </div>
       </div>
       {!shown.length ? (
-        <div className="muted empty">Здесь появятся {video ? 'готовые видео' : 'готовые изображения'}.</div>
+        <div className="muted empty">{video ? t('Finished videos will appear here.') : t('Finished images will appear here.')}</div>
       ) : (
         <div className={`grid ${video ? '' : 'grid-img'}`}>
           {shown.map((j) => (
             <div key={j.id} className={`tile ${j.status}`}>
-              <button className={`thumb ${video ? '' : 'thumb-img'}`} onClick={() => setOpenId(j.id)} title="Открыть">
-                {j.thumb ? <img src={`/files/thumbs/${j.thumb}`} alt="" loading="lazy" /> : <div className="thumb-empty">{STATUS_LABEL[j.status]}</div>}
+              <button className={`thumb ${video ? '' : 'thumb-img'}`} onClick={() => setOpenId(j.id)} title={t('Open')}>
+                {j.thumb ? <img src={`/files/thumbs/${j.thumb}`} alt="" loading="lazy" /> : <div className="thumb-empty">{t(STATUS_LABEL[j.status])}</div>}
                 {j.status === 'done' && video && <span className="play">▶</span>}
                 <span className="badge">
                   {j.params.width}×{j.params.height}
-                  {video ? ` · ${clipSeconds(j.params).toFixed(1)} с · ${j.params.outFps ?? j.params.fps} fps` : j.files?.length > 1 ? ` · ${j.files.length} шт.` : ''}
+                  {video
+                    ? ` · ${t('{s} s', { s: clipSeconds(j.params).toFixed(1) })} · ${j.params.outFps ?? j.params.fps} fps`
+                    : j.files?.length > 1 ? ` · ${t('{n} pcs', { n: j.files.length })}` : ''}
                 </span>
-                {j.status !== 'done' && <span className={`badge st ${j.status}`}>{STATUS_LABEL[j.status]}</span>}
+                {j.status !== 'done' && <span className={`badge st ${j.status}`}>{t(STATUS_LABEL[j.status])}</span>}
               </button>
               <div className="tile-body">
                 <div className="tile-prompt" title={j.params.prompt}>{j.params.prompt}</div>
-                {j.status === 'failed' && j.error && <div className="tile-err" title={j.error}>{j.error}</div>}
+                {j.status === 'failed' && j.error && <div className="tile-err" title={tError(j.error)}>{tError(j.error)}</div>}
                 <div className="tile-meta">
                   <span className="muted small">{fmtDate(j.createdAt)}{j.durationSec ? ` · ${fmtDuration(j.durationSec)}` : ''}</span>
                   <span className="tile-actions">
-                    {j.files?.length > 0 && <a className="btn-icon" href={`/api/jobs/${j.id}/download/0`} title="Скачать">⤓</a>}
-                    <button className="btn-icon" title="Повторить" onClick={() => onReuse(j)}>↻</button>
-                    {canManage(j) && <button className="btn-icon danger" title="Удалить" onClick={() => confirmDelete(j, onDelete)}>🗑</button>}
+                    {j.files?.length > 0 && <a className="btn-icon" href={`/api/jobs/${j.id}/download/0`} title={t('Download')}>⤓</a>}
+                    <button className="btn-icon" title={t('Repeat')} onClick={() => onReuse(j)}>↻</button>
+                    {canManage(j) && <button className="btn-icon danger" title={t('Delete')} onClick={() => confirmDelete(j, onDelete)}>🗑</button>}
                   </span>
                 </div>
               </div>

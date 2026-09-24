@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, fmtBytes } from './util.js';
+import { loc, t } from './i18n.js';
 
-// Первичная настройка: пока ни один режим не готов, администратор выбирает, какие наборы моделей скачать.
-// Обязательные наборы отмечены серой неснимаемой галочкой; прогресс загрузки дальше показывает обычный интерфейс.
+// First-run setup: while no mode is usable, an administrator picks which model packs to download.
+// Required packs have a grey checkbox that cannot be cleared; download progress continues in the regular UI.
 export default function Setup({ user, info, onStarted, onSkip }) {
   const { packs, disk, family } = info;
   const [picked, setPicked] = useState(() => new Set(packs.filter((p) => p.required || p.recommended).map((p) => p.id)));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  // Набор тянет за собой зависимости (например, видео AnimateLCM требует основу SD 1.5)
+  // A pack pulls in its dependencies (e.g. AnimateLCM video needs the SD 1.5 base)
   const effective = useMemo(() => {
     const out = new Set(picked);
     for (const p of packs) if (p.required) out.add(p.id);
@@ -17,7 +18,7 @@ export default function Setup({ user, info, onStarted, onSkip }) {
     return out;
   }, [picked, packs]);
 
-  // Модели считаем один раз, даже если они входят в несколько наборов (UMT5 у обеих Wan)
+  // Count each model once even if it belongs to several packs (UMT5 is shared by both Wan packs)
   const toDownload = useMemo(() => {
     const m = new Map();
     for (const p of packs) if (effective.has(p.id)) for (const x of p.models) if (x.status !== 'installed') m.set(x.id, x);
@@ -32,8 +33,8 @@ export default function Setup({ user, info, onStarted, onSkip }) {
     return (
       <main className="page setup">
         <div className="card">
-          <h2>Платформа ещё не готова</h2>
-          <p className="muted">Модели для генерации пока не скачаны. Попросите администратора открыть платформу и выбрать, что скачать.</p>
+          <h2>{t('The platform is not ready yet')}</h2>
+          <p className="muted">{t('No generation models have been downloaded yet. Ask an administrator to open the platform and choose what to download.')}</p>
         </div>
       </main>
     );
@@ -63,11 +64,10 @@ export default function Setup({ user, info, onStarted, onSkip }) {
   return (
     <main className="page setup">
       <div className="card">
-        <h2>Первичная настройка: какие модели скачать</h2>
+        <h2>{t('First-run setup: which models to download')}</h2>
         <p className="muted">
-          Модели не входят в образ — платформа скачает их с Hugging Face и подготовит для stable-diffusion.cpp.
-          Выберите, что нужно; добавить или удалить модели можно позже в разделе «Модели».
-          {family && <> Железо: <b>{family}</b> — рекомендации отмечены с учётом этого.</>}
+          {t('Models are not part of the image — the platform downloads them from Hugging Face and prepares them for stable-diffusion.cpp. Pick what you need; models can be added or removed later in the Models section.')}
+          {family && <> {t('Hardware:')} <b>{family}</b> — {t('recommendations take it into account.')}</>}
         </p>
       </div>
 
@@ -80,15 +80,15 @@ export default function Setup({ user, info, onStarted, onSkip }) {
               <input type="checkbox" checked={on} disabled={locked} onChange={() => toggle(p)} />
               <div className="pack-body">
                 <div className="pack-head">
-                  <span className="pack-name">{p.name}</span>
-                  {p.required && <span className="pill">нужно в любом случае</span>}
-                  {!p.required && locked && !p.installed && <span className="pill">нужно для выбранного</span>}
-                  {p.recommended && !p.required && <span className="pill installed">рекомендуется</span>}
-                  {p.experimental && <span className="pill error">экспериментально</span>}
-                  {p.installed && <span className="pill installed">уже скачано</span>}
+                  <span className="pack-name">{loc(p, 'name')}</span>
+                  {p.required && <span className="pill">{t('always required')}</span>}
+                  {!p.required && locked && !p.installed && <span className="pill">{t('needed for the selection')}</span>}
+                  {p.recommended && !p.required && <span className="pill installed">{t('recommended')}</span>}
+                  {p.experimental && <span className="pill error">{t('experimental')}</span>}
+                  {p.installed && <span className="pill installed">{t('already downloaded')}</span>}
                   <span className="pack-size">{p.installed ? '' : fmtBytes(p.remaining)}</span>
                 </div>
-                <div className="muted small">{p.description}</div>
+                <div className="muted small">{loc(p, 'description')}</div>
                 <div className="pack-models muted small">
                   {p.models.map((m) => (
                     <span key={m.id} className={m.status === 'installed' ? 'done' : ''}>
@@ -96,7 +96,7 @@ export default function Setup({ user, info, onStarted, onSkip }) {
                     </span>
                   ))}
                 </div>
-                {p.presetNames?.length > 0 && <div className="muted small">Даёт режимы: {p.presetNames.join(', ')}</div>}
+                {p.presetInfo?.length > 0 && <div className="muted small">{t('Enables modes:')} {p.presetInfo.map((x) => loc(x, 'name')).join(', ')}</div>}
               </div>
             </label>
           );
@@ -105,17 +105,17 @@ export default function Setup({ user, info, onStarted, onSkip }) {
 
       <div className="card setup-foot">
         <div>
-          <div><b>К загрузке: {fmtBytes(total)}</b> ({toDownload.length} файлов)</div>
+          <div><b>{t('To download: {size}', { size: fmtBytes(total) })}</b> ({t('{n} files', { n: toDownload.length })})</div>
           <div className={`small ${tooBig ? 'extra-text' : 'muted'}`}>
-            {disk?.free != null && `Свободно на диске с моделями: ${fmtBytes(disk.free)}`}
-            {tooBig && ' — не хватает места'}
+            {disk?.free != null && t('Free on the models disk: {size}', { size: fmtBytes(disk.free) })}
+            {tooBig && ` — ${t('not enough space')}`}
           </div>
           {error && <div className="error">{error}</div>}
         </div>
         <div className="row">
-          <button className="btn ghost" onClick={onSkip}>Позже</button>
+          <button className="btn ghost" onClick={onSkip}>{t('Later')}</button>
           <button className="btn primary" disabled={busy || !toDownload.length || tooBig} onClick={start}>
-            {busy ? 'Запуск…' : `Скачать выбранное (${fmtBytes(total)})`}
+            {busy ? t('Starting…') : t('Download selected ({size})', { size: fmtBytes(total) })}
           </button>
         </div>
       </div>

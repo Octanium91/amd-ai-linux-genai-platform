@@ -1,4 +1,4 @@
-// Пресеты — готовые режимы генерации (видео, изображения), собранные из моделей каталога.
+// Presets are ready-made generation modes (video, images) assembled from catalog models.
 import path from 'node:path';
 import { config } from './config.js';
 import { isInstalled, loadCatalog } from './models.js';
@@ -12,8 +12,8 @@ export function loadPresets() {
   return [...map.values()];
 }
 
-// Роли моделей в пресете: model, diffusion, vae, t5xxl, clip_vision, motion_module, high_noise
-// плюс любые дополнительные (например, LoRA) — они нужны только для проверки наличия.
+// Model roles in a preset: model, diffusion, vae, t5xxl, clip_vision, motion_module, high_noise
+// plus any extra roles (e.g. LoRA) that are only used to check that files are present.
 export function presetModels(preset, catalog = loadCatalog()) {
   return Object.entries(preset.models || {}).map(([role, id]) => ({
     role,
@@ -40,8 +40,8 @@ export function presetsWithAvailability() {
   });
 }
 
-// Скрытые стартовые шаблоны (catalog/templates.json): промпт + проверенные параметры.
-// Интерфейс подставляет случайный шаблон при открытии; выбрать шаблон вручную нельзя.
+// Hidden start templates (catalog/templates.json): a prompt plus tested parameters.
+// The UI fills the form with a random template on open; templates cannot be picked manually.
 export function loadTemplates() {
   const t = readJson(path.join(config.catalogDir, 'templates.json'), {});
   const neg = t.negatives || {};

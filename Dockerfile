@@ -1,9 +1,9 @@
-# AMD AI Linux GenAI Platform — один образ: stable-diffusion.cpp (Vulkan/RADV) + сервер + интерфейс.
-# ROCm не используется: вся генерация идёт через Vulkan на встроенной графике Ryzen AI.
+# AMD AI Linux GenAI Platform — a single image: stable-diffusion.cpp (Vulkan/RADV) + server + web UI.
+# No ROCm: all generation runs through Vulkan on the Ryzen AI integrated graphics.
 
-# ---------- stable-diffusion.cpp с бэкендом Vulkan ----------
+# ---------- stable-diffusion.cpp with the Vulkan backend ----------
 FROM debian:trixie AS sdcpp
-# Закреплённая версия: на ней платформа проверена (обновляйте осознанно — бывают регрессии Vulkan-видео)
+# Pinned version the platform is tested with (update deliberately: Vulkan video regressions happen)
 ARG SD_CPP_REF=88411ef
 RUN apt-get update && apt-get install -y --no-install-recommends \
       build-essential cmake git ca-certificates pkg-config libvulkan-dev glslc spirv-headers \
@@ -14,7 +14,7 @@ WORKDIR /src
 RUN cmake -B build -DCMAKE_BUILD_TYPE=Release -DSD_VULKAN=ON -DBUILD_SHARED_LIBS=OFF \
  && cmake --build build --config Release -j"$(nproc)"
 
-# ---------- веб-интерфейс ----------
+# ---------- web UI ----------
 FROM node:22-trixie-slim AS web
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
@@ -22,13 +22,13 @@ RUN npm ci --no-audit --no-fund
 COPY web/ ./
 RUN npm run build
 
-# ---------- зависимости сервера ----------
+# ---------- server dependencies ----------
 FROM node:22-trixie-slim AS srv
 WORKDIR /app/server
 COPY server/package.json server/package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund
 
-# ---------- итоговый образ на той же Debian 13, что и хост (та же версия Mesa/RADV) ----------
+# ---------- final image on the same Debian 13 as the host (same Mesa/RADV version) ----------
 FROM debian:trixie
 RUN apt-get update && apt-get install -y --no-install-recommends \
       libvulkan1 mesa-vulkan-drivers vulkan-tools libgomp1 ffmpeg ca-certificates \

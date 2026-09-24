@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Проверяет, что контейнер платформы видит iGPU через RADV и что Vulkan-куча равна GTT, а не UMA carve-out.
+# Checks that the platform container sees the iGPU through RADV and that the Vulkan heap equals GTT, not the UMA carve-out.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 docker compose exec platform sh -c '

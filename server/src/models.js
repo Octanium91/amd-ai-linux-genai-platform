@@ -1,5 +1,5 @@
-// Каталог моделей: какие файлы нужны, откуда их скачать и как подготовить.
-// Платформа сама докачивает недостающее (с продолжением после обрыва) и умеет удалять.
+// Model catalog: which files are needed, where to download them and how to prepare them.
+// The platform downloads missing files itself (resuming after interruptions) and can delete them.
 import fs from 'node:fs';
 import path from 'node:path';
 import { Readable, Transform } from 'node:stream';
@@ -25,7 +25,7 @@ export function loadCatalog() {
 
 export const modelPath = (entry) => path.join(MODELS, entry.file);
 
-// Состояние загрузок живёт в памяти: id -> { status, received, total, rate, error, abort }
+// Download state lives in memory: id -> { status, received, total, rate, error, abort }
 const downloads = new Map();
 const queue = [];
 let active = null;
@@ -66,7 +66,7 @@ export function enqueueDownloads(ids) {
   const added = [];
   for (const id of ids) {
     const entry = catalog.find((m) => m.id === id);
-    if (!entry) throw new Error(`Нет модели ${id} в каталоге`);
+    if (!entry) throw new Error(`Model ${id} is not in the catalog`);
     if (downloads.has(id) || isInstalled(entry)) continue;
     downloads.set(id, { status: 'queued', received: 0, total: entry.size || 0, rate: 0 });
     queue.push(entry);
@@ -101,11 +101,11 @@ async function pump() {
   try {
     await download(entry, d);
     downloads.delete(entry.id);
-    console.log(`[models] ${entry.id}: готово`);
+    console.log(`[models] ${entry.id}: done`);
   } catch (e) {
     if (downloads.get(entry.id) === d) {
       d.status = 'error';
-      d.error = e.name === 'AbortError' ? 'отменено' : e.message;
+      d.error = e.name === 'AbortError' ? 'cancelled' : e.message;
       console.error(`[models] ${entry.id}: ${d.error}`);
     }
   } finally {
@@ -134,8 +134,8 @@ async function download(entry, d) {
       headers.Authorization = `Bearer ${config.hfToken}`;
     }
     const res = await fetch(entry.url, { headers, signal: d.abort.signal, redirect: 'follow' });
-    if (res.status === 200 && start) start = 0; // сервер не поддержал Range — качаем заново
-    if (!res.ok) throw new Error(`HTTP ${res.status} при загрузке ${entry.url}`);
+    if (res.status === 200 && start) start = 0; // the server ignored Range — download from scratch
+    if (!res.ok) throw new Error(`HTTP ${res.status} while downloading ${entry.url}`);
     const len = Number(res.headers.get('content-length')) || 0;
     d.total = entry.size || start + len;
     d.received = start;
@@ -162,13 +162,13 @@ async function download(entry, d) {
 
   const got = fs.statSync(part).size;
   if (entry.size && got !== entry.size) {
-    throw new Error(`размер не совпал: ${got} вместо ${entry.size}, запустите загрузку ещё раз`);
+    throw new Error(`size mismatch: ${got} instead of ${entry.size}, start the download again`);
   }
 
   if (entry.postprocess) {
     d.status = 'processing';
     const fn = postprocessors[entry.postprocess];
-    if (!fn) throw new Error(`неизвестная обработка ${entry.postprocess}`);
+    if (!fn) throw new Error(`unknown postprocess ${entry.postprocess}`);
     const tmp = dest + '.tmp';
     fn(part, tmp);
     fs.renameSync(tmp, dest);
