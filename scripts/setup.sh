@@ -87,6 +87,8 @@ DATA_PATH=$(grep -E '^DATA_PATH=' .env | cut -d= -f2-); DATA_PATH=${DATA_PATH:-.
 mkdir -p "$DATA_PATH" && ok "каталог данных: $DATA_PATH"
 MODELS_PATH=$(grep -E '^MODELS_PATH=' .env | cut -d= -f2-); MODELS_PATH=${MODELS_PATH:-./models}
 mkdir -p "$MODELS_PATH" && ok "каталог моделей: $MODELS_PATH ($(df -h "$MODELS_PATH" | awk 'NR==2{print $4}') свободно)"
+OUTPUT_PATH=$(grep -E '^OUTPUT_PATH=' .env | cut -d= -f2-); OUTPUT_PATH=${OUTPUT_PATH:-./output}
+mkdir -p "$OUTPUT_PATH" && ok "каталог результатов: $OUTPUT_PATH"
 
 echo
 if [ $FAIL = 1 ]; then echo "Есть ошибки — исправьте их и запустите снова."; exit 1; fi

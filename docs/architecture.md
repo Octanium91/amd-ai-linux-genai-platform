@@ -30,7 +30,7 @@
 | Путь (в контейнере) | На хосте | Что |
 |---|---|---|
 | `/data/models` | `MODELS_PATH` (`./models`) | скачанные модели, отдельный том |
-| `/data/output` | `DATA_PATH/output` | готовые видео и изображения |
+| `/data/output` | `OUTPUT_PATH` (`./output`) | готовые видео и изображения, отдельный том |
 | `/data/input/uploads` | `DATA_PATH/input/uploads` | стартовые картинки |
 | `/data/state/jobs.json` | | история и очередь |
 | `/data/state/users.json`, `sessions.json` | | пользователи (scrypt) и сессии (хранятся хеши токенов), права 600 |

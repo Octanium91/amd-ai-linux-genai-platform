@@ -1,6 +1,7 @@
 .env
 data/
 models/
+output/
 node_modules/
 web/dist/
 server/public/
