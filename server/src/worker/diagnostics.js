@@ -4,7 +4,7 @@
 import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
-import { config } from './config.js';
+import { config } from '../common/config.js';
 
 const GB = 1024 ** 3;
 const run = (cmd, args, timeout = 20000) => new Promise((resolve) => {

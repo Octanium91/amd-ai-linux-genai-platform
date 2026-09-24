@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Updates the platform without interrupting a running generation:
+#   - builds both images;
+#   - restarts the web container at once (UI, API: generation is not affected);
+#   - restarts the worker only if its image or settings changed, and only after the current job:
+#     the worker is drained (finishes the job, starts nothing new), queued jobs wait and continue
+#     on the new worker.
+#   ./scripts/update.sh           update from the working copy
+#   ./scripts/update.sh --pull    git pull first
+# Interrupting the script (Ctrl+C, closed SSH session) releases the drain; the old worker carries on.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+[ "${1:-}" = "--pull" ] && git pull --ff-only
+DATA_PATH=$(grep -E '^DATA_PATH=' .env 2>/dev/null | cut -d= -f2-); DATA_PATH=${DATA_PATH:-./data}
+
+echo "== Building images"
+docker compose build
+
+# One-time migration from the single-container version (container genai-platform)
+if docker inspect genai-platform >/dev/null 2>&1; then
+  echo "== Migrating from the single-container version: waiting until no job is running or queued"
+  while grep -qE '"status": *"(running|queued)"' "$DATA_PATH/state/jobs.json" 2>/dev/null; do
+    printf '.'; sleep 30
+  done
+  echo
+  docker rm -f genai-platform >/dev/null
+  docker compose up -d --remove-orphans
+  exit 0
+fi
+
+echo "== web"
+docker compose up -d --no-deps web
+
+echo "== worker"
+if [ "$(docker inspect -f '{{.State.Running}}' genai-worker 2>/dev/null || echo false)" != true ]; then
+  docker compose up -d --no-deps worker
+  exit 0
+fi
+running_image=$(docker inspect -f '{{.Image}}' genai-worker)
+new_image=$(docker image inspect -f '{{.Id}}' genai-platform-worker:latest)
+running_hash=$(docker inspect -f '{{index .Config.Labels "com.docker.compose.config-hash"}}' genai-worker)
+new_hash=$(docker compose config --hash worker | awk '{print $2}')
+if [ "$running_image" = "$new_image" ] && [ "$running_hash" = "$new_hash" ]; then
+  echo "  unchanged, not restarted"
+  exit 0
+fi
+
+ctl() { docker exec genai-worker node src/worker/ctl.js "$@"; }
+release() { ctl drain 0 >/dev/null 2>&1 || true; }
+trap 'release; echo; echo "Interrupted: the worker keeps running the old version, the queue continues"; exit 130' INT TERM HUP
+
+# The drain is a lease: renewed on every poll, it expires by itself if this script dies
+first=1
+while :; do
+  status=$(ctl drain 120)
+  [ "$(echo "$status" | grep -o '"busy":[a-z]*' | cut -d: -f2)" = false ] && break
+  if [ $first = 1 ]; then
+    echo "  a job is running: the worker restarts after it, new jobs wait in the queue"
+    first=0
+  fi
+  printf '.'; sleep 15
+done
+[ $first = 1 ] || echo
+trap - INT TERM HUP
+docker compose up -d --no-deps worker
+echo "  restarted"

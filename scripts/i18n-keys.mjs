@@ -29,13 +29,18 @@ for (const f of fs.readdirSync(webSrc).filter((x) => /\.(jsx?|mjs)$/.test(x))) {
 
 // Server error messages shown to users: res.json({ error: '…' }), reject('…'), throw new Error('…')
 const serverKeys = new Set();
-for (const f of fs.readdirSync(serverSrc).filter((x) => x.endsWith('.js'))) {
+// worker/index.js and ctl.js only answer the web container (internal API), their errors never reach users
+const INTERNAL = new Set(['worker/index.js', 'worker/ctl.js']);
+const serverFiles = fs.readdirSync(serverSrc, { recursive: true })
+  .map((f) => f.split(path.sep).join('/'))
+  .filter((f) => f.endsWith('.js') && !INTERNAL.has(f));
+for (const f of serverFiles) {
   const s = fs.readFileSync(path.join(serverSrc, f), 'utf8');
   for (const m of s.matchAll(/(?:error:\s*|reject\(|return\s+|finish\(job, 'failed', |job\.error = )'((?:\\.|[^'])*)'/g)) {
     const msg = unescape(m[1]);
     if (/^[A-Z]/.test(msg) && !/^[A-Z_]+$/.test(msg)) serverKeys.add(msg.endsWith(': ') ? msg.trimEnd() : msg);
   }
-  for (const m of s.matchAll(/new Error\(\s*'((?:\\.|[^'])*)'/g)) serverKeys.add(unescape(m[1]).trimEnd());
+  for (const m of s.matchAll(/(?:new Error|super)\(\s*'((?:\\.|[^'])*)'/g)) serverKeys.add(unescape(m[1]).trimEnd());
   // Prefix messages with a variable tail, matched by tError() on "Prefix:"
   for (const m of s.matchAll(/`([A-Z][^`$]*?:) \$\{/g)) serverKeys.add(m[1]);
 }
@@ -47,6 +52,7 @@ const EXTRA = [
   'Interrupted by a container restart',
   'The container was stopped during generation',
   'Internal error',
+  'Not found',
   'Could not build the mp4:',
 ];
 for (const k of EXTRA) keys.add(k);

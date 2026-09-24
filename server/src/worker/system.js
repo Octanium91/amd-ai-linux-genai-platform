@@ -2,7 +2,7 @@
 import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { config } from './config.js';
+import { config } from '../common/config.js';
 
 const readNum = (f) => {
   try {

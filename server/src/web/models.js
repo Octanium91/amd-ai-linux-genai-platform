@@ -4,9 +4,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { config } from './config.js';
+import { config } from '../common/config.js';
 import { postprocessors } from './safetensors.js';
-import { readJson, statePath } from './store.js';
+import { readJson, statePath } from '../common/store.js';
 
 const MODELS = config.dirs.models;
 

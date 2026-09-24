@@ -18,4 +18,6 @@
 
 ## Deployment
 
-- Before restarting a running deployment, check that no job is `running` or `queued` in `data/state/jobs.json` — a restart aborts the current generation.
+- Two containers: `web` (UI, API, auth, catalog, downloads; `server/src/web`) and `worker` (GPU, queue, sd-cli; `server/src/worker`), sharing `server/src/common`. The worker has no npm dependencies and never reads the catalog: jobs carry a `spec` snapshot of their mode.
+- Deploy updates with `./scripts/update.sh`: it restarts `web` at once and the worker only after draining it. Never run a plain `docker compose up -d` over a running worker with a changed image; that aborts the current generation.
+- A change to the web ↔ worker API that breaks compatibility bumps `WORKER_API` in `server/src/common/config.js`.

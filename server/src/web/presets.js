@@ -1,8 +1,8 @@
 // Presets are ready-made generation modes (video, images) assembled from catalog models.
 import path from 'node:path';
-import { config } from './config.js';
+import { config } from '../common/config.js';
 import { isInstalled, loadCatalog } from './models.js';
-import { readJson, statePath } from './store.js';
+import { readJson, statePath } from '../common/store.js';
 
 export function loadPresets() {
   const base = readJson(path.join(config.catalogDir, 'presets.json'), []);

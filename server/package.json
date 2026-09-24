@@ -2,9 +2,10 @@
   "name": "genai-platform-server",
   "private": true,
   "type": "module",
-  "main": "src/index.js",
+  "main": "src/web/index.js",
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node src/web/index.js",
+    "worker": "node src/worker/index.js"
   },
   "engines": {
     "node": ">=22"

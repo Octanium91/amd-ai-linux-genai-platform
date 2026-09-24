@@ -1,8 +1,8 @@
 // Auth: users with scrypt hashes, HttpOnly session cookies,
 // brute-force protection and CSRF protection (SameSite=Lax + a required header on mutating requests).
 import crypto from 'node:crypto';
-import { config } from './config.js';
-import { readJson, statePath, writeJson } from './store.js';
+import { config } from '../common/config.js';
+import { readJson, statePath, writeJson } from '../common/store.js';
 
 const USERS_FILE = statePath('users.json');
 const SESSIONS_FILE = statePath('sessions.json');

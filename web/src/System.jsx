@@ -4,6 +4,17 @@ import { t } from './i18n.js';
 
 // Texts and advice for every server-side check (server/src/diagnostics.js reports only ids, statuses and values)
 const CHECKS = {
+  worker: {
+    title: 'Generation engine link',
+    text: (s, p) => {
+      if (s === 'ok') return t('The web server is connected to the generation engine (worker API v{api}).', p);
+      if (s === 'warn') return t('The generation engine speaks API v{api}, the web server expects v{expected}.', p);
+      return t('The generation engine (the worker container) is not reachable. The checks below need it.');
+    },
+    advice: (p, s) => (s === 'warn'
+      ? { text: t('Update both containers:'), commands: ['./scripts/update.sh'] }
+      : { text: t('Check that the worker container is running and look at its log:'), commands: ['docker compose ps', 'docker compose logs --tail 50 worker', 'docker compose up -d worker'] }),
+  },
   gpu: {
     title: 'GPU (Vulkan)',
     text: (s, p) => {
@@ -14,7 +25,7 @@ const CHECKS = {
     },
     advice: () => ({
       text: t('Check that /dev/dri is passed to the container and that RENDER_GID/VIDEO_GID in .env match the host groups (setup.sh fills them in). On the host, install mesa-vulkan-drivers and firmware-amd-graphics, then recreate the container.'),
-      commands: ['./scripts/setup.sh --install', 'getent group render video', 'docker compose up -d --force-recreate'],
+      commands: ['./scripts/setup.sh --install', 'getent group render video', 'docker compose up -d --force-recreate worker'],
     }),
   },
   'render-node': {
@@ -29,7 +40,7 @@ const CHECKS = {
       }
       : {
         text: t('RENDER_GID in .env must be the numeric GID of the host render group.'),
-        commands: ['getent group render', './scripts/setup.sh', 'docker compose up -d --force-recreate'],
+        commands: ['getent group render', './scripts/setup.sh', 'docker compose up -d --force-recreate worker'],
       }),
   },
   cpu: {
@@ -75,7 +86,7 @@ const CHECKS = {
     },
     advice: () => ({
       text: t('Make sure docker-compose.yml sets radv_enable_unified_heap_on_apu=true and mounts config/drirc, then recreate the container.'),
-      commands: ['docker compose up -d --force-recreate', './scripts/check-gpu.sh'],
+      commands: ['docker compose up -d --force-recreate worker', './scripts/check-gpu.sh'],
     }),
   },
   'video-memory': {
@@ -105,12 +116,12 @@ const CHECKS = {
   engine: {
     title: 'Generation engine',
     text: (s, p) => (s === 'ok' ? p.version : t('sd-cli does not start in the container.')),
-    advice: () => ({ text: t('Rebuild the image:'), commands: ['docker compose build --no-cache && docker compose up -d'] }),
+    advice: () => ({ text: t('Rebuild the image:'), commands: ['docker compose build --no-cache worker && ./scripts/update.sh'] }),
   },
   ffmpeg: {
     title: 'ffmpeg',
     text: (s, p) => (s === 'ok' ? p.version : t('ffmpeg is missing: videos cannot be assembled.')),
-    advice: () => ({ text: t('Rebuild the image:'), commands: ['docker compose build --no-cache && docker compose up -d'] }),
+    advice: () => ({ text: t('Rebuild the image:'), commands: ['docker compose build --no-cache worker && ./scripts/update.sh'] }),
   },
   npu: {
     title: 'NPU (XDNA)',
@@ -185,7 +196,7 @@ export default function System() {
             {data.checks.map((c) => {
               const def = CHECKS[c.id];
               if (!def) return null;
-              const advice = c.status !== 'ok' && def.advice ? def.advice(c.params) : null;
+              const advice = c.status !== 'ok' && def.advice ? def.advice(c.params, c.status) : null;
               return (
                 <div key={c.id} className={`check ${c.status}`}>
                   <span className={`check-dot ${c.status}`} aria-hidden="true" />

@@ -33,8 +33,10 @@ git clone https://github.com/Octanium91/amd-ai-linux-genai-platform.git
 cd amd-ai-linux-genai-platform
 ./scripts/setup.sh --install     # host checks, Mesa/Vulkan packages, .env
 docker compose up -d --build     # the first build takes ~5–10 minutes (stable-diffusion.cpp is compiled)
-./scripts/check-gpu.sh           # the container must see RADV and a Vulkan heap the size of GTT
+./scripts/check-gpu.sh           # the worker must see RADV and a Vulkan heap the size of GTT
 ```
+
+To update later, run `./scripts/update.sh` (or `./scripts/update.sh --pull` to `git pull` first). It rebuilds the images, restarts the web container at once and the generation engine only after the current job, so updates never interrupt a generation. See [docs/architecture.md](docs/architecture.md#containers-and-updates).
 
 Open `http://<host>:7860`. On first start there are no users, so the platform offers to **create the administrator** (username and password). Do it right after starting: until then, anyone on the network can see that form. After that only sign-in is available; the administrator adds other users in the Users section.
 

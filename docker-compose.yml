@@ -1,22 +1,27 @@
 # AMD AI Linux GenAI Platform
-# Run: ./scripts/setup.sh (once), then docker compose up -d --build
+# First start: ./scripts/setup.sh, then docker compose up -d --build
+# Updates:     ./scripts/update.sh  (restarts web at once, the worker only when no job is running)
 name: genai-platform
 
+# Shared by both services: run as the host user (setup.sh writes PUID/PGID), so every file in
+# data/, models/ and output/ belongs to that user and the directories can be moved without sudo
+x-common: &common
+  restart: unless-stopped
+  init: true
+  user: "${PUID:?run scripts/setup.sh — PUID is missing in .env}:${PGID:?run scripts/setup.sh — PGID is missing in .env}"
+
 services:
-  platform:
+  # The generation engine: owns the GPU and the job queue. It has no published port; only the web
+  # service talks to it, with a token from data/state/worker.token.
+  worker:
+    <<: *common
     build:
       context: .
+      target: worker
       args:
         SD_CPP_REF: ${SD_CPP_REF:-88411ef}
-    image: genai-platform:latest
-    container_name: genai-platform
-    restart: unless-stopped
-    init: true
-    # Run as the host user (setup.sh writes PUID/PGID): every file in data/, models/ and output/
-    # belongs to that user, so the directories can be copied or moved without sudo
-    user: "${PUID:?run scripts/setup.sh — PUID is missing in .env}:${PGID:?run scripts/setup.sh — PGID is missing in .env}"
-    ports:
-      - "${BIND_ADDR:-0.0.0.0}:${PORT:-7860}:7860"
+    image: genai-platform-worker:latest
+    container_name: genai-worker
     # Radeon iGPU via Vulkan: render node + numeric GIDs of the host render/video groups (written by setup.sh)
     devices:
       - /dev/dri:/dev/dri
@@ -24,9 +29,6 @@ services:
       - "${RENDER_GID:?run scripts/setup.sh — RENDER_GID is missing in .env}"
       - "${VIDEO_GID:?run scripts/setup.sh — VIDEO_GID is missing in .env}"
     environment:
-      HF_TOKEN: ${HF_TOKEN:-}
-      COOKIE_SECURE: ${COOKIE_SECURE:-false}
-      TRUST_PROXY: ${TRUST_PROXY:-false}
       # One DEVICE_LOCAL Vulkan heap spanning the whole GTT instead of the small UMA carve-out (512 MB etc.)
       radv_enable_unified_heap_on_apu: "true"
       # RADV only, no software llvmpipe
@@ -35,11 +37,34 @@ services:
     ulimits:
       memlock: -1
     volumes:
-      # Platform state: users, job history, logs, uploaded images
+      # Platform state: job history, logs, previews, thumbnails, uploaded images
       - ${DATA_PATH:-./data}:/data
-      # Downloaded models: a separate volume, independent of the image, survives any rebuild
-      - ${MODELS_PATH:-./models}:/data/models
-      # Generated videos and images: a separate volume for the same reason
+      # Models are only read here; the web service downloads them
+      - ${MODELS_PATH:-./models}:/data/models:ro
+      # Generated videos and images
       - ${OUTPUT_PATH:-./output}:/data/output
       - ./config/drirc:/etc/drirc:ro
+      - /etc/localtime:/etc/localtime:ro
+
+  # UI, API, users and model downloads. No GPU access; safe to restart at any time.
+  web:
+    <<: *common
+    build:
+      context: .
+      target: web
+    image: genai-platform-web:latest
+    container_name: genai-web
+    ports:
+      - "${BIND_ADDR:-0.0.0.0}:${PORT:-7860}:7860"
+    environment:
+      HF_TOKEN: ${HF_TOKEN:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+    volumes:
+      # Users, sessions, uploads, your own models/modes (state/*.local.json)
+      - ${DATA_PATH:-./data}:/data
+      # Downloaded models: a separate volume, independent of the images, survives any rebuild
+      - ${MODELS_PATH:-./models}:/data/models
+      # Results are served from here; the worker writes and deletes them
+      - ${OUTPUT_PATH:-./output}:/data/output:ro
       - /etc/localtime:/etc/localtime:ro

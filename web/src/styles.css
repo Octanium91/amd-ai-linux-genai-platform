@@ -344,6 +344,8 @@ input[type="range"].extra { accent-color: var(--bad); }
 .nav-badge.warn { background: var(--warn); }
 .nav-badge.fail { background: var(--bad); }
 .banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 14px; margin-bottom: 16px; border-radius: 12px; font-size: 13.5px; }
+.banner.warn { background: color-mix(in srgb, var(--warn) 14%, transparent); border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line)); }
+.banner.info { background: color-mix(in srgb, var(--accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line)); }
 .banner.fail { background: color-mix(in srgb, var(--bad) 14%, transparent); border: 1px solid color-mix(in srgb, var(--bad) 45%, var(--line)); }
 .sys-summary { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 10px 0 0; }
 .pill.queued { background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn); }

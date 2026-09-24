@@ -1,13 +1,13 @@
 // Generation queue on top of sd-cli: strictly one job on the GPU, progress parsed from its output,
 // history kept in /data/state/jobs.json so it survives container re-creation.
+// Jobs arrive from the web container already validated, with a snapshot of the mode (`spec`):
+// the worker does not read the catalog, so catalog and UI updates never require restarting it.
 import { spawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { config } from './config.js';
-import { loadCatalog, modelPath } from './models.js';
-import { loadPresets, presetModels } from './presets.js';
-import { debouncedWriter, readJson, statePath } from './store.js';
+import { config } from '../common/config.js';
+import { debouncedWriter, readJson, statePath } from '../common/store.js';
 
 const { dirs } = config;
 const JOBS_FILE = statePath('jobs.json');
@@ -167,7 +167,7 @@ async function finalizeImages(job) {
   await makeThumb(job, path.join(dirs.output, job.files[0]));
 }
 
-// ---------- command line ----------
+// ---------- command line (from the job's spec) ----------
 
 const ROLE_FLAGS = {
   model: '--model',
@@ -181,12 +181,11 @@ const ROLE_FLAGS = {
 
 function buildArgs(job, preset, outBase, initImage) {
   const p = job.params;
-  const catalog = loadCatalog();
   const args = ['-M', preset.kind === 'image' ? 'img_gen' : 'vid_gen'];
-  for (const { role, id, entry } of presetModels(preset, catalog)) {
-    if (!entry) throw new Error(`Model ${id} is not in the catalog`);
-    if (!fs.existsSync(modelPath(entry))) throw new Error(`Model not downloaded: ${entry.name}`);
-    if (ROLE_FLAGS[role]) args.push(ROLE_FLAGS[role], modelPath(entry));
+  for (const { role, name, file } of preset.models) {
+    const full = path.join(dirs.models, file);
+    if (!fs.existsSync(full)) throw new Error(`Model not downloaded: ${name}`);
+    if (ROLE_FLAGS[role]) args.push(ROLE_FLAGS[role], full);
   }
   if (preset.loraDir) args.push('--lora-model-dir', path.join(dirs.models, preset.loraDir));
   args.push('-p', p.prompt + (preset.promptSuffix || ''));
@@ -247,7 +246,7 @@ function newProgress(segment, segments, doneSegments = []) {
 }
 
 async function run(job) {
-  const preset = loadPresets().find((p) => p.id === job.params.presetId);
+  const preset = job.spec;
   const segments = job.params.segments || 1;
   const tmpBase = path.join(dirs.output, `.${job.id}`);
   const outputs = [];
@@ -265,7 +264,7 @@ async function run(job) {
   };
 
   try {
-    if (!preset) throw new Error('Preset not found: ' + job.params.presetId);
+    if (!preset) throw new Error('Queued by an older version of the platform, submit it again');
     job.status = 'running';
     save(true);
     for (let i = 0; i < segments && job.status === 'running'; i++) {
@@ -314,94 +313,34 @@ async function run(job) {
   nextJob();
 }
 
+// ---------- drain: finish the current job, start nothing new (engine updates) ----------
+// A drain is a lease: scripts/update.sh keeps renewing it while it waits, so if the script dies
+// the worker resumes the queue by itself when the lease runs out.
+let drainUntil = 0;
+export const draining = () => Date.now() < drainUntil;
+
+export function setDrain(seconds) {
+  drainUntil = seconds > 0 ? Date.now() + Math.min(seconds, 3600) * 1000 : 0;
+  if (!draining()) nextJob();
+}
+setInterval(() => nextJob(), 5000).unref();
+
 export function nextJob() {
-  if (current) return;
+  if (current || draining()) return;
   const job = jobs.filter((j) => j.status === 'queued').sort((a, b) => a.createdAt - b.createdAt)[0];
   if (job) run(job);
 }
 
 // ---------- create, cancel, delete ----------
 
-const OUT_FPS = [24, 30, 50, 60, 120];
-
-const clamp = (v, lo, hi, def) => {
-  const n = Number(v);
-  return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : def;
-};
-
-// Wan needs 4n+1 frames; AnimateDiff takes exactly duration × fps (16 works best)
-function planFrames(d, duration) {
-  const nativeFps = d.nativeFps ?? 24;
-  const raw = duration * nativeFps;
-  const frames = d.frameRule === 'exact' ? Math.round(raw) : Math.round(raw / 4) * 4 + 1;
-  return Math.min(d.maxFrames ?? 121, Math.max(d.minFrames ?? 5, frames));
-}
-
-// "Extra" is twice the steps of "High" unless the preset defines its own value
-export function qualitySteps(d, quality) {
-  const q = d.quality || {};
-  if (quality === 'extra') return q.extra ?? (q.high ? q.high * 2 : null);
-  return q[quality] ?? null;
-}
-
-// Single-pass model limit and the extra limit (two segments chained via image-to-video)
-export function durationLimits(preset) {
-  const d = preset.defaults || {};
-  const nativeFps = d.nativeFps ?? 24;
-  const maxFrames = d.maxFrames ?? 121;
-  const base = (d.frameRule === 'exact' ? maxFrames : maxFrames - 1) / nativeFps;
-  const extendable = preset.kind === 'video' && preset.image !== 'none';
-  return { base, max: extendable ? base * 2 : base, extendable };
-}
-
-export function createJob(preset, body, user, image) {
-  const d = preset.defaults || {};
-  const round16 = (v) => Math.round(v / 16) * 16;
-  const quality = qualitySteps(d, body.quality) != null ? body.quality : 'normal';
-  let seed = Math.trunc(Number(body.seed));
-  if (!Number.isFinite(seed) || seed < 0) seed = crypto.randomInt(0, 2 ** 31 - 1);
-
-  const params = {
-    kind: preset.kind,
-    presetId: preset.id,
-    presetName: preset.name,
-    prompt: String(body.prompt || '').trim(),
-    negative: String(body.negative ?? '').trim(),
-    width: round16(clamp(body.width, 128, 2048, d.width ?? 512)),
-    height: round16(clamp(body.height, 128, 2048, d.height ?? 512)),
-    quality,
-    steps: qualitySteps(d, quality) ?? d.steps ?? 20,
-    cfg: clamp(body.cfg, 0, 30, d.cfg ?? 7),
-    flowShift: d.flowShift == null ? null : clamp(body.flowShift, 0, 30, d.flowShift),
-    sampler: /^[a-z0-9_+]+$/.test(body.sampler || '') ? body.sampler : d.sampler || 'euler',
-    seed,
-    image,
-  };
-  if (preset.kind === 'image') {
-    params.count = Math.round(clamp(body.count, 1, 8, 1));
-  } else {
-    const nativeFps = d.nativeFps ?? 24;
-    const exact = d.frameRule === 'exact';
-    const lim = durationLimits(preset);
-    const duration = clamp(body.duration, 0.5, lim.max, d.duration ?? 2);
-    // Longer than the model limit: two segments, the second continues from the last frame of the first
-    const segments = duration > lim.base + 1e-6 ? 2 : 1;
-    const frames = planFrames(d, duration / segments);
-    const segSeconds = (exact ? frames : frames - 1) / nativeFps;
-    Object.assign(params, {
-      frames,
-      segments,
-      fps: nativeFps,
-      duration: segSeconds * segments,
-      outFps: OUT_FPS.includes(Number(body.outFps)) ? Number(body.outFps) : d.outFps ?? nativeFps,
-    });
-  }
+export function enqueueJob({ user, params, spec }) {
   const job = {
     id: crypto.randomBytes(6).toString('hex'),
     status: 'queued',
     createdAt: Date.now(),
-    user: user.username,
+    user,
     params,
+    spec,
   };
   jobs.push(job);
   save(true);
@@ -440,7 +379,7 @@ export function deleteJob(job) {
 }
 
 export function jobSummary(j) {
-  const { cmd, ...out } = j;
+  const { cmd, spec, ...out } = j;
   if (j.status === 'running') {
     for (const ext of ['.webp', '.png']) {
       try {
@@ -453,27 +392,9 @@ export function jobSummary(j) {
   return out;
 }
 
-export function jobLog(job, tail) {
-  const file = path.join(dirs.logs, job.id + '.log');
-  let text = '';
-  try {
-    const st = fs.statSync(file);
-    const len = Math.min(st.size, 256 * 1024);
-    const fd = fs.openSync(file, 'r');
-    const b = Buffer.alloc(len);
-    fs.readSync(fd, b, 0, len, st.size - len);
-    fs.closeSync(fd);
-    text = b.toString('utf8');
-  } catch {}
-  return text.replace(ANSI, '').split(/[\r\n]+/).filter((l) => l.trim()).slice(-tail);
-}
-
 // Models used by the current generation cannot be deleted
 export function modelsInUse() {
-  const job = runningJob();
-  if (!job) return new Set();
-  const preset = loadPresets().find((p) => p.id === job.params.presetId);
-  return new Set(Object.values(preset?.models || {}));
+  return [...new Set((runningJob()?.spec?.models || []).map((m) => m.id))];
 }
 
 export function shutdownJobs() {

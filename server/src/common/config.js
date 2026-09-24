@@ -9,13 +9,16 @@ const DATA = process.env.DATA_DIR || '/data';
 
 export const config = {
   port: Number(process.env.PORT) || 7860,
+  // The worker API is internal: reachable only on the compose network, never published
+  workerPort: Number(process.env.WORKER_PORT) || 7861,
+  workerUrl: process.env.WORKER_URL || 'http://127.0.0.1:7861',
   sdCli: process.env.SD_CLI || 'sd-cli',
   hfToken: process.env.HF_TOKEN || '',
   cookieSecure: process.env.COOKIE_SECURE === 'true',
   trustProxy: process.env.TRUST_PROXY === 'true',
   sessionDays: Number(process.env.SESSION_DAYS) || 30,
-  catalogDir: process.env.CATALOG_DIR || path.resolve(here, '../../catalog'),
-  publicDir: path.resolve(here, '../public'),
+  catalogDir: process.env.CATALOG_DIR || path.resolve(here, '../../../catalog'),
+  publicDir: path.resolve(here, '../../public'),
   dirs: {
     data: DATA,
     models: path.join(DATA, 'models'),
@@ -30,4 +33,12 @@ export const config = {
   },
 };
 
-for (const d of Object.values(config.dirs)) fs.mkdirSync(d, { recursive: true });
+// Version of the web ↔ worker API; both sides refuse to work with a different major version
+export const WORKER_API = 1;
+
+// Some directories are mounted read-only in one of the containers (output in web, models in worker)
+for (const d of Object.values(config.dirs)) {
+  try {
+    fs.mkdirSync(d, { recursive: true });
+  } catch {}
+}

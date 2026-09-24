@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Start with the **System** section of the web UI (administrators): it runs the checks below inside the container and shows advice with copyable commands for each problem. The same checks are logged at startup (`docker compose logs platform | grep diagnostics`). On the host, `./scripts/setup.sh` checks packages, groups and GTT before the first start.
+Start with the **System** section of the web UI (administrators): it runs the checks below inside the container and shows advice with copyable commands for each problem. The same checks are logged at startup (`docker compose logs worker | grep diagnostics`). On the host, `./scripts/setup.sh` checks packages, groups and GTT before the first start.
 
 ## Vulkan only sees `llvmpipe`
 
@@ -44,10 +44,15 @@ Click Download again: the download resumes where it stopped (a `.part` file in `
 If there is another administrator, they can change the password in the Users section. Otherwise reset the users: the platform will offer to create the administrator again. Jobs, results and models are kept.
 
 ```bash
-docker compose down
 rm data/state/users.json data/state/sessions.json
-docker compose up -d
+docker compose restart web
 ```
+
+Only the web container restarts, so a running generation is not affected.
+
+## "The generation engine is restarting or unavailable"
+
+The web container cannot reach the worker. For a few seconds during `./scripts/update.sh` this is expected. If it stays, check the worker: `docker compose ps` and `docker compose logs --tail 50 worker`. Queued jobs are kept in `data/state/jobs.json`, and the worker continues them once it is up.
 
 ## `EACCES: permission denied` in the logs
 
@@ -55,7 +60,7 @@ The container runs as `PUID`/`PGID` from `.env` and cannot write files owned by 
 
 ## stable-diffusion.cpp regressions
 
-The engine version is pinned in `SD_CPP_REF` (`.env`, the tested commit `88411ef` by default). After changing it, rebuild the image (`docker compose build --no-cache`) and run short jobs in every mode: Vulkan video regressions have happened between builds (for example [#1976](https://github.com/leejet/stable-diffusion.cpp/issues/1976)).
+The engine version is pinned in `SD_CPP_REF` (`.env`, the tested commit `88411ef` by default). After changing it, rebuild the worker image (`docker compose build --no-cache worker`, then `./scripts/update.sh`) and run short jobs in every mode: Vulkan video regressions have happened between builds (for example [#1976](https://github.com/leejet/stable-diffusion.cpp/issues/1976)).
 
 ## A UI string is not translated
 

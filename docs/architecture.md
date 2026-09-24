@@ -1,48 +1,78 @@
 # Architecture
 
 ```
-Browser ──HTTP──▶ genai-platform (a single container)
-                   ├─ Node.js server (server/src)
-                   │   ├─ auth.js         users, sessions, CSRF, brute-force protection
-                   │   ├─ jobs.js         queue: one job on the GPU, sd-cli progress parsing, segments
-                   │   ├─ models.js       catalog, resumable downloads, deletion
-                   │   ├─ safetensors.js  streaming model conversion
-                   │   ├─ presets.js      generation modes and start templates
-                   │   └─ system.js       APU, iGPU (Vulkan), GTT, NPU, CPU and disk usage
-                   ├─ React UI (web/, built into the image)
-                   └─ sd-cli — stable-diffusion.cpp built with -DSD_VULKAN=ON
-                           │
-                           ▼  /dev/dri/renderD128 (Mesa RADV)
-                     Radeon iGPU  ◀── GTT (shared RAM)
+Browser ──HTTP──▶ web container (port 7860)             worker container (internal network only)
+                   ├─ React UI                           ├─ job queue (source of truth, jobs.json)
+                   ├─ API, auth, users                   ├─ sd-cli: stable-diffusion.cpp, -DSD_VULKAN=ON
+                   ├─ catalog, modes, model downloads    ├─ progress parsing, segments, ffmpeg
+                   ├─ serves results                     ├─ hardware info, system check
+                   └─ ── HTTP /v1 + token ─────────────▶ └─ /dev/dri/renderD128 (Mesa RADV)
+                                                                  │
+                                                                  ▼
+                                                            Radeon iGPU  ◀── GTT (shared RAM)
 ```
 
-There is one container: the generation engine runs as an `sd-cli` process next to the server, so no Docker socket access is needed. The image is based on Debian 13 like the host, so Mesa/RADV versions match between the container and the host.
+Code: `server/src/web` (the web container), `server/src/worker` (the worker), `server/src/common` (configuration and state files, used by both).
+
+| Module | What |
+|---|---|
+| `web/index.js` | HTTP API, result files, the SPA |
+| `web/auth.js` | users, sessions, CSRF, brute-force protection |
+| `web/params.js` | validates a submission into job parameters and the mode snapshot (`spec`) |
+| `web/models.js`, `web/safetensors.js` | catalog, resumable downloads, deletion, streaming model conversion |
+| `web/presets.js` | generation modes and start templates |
+| `web/worker.js` | worker API client with the last known state cached |
+| `worker/queue.js` | the queue: one job on the GPU, sd-cli progress parsing, segments, finalization, drain |
+| `worker/system.js`, `worker/diagnostics.js` | APU, iGPU (Vulkan), GTT, NPU, CPU and disk usage; the system check |
+| `worker/index.js`, `worker/ctl.js` | the internal API and its command-line client for `update.sh` |
+
+Both images are based on Debian 13 like the host, so Mesa/RADV versions match between the worker and the host. The engine runs as an `sd-cli` process inside the worker, so no Docker socket access is needed.
 
 A new content type (upscaling, audio, LLM…) is added by:
 - a mode with a new `kind` in `catalog/presets.json`;
-- a command-building and finalization branch in `jobs.js` (`buildArgs`, `finalize*`);
+- a command-building and finalization branch in `worker/queue.js` (`buildArgs`, `finalize*`);
 - a section in the UI.
 
 The queue, models, users and gallery are shared.
 
+## Containers and updates
+
+The split follows how often things change: the UI and API change often, the engine rarely.
+
+- **web** has no GPU and holds no queue state. Restarting it only makes the browser reconnect; a running generation continues, and its progress picks up again. The web image does not contain sd.cpp, so it rebuilds in seconds.
+- **worker** owns the GPU and the queue. Its image contains only `server/src/common` and `server/src/worker` and has no npm dependencies. After a change to the UI, the API or the catalog it therefore builds byte-identical, and Docker does not recreate it.
+- **Jobs carry their mode:** when a job is created, the web container resolves the mode into a `spec` (model files by role, flags, `imageArgs`/`continueArgs`, preview) and sends it along with the parameters. The worker never reads the catalog, so catalog changes take effect with the next job without restarting the worker.
+- **The internal API** (`/v1/state`, `/v1/jobs`, `/v1/jobs/:id[/cancel]`, `/v1/diagnostics`, `/v1/drain`, `/v1/health`) is only reachable on the compose network. Every route except `/v1/health` needs the token from `data/state/worker.token`, which whichever container starts first creates (mode 600). The API is versioned (`WORKER_API`); a mismatch shows up in the system check.
+- **When the worker is unavailable** (restarting), the web container keeps serving the last known jobs and hardware info. New jobs get a clear 503 and the UI shows a banner. Logs are read directly from `data/state/logs`, so they stay viewable.
+- **Drain:** `POST /v1/drain {seconds}` makes the worker finish the current job and start nothing new; new jobs still queue up. The drain is a lease: `update.sh` renews it every 15 s, so if the script dies the worker resumes by itself within two minutes.
+
+`scripts/update.sh`:
+1. builds both images;
+2. restarts `web` immediately;
+3. compares the running worker's image and compose config hash with the new ones; if nothing changed, the worker is left alone;
+4. otherwise it drains the worker, waits for the current job and restarts the worker. The new worker takes the queue from `jobs.json`.
+
+The first run after the single-container version waits until that container has no running or queued job, then replaces it with the two containers.
+
 ## Data on the host
 
-| Path (in the container) | On the host | Contents |
-|---|---|---|
-| `/data/models` | `MODELS_PATH` (`./models`) | downloaded models, a separate volume |
-| `/data/output` | `OUTPUT_PATH` (`./output`) | generated videos and images, a separate volume |
-| `/data/input/uploads` | `DATA_PATH/input/uploads` | uploaded init images |
-| `/data/state/jobs.json` | `DATA_PATH/state` | history and queue |
-| `/data/state/users.json`, `sessions.json` | | users (scrypt) and sessions (token hashes only), mode 600 |
-| `/data/state/models.local.json`, `presets.local.json` | | your own models and modes |
-| `/data/state/{logs,thumbs,previews}` | | sd-cli logs, thumbnails, previews |
-| `/data/state/cache` | | Mesa shader cache (`XDG_CACHE_HOME`) |
+| Path (in the containers) | On the host | Contents | Written by |
+|---|---|---|---|
+| `/data/models` | `MODELS_PATH` (`./models`) | downloaded models, a separate volume | web (read-only in the worker) |
+| `/data/output` | `OUTPUT_PATH` (`./output`) | generated videos and images, a separate volume | worker (read-only in web) |
+| `/data/input/uploads` | `DATA_PATH/input/uploads` | uploaded init images | web; the worker removes unused ones |
+| `/data/state/jobs.json` | `DATA_PATH/state` | history and queue | worker |
+| `/data/state/users.json`, `sessions.json` | | users (scrypt) and sessions (token hashes only), mode 600 | web |
+| `/data/state/models.local.json`, `presets.local.json` | | your own models and modes | you |
+| `/data/state/{logs,thumbs,previews}` | | sd-cli logs, thumbnails, previews | worker |
+| `/data/state/worker.token` | | web ↔ worker API token, mode 600 | the first container to start |
+| `/data/state/cache` | | Mesa shader cache (`XDG_CACHE_HOME`) | worker |
 
-The image can be rebuilt and updated at will: none of this is stored in it. The container runs as the host user (`PUID`/`PGID`), so the files belong to that user and the directories can be copied to another disk or server, see [moving.md](moving.md).
+The images can be rebuilt and updated at will: none of this is stored in them. Both containers run as the host user (`PUID`/`PGID`), so the files belong to that user and the directories can be copied to another disk or server, see [moving.md](moving.md).
 
 ## Generation
 
-1. `POST /api/jobs` validates the mode and its models, normalizes the parameters and queues the job. Wan frame counts are rounded to 4n+1; AnimateDiff uses exactly `duration × nativeFps`; sizes are multiples of 16; seed −1 is replaced with a random one. A duration above the model limit becomes two segments.
+1. `POST /api/jobs` (web) validates the mode and its models, normalizes the parameters and sends the job with its `spec` to the worker. Wan frame counts are rounded to 4n+1; AnimateDiff uses exactly `duration × nativeFps`; sizes are multiples of 16; seed −1 is replaced with a random one. A duration above the model limit becomes two segments.
 2. The queue runs `sd-cli` strictly one process at a time: the GPU and GTT are shared.
 3. `sd-cli` output is parsed line by line:
    - stages: `generate_video` / `generating image` → sampling, `sampling completed` / `latent images completed` → decoding, `decode_first_stage completed` → saving;
@@ -51,7 +81,7 @@ The image can be rebuilt and updated at will: none of this is stored in it. The 
    - saved files.
 4. For extra-length videos, ffmpeg extracts the last frame of a segment, and the next segment is generated from it as image-to-video with the mode's `continueArgs`.
 5. Video: the MJPEG AVI(s) from `sd-cli` → an H.264 mp4 via ffmpeg (segments are concatenated without the duplicated seam frame). If the output FPS is above the native one, `minterpolate` synthesizes the frames. Images: the PNGs are renamed. A thumbnail is made for the gallery.
-6. If the container restarts during a generation, the current job is marked as failed and the rest of the queue continues.
+6. If the worker is stopped during a generation (a power loss, a plain `docker compose up` over it), the current job is marked as failed and the rest of the queue continues. `update.sh` avoids this by draining first.
 
 ## API
 
@@ -80,10 +110,11 @@ Every route except sign-in requires a session. Mutating requests require the `X-
 
 ## System check
 
-`server/src/diagnostics.js` checks the environment from inside the container and returns only ids, statuses (`ok`, `warn`, `fail`, `info`) and values; the UI (`web/src/System.jsx`) owns the texts and advice so they can be translated.
+`server/src/worker/diagnostics.js` checks the environment from inside the worker and returns only ids, statuses (`ok`, `warn`, `fail`, `info`) and values; the UI (`web/src/System.jsx`) owns the texts and advice so they can be translated.
 
 | Check | Fails / warns when |
 |---|---|
+| `worker` | the web container cannot reach the worker (fail) or their API versions differ (warn); added by the web container |
 | `gpu` | Vulkan does not work or only sees llvmpipe (fail); the driver is not RADV (warn) |
 | `render-node` | `/dev/dri/renderD128` is missing or not accessible (fail) |
 | `cpu`, `gpu-arch` | not a Ryzen AI APU / not RDNA 3.5 (warn) |

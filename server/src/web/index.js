@@ -1,21 +1,21 @@
-// AMD AI Linux GenAI Platform — HTTP server: auth, generation queue, model catalog.
+// AMD AI Linux GenAI Platform — web container: UI, API, auth, model catalog and downloads.
+// Generation runs in the worker container (src/worker); this server talks to it over an internal
+// API, so it can be restarted or updated at any time without touching a running job.
 import crypto from 'node:crypto';
 import express from 'express';
 import multer from 'multer';
 import fs from 'node:fs';
 import path from 'node:path';
 import { authRoutes, logStartupHint, requireAdmin, requireAuth } from './auth.js';
-import { config } from './config.js';
-import {
-  cancelJob, createJob, deleteJob, jobLog, jobs, jobSummary, modelsInUse, nextJob, shutdownJobs,
-} from './jobs.js';
+import { config, WORKER_API } from '../common/config.js';
+import { jobLog } from './joblog.js';
 import {
   cancelDownload, deleteModel, diskUsage, enqueueDownloads, loadCatalog, modelStatus,
 } from './models.js';
+import { jobParams, jobSpec } from './params.js';
 import { loadPresets, loadTemplates, presetsWithAvailability } from './presets.js';
-import { readJson } from './store.js';
-import { diagnostics, logDiagnostics } from './diagnostics.js';
-import { systemInfo } from './system.js';
+import { readJson } from '../common/store.js';
+import { callWorker, workerState } from './worker.js';
 
 const { dirs } = config;
 logStartupHint();
@@ -49,30 +49,40 @@ const upload = multer({
   fileFilter: (req, file, cb) => cb(null, /^image\//.test(file.mimetype)),
 });
 
-const findJob = (id) => jobs.find((j) => j.id === id);
+// Express 5 passes rejected promises to the error handler; worker errors keep their HTTP status
+const findJob = (id) => callWorker(`/v1/jobs/${encodeURIComponent(id)}`);
 const canManage = (req, job) => req.user.role === 'admin' || job.user === req.user.username;
 
-// Short health summary for the header badge; the full list lives in /api/diagnostics
-let health = null;
-const refreshHealth = () => diagnostics().then((d) => {
-  health = { status: d.status, problems: d.checks.filter((c) => c.status === 'fail' || c.status === 'warn').map((c) => ({ id: c.id, status: c.status })) };
-}).catch(() => {});
+// The web ↔ worker link is one more system check
+function workerCheck(w) {
+  if (!w.online) return { id: 'worker', status: 'fail', params: {} };
+  if (!w.compatible) return { id: 'worker', status: 'warn', params: { api: w.api, expected: WORKER_API } };
+  return { id: 'worker', status: 'ok', params: { api: w.api } };
+}
 
-api.get('/state', (req, res) => {
-  refreshHealth();
-  res.json({ jobs: jobs.map(jobSummary), system: systemInfo(), health, now: Date.now() });
+api.get('/state', async (req, res) => {
+  const { jobs, system, health, worker } = await workerState();
+  const check = workerCheck(worker);
+  const summary = check.status === 'ok' ? health : {
+    status: check.status === 'fail' || health?.status === 'fail' ? 'fail' : 'warn',
+    problems: [{ id: check.id, status: check.status }, ...(health?.problems || [])],
+  };
+  res.json({ jobs, system, health: summary, worker, now: Date.now() });
 });
 
 api.get('/diagnostics', async (req, res) => {
-  const d = await diagnostics(req.query.refresh === '1');
-  refreshHealth();
-  res.json(d);
+  const { worker } = await workerState();
+  let d = { checks: [], at: Date.now() };
+  if (worker.online) d = await callWorker(`/v1/diagnostics${req.query.refresh === '1' ? '?refresh=1' : ''}`, { timeout: 90000 });
+  const checks = [workerCheck(worker), ...d.checks];
+  const status = checks.some((c) => c.status === 'fail') ? 'fail' : checks.some((c) => c.status === 'warn') ? 'warn' : 'ok';
+  res.json({ ...d, checks, status });
 });
 
 api.get('/presets', (req, res) => res.json(presetsWithAvailability()));
 api.get('/templates', (req, res) => res.json(loadTemplates()));
 
-api.post('/jobs', upload.single('image'), (req, res) => {
+api.post('/jobs', upload.single('image'), async (req, res) => {
   const b = req.body || {};
   const reject = (msg) => {
     if (req.file) fs.rmSync(req.file.path, { force: true });
@@ -89,34 +99,37 @@ api.post('/jobs', upload.single('image'), (req, res) => {
   if (preset.image === 'none') image = null;
   if (preset.image === 'required' && !image) return reject('This mode requires an image');
 
-  res.json(jobSummary(createJob(preset, b, req.user, image)));
+  try {
+    res.json(await callWorker('/v1/jobs', {
+      method: 'POST',
+      body: { user: req.user.username, params: jobParams(preset, b, image), spec: jobSpec(preset) },
+    }));
+  } catch (e) {
+    if (req.file) fs.rmSync(req.file.path, { force: true });
+    throw e;
+  }
 });
 
-api.post('/jobs/:id/cancel', (req, res) => {
-  const job = findJob(req.params.id);
-  if (!job) return res.status(404).json({ error: 'Not found' });
+api.post('/jobs/:id/cancel', async (req, res) => {
+  const job = await findJob(req.params.id);
   if (!canManage(req, job)) return res.status(403).json({ error: 'This job belongs to another user' });
-  cancelJob(job);
-  res.json(jobSummary(job));
+  res.json(await callWorker(`/v1/jobs/${job.id}/cancel`, { method: 'POST' }));
 });
 
-api.delete('/jobs/:id', (req, res) => {
-  const job = findJob(req.params.id);
-  if (!job) return res.status(404).json({ error: 'Not found' });
+api.delete('/jobs/:id', async (req, res) => {
+  const job = await findJob(req.params.id);
   if (!canManage(req, job)) return res.status(403).json({ error: 'This job belongs to another user' });
-  deleteJob(job);
-  res.json({ ok: true });
+  res.json(await callWorker(`/v1/jobs/${job.id}`, { method: 'DELETE' }));
 });
 
+// Logs are read straight from /data/state/logs: they stay viewable while the worker restarts
 api.get('/jobs/:id/log', (req, res) => {
-  const job = findJob(req.params.id);
-  if (!job) return res.status(404).json({ error: 'Not found' });
   const tail = Math.min(2000, Math.max(10, Number(req.query.tail) || 200));
-  res.json({ lines: jobLog(job, tail) });
+  res.json({ lines: jobLog(req.params.id, tail) });
 });
 
-api.get('/jobs/:id/download/:n', (req, res) => {
-  const job = findJob(req.params.id);
+api.get('/jobs/:id/download/:n', async (req, res) => {
+  const job = await findJob(req.params.id);
   const file = job?.files?.[Number(req.params.n) || 0];
   if (!file) return res.status(404).json({ error: 'No such file' });
   res.download(path.join(dirs.output, file), file);
@@ -124,9 +137,9 @@ api.get('/jobs/:id/download/:n', (req, res) => {
 
 // ---------- models ----------
 
-api.get('/models', (req, res) => {
+api.get('/models', async (req, res) => {
   const presets = loadPresets();
-  const inUse = modelsInUse();
+  const inUse = new Set((await workerState()).inUse || []);
   const models = loadCatalog().map((m) => ({
     ...m,
     ...modelStatus(m),
@@ -137,11 +150,11 @@ api.get('/models', (req, res) => {
 });
 
 // Model packs for first-run setup: what a pack enables, what is already downloaded, what is recommended for this hardware
-api.get('/packs', (req, res) => {
+api.get('/packs', async (req, res) => {
   const catalog = loadCatalog();
   const status = new Map(catalog.map((m) => [m.id, modelStatus(m)]));
   const presets = presetsWithAvailability();
-  const family = systemInfo().family;
+  const family = (await workerState()).system?.family || null;
   const packs = readJson(path.join(config.catalogDir, 'packs.json'), []).map((p) => {
     const models = p.models.map((id) => {
       const m = catalog.find((x) => x.id === id);
@@ -183,10 +196,13 @@ api.post('/models/:id/cancel', requireAdmin, (req, res) => {
   res.json({ ok: cancelDownload(req.params.id) });
 });
 
-api.delete('/models/:id', requireAdmin, (req, res) => {
+api.delete('/models/:id', requireAdmin, async (req, res) => {
   const entry = loadCatalog().find((m) => m.id === req.params.id);
   if (!entry) return res.status(404).json({ error: 'No such model' });
-  if (modelsInUse().has(entry.id)) return res.status(409).json({ error: 'The model is in use by the current generation' });
+  // Without the worker it is unknown whether a generation uses the model right now
+  const { worker, inUse } = await workerState();
+  if (!worker.online) return res.status(503).json({ error: 'The generation engine is not available, try again in a minute' });
+  if (inUse.includes(entry.id)) return res.status(409).json({ error: 'The model is in use by the current generation' });
   deleteModel(entry);
   res.json({ ok: true });
 });
@@ -212,18 +228,19 @@ app.use((req, res, next) => {
 });
 
 app.use((err, req, res, next) => {
-  console.error(err);
-  res.status(500).json({ error: err.message || 'Internal error' });
+  if (!err.status || err.status >= 500) console.error(err.message);
+  res.status(err.status || 500).json({ error: err.message || 'Internal error' });
 });
 
 const server = app.listen(config.port, () => {
   console.log(`GenAI Platform: http://0.0.0.0:${config.port}`);
-  nextJob();
-  logDiagnostics().then(refreshHealth).catch((e) => console.error('[diagnostics]', e.message));
+  workerState().then(({ worker }) => {
+    if (!worker.online) console.warn(`[web] the worker is not reachable at ${config.workerUrl} yet`);
+    else if (!worker.compatible) console.warn(`[web] the worker speaks API v${worker.api}, expected v${WORKER_API}: update both containers`);
+  });
 });
 
 function shutdown() {
-  shutdownJobs();
   server.close();
   process.exit(0);
 }

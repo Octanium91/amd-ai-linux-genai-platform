@@ -128,6 +128,7 @@ export default function App() {
   const [setupSkipped, setSetupSkipped] = useState(false);
   const [online, setOnline] = useState(true);
   const [health, setHealth] = useState(null);
+  const [worker, setWorker] = useState(null); // generation engine (worker container) status
   const [now, setNow] = useState(Date.now());
   const skew = useRef(0);
 
@@ -146,6 +147,7 @@ export default function App() {
       setJobs(s.jobs);
       setSystem(s.system);
       setHealth(s.health);
+      setWorker(s.worker);
       setOnline(true);
     } catch (e) {
       if (e.status !== 401) setOnline(false);
@@ -209,7 +211,18 @@ export default function App() {
         </div>
       </header>
 
-      {user.role === 'admin' && health?.status === 'fail' && tab !== 'system' && (
+      {online && worker && !worker.online && (
+        <div className="banner warn">
+          <span>{t('The generation engine is restarting or unavailable. Queued jobs are kept and continue when it is back.')}</span>
+        </div>
+      )}
+      {worker?.online && worker.draining && (
+        <div className="banner info">
+          <span>{t('The generation engine will be updated after the current job. New jobs wait in the queue.')}</span>
+        </div>
+      )}
+
+      {user.role === 'admin' && health?.status === 'fail' && worker?.online !== false && tab !== 'system' && (
         <div className="banner fail">
           <span>{t('The system check found problems — generation may not work.')}</span>
           <button className="btn" onClick={() => go('system')}>{t('Open the system check')}</button>

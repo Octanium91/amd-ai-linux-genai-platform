@@ -84,7 +84,7 @@ set_env() { grep -q "^$1=" .env && sed -i "s|^$1=.*|$1=$2|" .env || echo "$1=$2"
 [ -n "$VIDEO_GID" ] && set_env VIDEO_GID "$VIDEO_GID"
 set_env PUID "$(id -u)"
 set_env PGID "$(id -g)"
-ok "the container runs as $(id -un) (PUID $(id -u), PGID $(id -g))"
+ok "the containers run as $(id -un) (PUID $(id -u), PGID $(id -g))"
 chmod 600 .env
 DATA_PATH=$(grep -E '^DATA_PATH=' .env | cut -d= -f2-); DATA_PATH=${DATA_PATH:-./data}
 mkdir -p "$DATA_PATH" && ok "data directory: $DATA_PATH"
@@ -107,7 +107,8 @@ fi
 
 echo
 if [ $FAIL = 1 ]; then echo "There are errors — fix them and run again."; exit 1; fi
-echo "Done. Start:  docker compose up -d --build   →   http://$(hostname -I 2>/dev/null | awk '{print $1}'):$(grep -E '^PORT=' .env | cut -d= -f2 || echo 7860)"
+echo "Done. First start:  docker compose up -d --build   (later updates: ./scripts/update.sh)"
+echo "  UI:  http://$(hostname -I 2>/dev/null | awk '{print $1}'):$(grep -E '^PORT=' .env | cut -d= -f2 || echo 7860)"
 echo "On first open the web UI offers to create the administrator — do it right after the start."
 [ $WARN = 1 ] && echo "(see the warnings above)"
 exit 0
