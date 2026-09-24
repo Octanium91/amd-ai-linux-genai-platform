@@ -13,6 +13,7 @@ import {
   cancelDownload, deleteModel, diskUsage, enqueueDownloads, loadCatalog, modelStatus,
 } from './models.js';
 import { loadPresets, loadTemplates, presetsWithAvailability } from './presets.js';
+import { readJson } from './store.js';
 import { systemInfo } from './system.js';
 
 const { dirs } = config;
@@ -119,6 +120,37 @@ api.get('/models', (req, res) => {
     usedBy: presets.filter((p) => Object.values(p.models || {}).includes(m.id)).map((p) => p.name),
   }));
   res.json({ models, disk: diskUsage() });
+});
+
+// Наборы моделей для первичной настройки: что даёт набор, что уже скачано, что рекомендуется под это железо
+api.get('/packs', (req, res) => {
+  const catalog = loadCatalog();
+  const status = new Map(catalog.map((m) => [m.id, modelStatus(m)]));
+  const presets = presetsWithAvailability();
+  const family = systemInfo().family;
+  const packs = readJson(path.join(config.catalogDir, 'packs.json'), []).map((p) => {
+    const models = p.models.map((id) => {
+      const m = catalog.find((x) => x.id === id);
+      return { id, name: m?.name || id, size: m?.size || 0, status: status.get(id)?.status || 'missing' };
+    });
+    return {
+      ...p,
+      models,
+      installed: models.every((m) => m.status === 'installed'),
+      remaining: models.filter((m) => m.status !== 'installed').reduce((s, m) => s + m.size, 0),
+      recommended: !!p.recommended || (p.recommendedFamilies || []).includes(family),
+      presetNames: (p.presets || []).map((id) => presets.find((x) => x.id === id)?.name || id),
+    };
+  });
+  const downloading = [...status.values()].some((s) => ['queued', 'downloading', 'processing'].includes(s.status));
+  res.json({
+    packs,
+    family,
+    disk: diskUsage(),
+    downloading,
+    // Первичная настройка нужна, пока нет ни одного рабочего режима и ничего не качается
+    needed: !presets.some((p) => p.available) && !downloading,
+  });
 });
 
 api.post('/models/download', requireAdmin, (req, res) => {

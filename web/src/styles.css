@@ -306,3 +306,21 @@ code { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; back
 input[type="range"].extra { accent-color: var(--bad); }
 .chip.extra { border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); color: var(--bad); }
 .chip.extra.on { background: var(--bad); border-color: var(--bad); color: #fff; }
+
+/* первичная настройка */
+.setup { max-width: 900px; }
+.setup p { line-height: 1.55; }
+.packs { display: flex; flex-direction: column; gap: 10px; }
+.pack { display: flex; gap: 14px; align-items: flex-start; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); cursor: pointer; transition: border-color 0.15s; }
+.pack:hover { border-color: var(--muted); }
+.pack.on { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.pack.locked { cursor: default; }
+.pack input[type="checkbox"] { width: 18px; height: 18px; margin-top: 2px; flex: none; accent-color: var(--accent); padding: 0; }
+.pack.locked input[type="checkbox"] { accent-color: #7d8190; opacity: 0.8; }
+.pack-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.pack-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pack-name { font-weight: 600; }
+.pack-size { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 600; }
+.pack-models { display: flex; gap: 4px 14px; flex-wrap: wrap; }
+.pack-models .done { color: var(--ok); }
+.setup-foot { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; position: sticky; bottom: 12px; }

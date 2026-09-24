@@ -5,6 +5,7 @@ import Login from './Login.jsx';
 import Studio from './Studio.jsx';
 import Models from './Models.jsx';
 import Users, { ChangePassword } from './Users.jsx';
+import Setup from './Setup.jsx';
 
 export { Logo };
 
@@ -99,6 +100,8 @@ export default function App() {
   const [system, setSystem] = useState(null);
   const [presets, setPresets] = useState([]);
   const [templates, setTemplates] = useState(null);
+  const [setup, setSetup] = useState(null); // состояние первичной настройки (наборы моделей)
+  const [setupSkipped, setSetupSkipped] = useState(false);
   const [online, setOnline] = useState(true);
   const [now, setNow] = useState(Date.now());
   const skew = useRef(0);
@@ -122,7 +125,10 @@ export default function App() {
       if (!/Требуется вход/.test(e.message)) setOnline(false);
     }
   }, []);
-  const loadPresets = useCallback(() => api('/api/presets').then(setPresets).catch(() => {}), []);
+  const loadPresets = useCallback(() => {
+    api('/api/presets').then(setPresets).catch(() => {});
+    api('/api/packs').then(setSetup).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -169,7 +175,14 @@ export default function App() {
         </div>
       </header>
 
-      {(tab === 'video' || tab === 'image') && (
+      {setup?.needed && !setupSkipped && tab !== 'users' && tab !== 'models' ? (
+        <Setup
+          user={user}
+          info={setup}
+          onStarted={() => { setSetupSkipped(true); loadPresets(); go('models'); }}
+          onSkip={() => setSetupSkipped(true)}
+        />
+      ) : (tab === 'video' || tab === 'image') && (
         <Studio
           kind={tab}
           user={user}
