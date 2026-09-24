@@ -68,6 +68,7 @@ Every route except sign-in requires a session. Mutating requests require the `X-
 | GET | `/api/presets` | user | modes with availability and the list of missing models |
 | GET | `/api/templates` | user | hidden start templates |
 | GET | `/api/packs` | user | model packs for first-run setup |
+| GET | `/api/diagnostics` | user | system check results (`?refresh=1` re-runs) |
 | POST | `/api/jobs` | user | a new job (multipart, optional `image`) |
 | POST/DELETE | `/api/jobs/:id/cancel` · `/api/jobs/:id` | owner or admin | cancel / delete together with files |
 | GET | `/api/jobs/:id/log` · `/api/jobs/:id/download/:n` | user | sd-cli log, download a result |
@@ -75,6 +76,26 @@ Every route except sign-in requires a session. Mutating requests require the `X-
 | POST | `/api/models/download` `{ids}` · `/api/models/:id/cancel` | admin | download / cancel |
 | DELETE | `/api/models/:id` | admin | delete (refused while the model is in use) |
 | GET | `/files/{output,thumbs,previews,uploads}/…` | user | files (with Range support for video) |
+
+## System check
+
+`server/src/diagnostics.js` checks the environment from inside the container and returns only ids, statuses (`ok`, `warn`, `fail`, `info`) and values; the UI (`web/src/System.jsx`) owns the texts and advice so they can be translated.
+
+| Check | Fails / warns when |
+|---|---|
+| `gpu` | Vulkan does not work or only sees llvmpipe (fail); the driver is not RADV (warn) |
+| `render-node` | `/dev/dri/renderD128` is missing or not accessible (fail) |
+| `cpu`, `gpu-arch` | not a Ryzen AI APU / not RDNA 3.5 (warn) |
+| `kernel` | older than 6.10 (warn) |
+| `gtt` | GTT is well below ¾ of RAM (warn, with the computed kernel parameters) |
+| `vulkan-heap` | the largest DEVICE_LOCAL heap is below 80 % of GTT, i.e. the unified heap is off (warn) |
+| `video-memory` | GTT below the ~22 GB Wan 2.2 needs (warn) |
+| `swap` | no swap (info) |
+| `disk` | < 30 GB (warn) or < 10 GB (fail) free for models |
+| `engine`, `ffmpeg` | `sd-cli` or ffmpeg does not run (fail) |
+| `npu` | informational only |
+
+Results are cached for a minute (`GET /api/diagnostics?refresh=1` forces a re-run). `/api/state` carries a short `health` summary for the header badge and the admin banner; modes with `minGtt` show a warning in the form when GTT is smaller.
 
 ## Internationalization
 

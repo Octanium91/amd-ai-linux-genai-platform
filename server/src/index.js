@@ -14,6 +14,7 @@ import {
 } from './models.js';
 import { loadPresets, loadTemplates, presetsWithAvailability } from './presets.js';
 import { readJson } from './store.js';
+import { diagnostics, logDiagnostics } from './diagnostics.js';
 import { systemInfo } from './system.js';
 
 const { dirs } = config;
@@ -51,8 +52,21 @@ const upload = multer({
 const findJob = (id) => jobs.find((j) => j.id === id);
 const canManage = (req, job) => req.user.role === 'admin' || job.user === req.user.username;
 
+// Short health summary for the header badge; the full list lives in /api/diagnostics
+let health = null;
+const refreshHealth = () => diagnostics().then((d) => {
+  health = { status: d.status, problems: d.checks.filter((c) => c.status === 'fail' || c.status === 'warn').map((c) => ({ id: c.id, status: c.status })) };
+}).catch(() => {});
+
 api.get('/state', (req, res) => {
-  res.json({ jobs: jobs.map(jobSummary), system: systemInfo(), now: Date.now() });
+  refreshHealth();
+  res.json({ jobs: jobs.map(jobSummary), system: systemInfo(), health, now: Date.now() });
+});
+
+api.get('/diagnostics', async (req, res) => {
+  const d = await diagnostics(req.query.refresh === '1');
+  refreshHealth();
+  res.json(d);
 });
 
 api.get('/presets', (req, res) => res.json(presetsWithAvailability()));
@@ -205,6 +219,7 @@ app.use((err, req, res, next) => {
 const server = app.listen(config.port, () => {
   console.log(`GenAI Platform: http://0.0.0.0:${config.port}`);
   nextJob();
+  logDiagnostics().then(refreshHealth).catch((e) => console.error('[diagnostics]', e.message));
 });
 
 function shutdown() {

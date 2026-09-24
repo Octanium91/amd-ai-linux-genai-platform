@@ -1,5 +1,7 @@
 # Troubleshooting
 
+Start with the **System** section of the web UI (administrators): it runs the checks below inside the container and shows advice with copyable commands for each problem. The same checks are logged at startup (`docker compose logs platform | grep diagnostics`). On the host, `./scripts/setup.sh` checks packages, groups and GTT before the first start.
+
 ## Vulkan only sees `llvmpipe`
 
 `vulkaninfo --summary` on the host shows `llvmpipe` instead of `RADV`:

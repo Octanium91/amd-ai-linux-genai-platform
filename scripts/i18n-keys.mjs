@@ -21,7 +21,7 @@ for (const f of fs.readdirSync(webSrc).filter((x) => /\.(jsx?|mjs)$/.test(x))) {
     if (m[4]) keys.add(unescape(m[4]));
   }
   // label: '…' in constant tables (tabs, stages, filters, quality) and value maps (STATUS, CATEGORY)
-  for (const m of s.matchAll(/\blabel:\s*'((?:\\.|[^'])*)'/g)) keys.add(unescape(m[1]));
+  for (const m of s.matchAll(/\b(?:label|title):\s*'((?:\\.|[^'])*)'/g)) keys.add(unescape(m[1]));
   for (const block of s.matchAll(/(?:STATUS|CATEGORY|STATUS_LABEL|QUALITY_LABEL)\s*=\s*\{([^}]*)\}/g)) {
     for (const m of block[1].matchAll(/:\s*'((?:\\.|[^'])*)'/g)) keys.add(unescape(m[1]));
   }

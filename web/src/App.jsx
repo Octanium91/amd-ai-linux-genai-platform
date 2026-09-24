@@ -8,6 +8,7 @@ import Studio from './Studio.jsx';
 import Models from './Models.jsx';
 import Users, { ChangePassword } from './Users.jsx';
 import Setup from './Setup.jsx';
+import System from './System.jsx';
 
 // Content generation sections (one per content kind) and platform management sections are separate groups
 const GEN_TABS = [
@@ -17,11 +18,13 @@ const GEN_TABS = [
 const ADMIN_TABS = [
   { key: 'models', label: 'Models', icon: 'models' },
   { key: 'users', label: 'Users', icon: 'users', admin: true },
+  { key: 'system', label: 'System', icon: 'system', admin: true },
 ];
 const TABS = [...GEN_TABS, ...ADMIN_TABS];
 
 const ICONS = {
   models: 'M12 2 3 7v10l9 5 9-5V7l-9-5Zm0 2.3L18.7 8 12 11.7 5.3 8 12 4.3ZM5 9.7l6 3.3v6.7l-6-3.3V9.7Zm8 10V13l6-3.3v6.7l-6 3.3Z',
+  system: 'M3 12h4l2-6 4 12 2-6h6v-2h-4.6L15 4.5 11 16.8 9 10.5 8.3 10H3v2Z',
   users: 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0-6a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm7.5 6a3.5 3.5 0 1 0 0-7 1 1 0 0 0 0 2 1.5 1.5 0 1 1 0 3 1 1 0 0 0 0 2ZM9 13c-3.9 0-7 2-7 4.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5C16 15 12.9 13 9 13Zm5 6H4v-1.5c0-1.2 2.1-2.5 5-2.5s5 1.3 5 2.5V19Zm3-5.8a1 1 0 0 0-.4 1.9c1.4.6 2.4 1.5 2.4 2.4V19h-1a1 1 0 0 0 0 2h2a1 1 0 0 0 1-1v-2.5c0-1.9-1.6-3.5-4-4.3Z',
 };
 const Icon = ({ name }) => (
@@ -124,6 +127,7 @@ export default function App() {
   const [setup, setSetup] = useState(null); // first-run setup state (model packs)
   const [setupSkipped, setSetupSkipped] = useState(false);
   const [online, setOnline] = useState(true);
+  const [health, setHealth] = useState(null);
   const [now, setNow] = useState(Date.now());
   const skew = useRef(0);
 
@@ -141,6 +145,7 @@ export default function App() {
       skew.current = s.now - Date.now();
       setJobs(s.jobs);
       setSystem(s.system);
+      setHealth(s.health);
       setOnline(true);
     } catch (e) {
       if (e.status !== 401) setOnline(false);
@@ -194,6 +199,7 @@ export default function App() {
           {adminTabs.map((x) => (
             <button key={x.key} className={`nav-link ${tab === x.key ? 'on' : ''}`} onClick={() => go(x.key)} title={t(x.label)}>
               <Icon name={x.icon} /> <span>{t(x.label)}</span>
+              {x.key === 'system' && health && health.status !== 'ok' && <span className={`nav-badge ${health.status}`} />}
             </button>
           ))}
         </nav>
@@ -203,7 +209,14 @@ export default function App() {
         </div>
       </header>
 
-      {setup?.needed && !setupSkipped && tab !== 'users' && tab !== 'models' ? (
+      {user.role === 'admin' && health?.status === 'fail' && tab !== 'system' && (
+        <div className="banner fail">
+          <span>{t('The system check found problems — generation may not work.')}</span>
+          <button className="btn" onClick={() => go('system')}>{t('Open the system check')}</button>
+        </div>
+      )}
+
+      {setup?.needed && !setupSkipped && (tab === 'video' || tab === 'image') ? (
         <Setup
           user={user}
           info={setup}
@@ -217,6 +230,7 @@ export default function App() {
           jobs={jobs}
           presets={presets.filter((p) => (p.kind || 'video') === tab)}
           templates={templates ? templates[tab] || [] : undefined}
+          system={system}
           now={now + skew.current}
           refresh={refresh}
           reloadPresets={loadPresets}
@@ -225,6 +239,7 @@ export default function App() {
       )}
       {tab === 'models' && <Models user={user} onChange={loadPresets} />}
       {tab === 'users' && user.role === 'admin' && <Users me={user} />}
+      {tab === 'system' && user.role === 'admin' && <System />}
     </div>
   );
 }

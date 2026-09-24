@@ -110,7 +110,7 @@ function MissingModels({ preset, user, goModels, reloadPresets }) {
   );
 }
 
-export default function GenerateForm({ kind, user, presets, templates, jobs, reuse, queueSize, onCreated, reloadPresets, goModels }) {
+export default function GenerateForm({ kind, user, presets, templates, system, jobs, reuse, queueSize, onCreated, reloadPresets, goModels }) {
   const [form, setForm] = useState(null);
   const [image, setImage] = useState(null); // File
   const [imageRef, setImageRef] = useState(null); // name of an already uploaded file
@@ -220,6 +220,14 @@ export default function GenerateForm({ kind, user, presets, templates, jobs, reu
         </select>
         {preset?.description && <span className="field-hint">{loc(preset, 'description')}</span>}
       </label>
+
+      {preset?.minGtt && system?.gttTotal && system.gttTotal < preset.minGtt * 1024 ** 3 * 0.95 && (
+        <div className="missing">
+          <div className="small">
+            {t('This mode needs about {need} GB of GPU memory (GTT); this system has {have}. It may run out of memory — see the system check.', { need: preset.minGtt, have: fmtBytes(system.gttTotal) })}
+          </div>
+        </div>
+      )}
 
       {preset && !preset.available && (
         <MissingModels preset={preset} user={user} goModels={goModels} reloadPresets={reloadPresets} />
