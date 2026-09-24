@@ -40,9 +40,10 @@ COPY server/package.json /app/server/
 COPY server/src /app/server/src
 COPY catalog /app/catalog
 COPY --from=web /web/dist /app/server/public
-ENV NODE_ENV=production DATA_DIR=/data CATALOG_DIR=/app/catalog PORT=7860 \n    HOME=/tmp XDG_CACHE_HOME=/data/state/cache
-# The container runs as the host user (see docker-compose.yml); HOME and caches must not need root.
-# The Mesa shader cache lives in /data/state/cache, so it moves together with the data directory.
+# The container runs as the host user (see docker-compose.yml): HOME must not need root, and the
+# Mesa shader cache lives in /data/state/cache so it moves together with the data directory
+ENV NODE_ENV=production DATA_DIR=/data CATALOG_DIR=/app/catalog PORT=7860 \
+    HOME=/tmp XDG_CACHE_HOME=/data/state/cache
 WORKDIR /app/server
 EXPOSE 7860
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
