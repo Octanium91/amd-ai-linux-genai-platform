@@ -92,6 +92,8 @@ MODELS_PATH=$(grep -E '^MODELS_PATH=' .env | cut -d= -f2-); MODELS_PATH=${MODELS
 mkdir -p "$MODELS_PATH" && ok "models directory: $MODELS_PATH ($(df -h "$MODELS_PATH" | awk 'NR==2{print $4}') free)"
 OUTPUT_PATH=$(grep -E '^OUTPUT_PATH=' .env | cut -d= -f2-); OUTPUT_PATH=${OUTPUT_PATH:-./output}
 mkdir -p "$OUTPUT_PATH" && ok "output directory: $OUTPUT_PATH"
+# Mount points of the models/output volumes inside DATA_PATH; otherwise Docker creates them as root
+mkdir -p "$DATA_PATH/models" "$DATA_PATH/output"
 
 # Files left by an older root-running container (or copied with sudo) must belong to the host user
 FOREIGN=$(find "$DATA_PATH" "$MODELS_PATH" "$OUTPUT_PATH" ! -user "$(id -u)" 2>/dev/null | head -1)
