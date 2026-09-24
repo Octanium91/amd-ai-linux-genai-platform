@@ -13,14 +13,21 @@ const { dirs } = config;
 const JOBS_FILE = statePath('jobs.json');
 
 export let jobs = readJson(JOBS_FILE, []);
+export const save = debouncedWriter(JOBS_FILE, () => jobs);
+
+// A job that was running when the container stopped (restart, power loss) cannot resume.
+// Persist the change right away so the state file never keeps a stale "running" job.
+let interrupted = 0;
 for (const j of jobs) {
   if (j.status === 'running') {
     j.status = 'failed';
     j.error = 'Interrupted by a container restart';
     j.finishedAt ??= Date.now();
+    if (j.startedAt) j.durationSec = Math.round((j.finishedAt - j.startedAt) / 1000);
+    interrupted++;
   }
 }
-export const save = debouncedWriter(JOBS_FILE, () => jobs);
+if (interrupted) save(true);
 
 let current = null; // { job, proc }
 export const runningJob = () => current?.job || null;
