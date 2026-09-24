@@ -1,5 +1,7 @@
 // Ukrainian UI translations. Keys are the English source strings (see web/src/i18n.js).
 export default {
+  "Generation": "Генерація",
+  "Management": "Керування",
   "(optional: image → image)": "(необов'язково: картинка → картинка)",
   "(optional: image → video)": "(необов'язково: картинка → відео)",
   "(required)": "(обов'язково)",

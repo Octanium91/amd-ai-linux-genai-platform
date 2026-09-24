@@ -329,3 +329,11 @@ input[type="range"].extra { accent-color: var(--bad); }
 .lang-switch { width: auto; padding: 4px 8px; font-size: 12.5px; border-radius: 8px; }
 .menu-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 10px; }
 .login-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+
+/* management navigation: separate from the generation tabs, secondary style */
+.nav-admin { display: flex; gap: 2px; padding-left: 12px; border-left: 1px solid var(--line); }
+.nav-link { display: inline-flex; align-items: center; gap: 6px; background: none; border: 1px solid transparent; padding: 6px 10px; border-radius: 9px; cursor: pointer; color: var(--muted); font-size: 13px; }
+.nav-link:hover { color: var(--text); background: var(--panel-2); }
+.nav-link.on { color: var(--text); border-color: var(--line); background: var(--panel-2); }
+@media (max-width: 760px) { .nav-admin { order: 4; border-left: 0; padding-left: 0; } }
+@media (max-width: 1100px) { .nav-link span { display: none; } }

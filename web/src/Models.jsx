@@ -35,7 +35,7 @@ function ModelRow({ m, admin, act }) {
           <span>{fmtBytes(m.installedSize || m.size)}</span>
           <span>{t('license: {license}', { license: m.license || '—' })}</span>
           {m.homepage && <a href={m.homepage} target="_blank" rel="noreferrer">{t('source ↗')}</a>}
-          {m.usedBy?.length > 0 && <span>{t('needed for: {modes}', { modes: m.usedBy.join(', ') })}</span>}
+          {m.usedBy?.length > 0 && <span>{t('needed for: {modes}', { modes: m.usedBy.map((p) => loc(p, 'name')).join(', ') })}</span>}
         </div>
         {busy && (
           <div className="model-progress">

@@ -117,7 +117,7 @@ api.get('/models', (req, res) => {
     ...m,
     ...modelStatus(m),
     inUse: inUse.has(m.id),
-    usedBy: presets.filter((p) => Object.values(p.models || {}).includes(m.id)).map((p) => p.name),
+    usedBy: presets.filter((p) => Object.values(p.models || {}).includes(m.id)).map((p) => ({ name: p.name, i18n: p.i18n })),
   }));
   res.json({ models, disk: diskUsage() });
 });

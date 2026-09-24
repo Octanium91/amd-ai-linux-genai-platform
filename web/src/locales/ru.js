@@ -1,5 +1,7 @@
 // Russian UI translations. Keys are the English source strings (see web/src/i18n.js).
 export default {
+  "Generation": "Генерация",
+  "Management": "Управление",
   "(optional: image → image)": "(необязательно: картинка → картинка)",
   "(optional: image → video)": "(необязательно: картинка → видео)",
   "(required)": "(обязательно)",
