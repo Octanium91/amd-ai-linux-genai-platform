@@ -6,7 +6,7 @@ import { config, WORKER_API } from '../common/config.js';
 import { tokenMatches, workerToken } from '../common/token.js';
 import { diagnostics, logDiagnostics } from './diagnostics.js';
 import {
-  cancelJob, deleteJob, draining, enqueueJob, jobs, jobSummary, modelsInUse, nextJob, runningJob, setDrain, shutdownJobs,
+  cancelJob, deleteJob, draining, enqueueJob, jobs, jobSummary, modelsInUse, nextJob, retryJob, runningJob, setDrain, shutdownJobs,
 } from './queue.js';
 import { systemInfo } from './system.js';
 
@@ -78,6 +78,15 @@ const routes = [
     const job = findJob(id);
     cancelJob(job);
     return jobSummary(job);
+  }],
+  ['POST', /^\/v1\/jobs\/([\w-]+)\/retry$/, async (req, url, id) => {
+    const b = await readBody(req);
+    if (!b.spec?.models) throw new HttpError(400, 'Invalid job');
+    try {
+      return jobSummary(retryJob(findJob(id), b.spec));
+    } catch (e) {
+      throw e instanceof HttpError ? e : new HttpError(409, e.message);
+    }
   }],
   ['DELETE', /^\/v1\/jobs\/([\w-]+)$/, (req, url, id) => {
     deleteJob(findJob(id));

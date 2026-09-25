@@ -42,7 +42,7 @@ The split follows how often things change: the UI and API change often, the engi
 - **web** has no GPU and holds no queue state. Restarting it only makes the browser reconnect; a running generation continues, and its progress picks up again. The web image does not contain sd.cpp, so it rebuilds in seconds.
 - **worker** owns the GPU and the queue. Its image contains only `server/src/common` and `server/src/worker` and has no npm dependencies. After a change to the UI, the API or the catalog it therefore builds byte-identical, and Docker does not recreate it.
 - **Jobs carry their mode:** when a job is created, the web container resolves the mode into a `spec` (model files by role, flags, `imageArgs`/`continueArgs`, preview) and sends it along with the parameters. The worker never reads the catalog, so catalog changes take effect with the next job without restarting the worker.
-- **The internal API** (`/v1/state`, `/v1/jobs`, `/v1/jobs/:id[/cancel]`, `/v1/diagnostics`, `/v1/drain`, `/v1/health`) is only reachable on the compose network. Every route except `/v1/health` needs the token from `data/state/worker.token`, which whichever container starts first creates (mode 600). The API is versioned (`WORKER_API`); a mismatch shows up in the system check.
+- **The internal API** (`/v1/state`, `/v1/jobs`, `/v1/jobs/:id[/cancel|/retry]`, `/v1/diagnostics`, `/v1/drain`, `/v1/health`) is only reachable on the compose network. Every route except `/v1/health` needs the token from `data/state/worker.token`, which whichever container starts first creates (mode 600). The API is versioned (`WORKER_API`); a mismatch shows up in the system check.
 - **When the worker is unavailable** (restarting), the web container keeps serving the last known jobs and hardware info. New jobs get a clear 503 and the UI shows a banner. Logs are read directly from `data/state/logs`, so they stay viewable.
 - **Drain:** `POST /v1/drain {seconds}` makes the worker finish the current job and start nothing new; new jobs still queue up. The drain is a lease: `update.sh` renews it every 15 s, so if the script dies the worker resumes by itself within two minutes.
 
@@ -102,6 +102,7 @@ Every route except sign-in requires a session. Mutating requests require the `X-
 | GET | `/api/diagnostics` | user | system check results (`?refresh=1` re-runs) |
 | POST | `/api/jobs` | user | a new job (multipart, optional `image`) |
 | POST/DELETE | `/api/jobs/:id/cancel` · `/api/jobs/:id` | owner or admin | cancel / delete together with files |
+| POST | `/api/jobs/:id/retry` | owner or admin | restart a failed or cancelled job with the same parameters and seed; it joins the end of the queue |
 | GET | `/api/jobs/:id/log` · `/api/jobs/:id/download/:n` | user | sd-cli log, download a result |
 | GET | `/api/models` | user | catalog, statuses, download progress, disk space |
 | POST | `/api/models/download` `{ids}` · `/api/models/:id/cancel` | admin | download / cancel |

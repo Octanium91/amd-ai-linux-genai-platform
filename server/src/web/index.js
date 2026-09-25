@@ -116,6 +116,21 @@ api.post('/jobs/:id/cancel', async (req, res) => {
   res.json(await callWorker(`/v1/jobs/${job.id}/cancel`, { method: 'POST' }));
 });
 
+// Restart a failed or cancelled job as it was: same parameters, seed and source image.
+// The mode is resolved again from the current catalog, so its models must still be installed.
+api.post('/jobs/:id/retry', async (req, res) => {
+  const job = await findJob(req.params.id);
+  if (!canManage(req, job)) return res.status(403).json({ error: 'This job belongs to another user' });
+  if (!['failed', 'cancelled'].includes(job.status)) return res.status(409).json({ error: 'Only failed or cancelled jobs can be restarted' });
+  const preset = presetsWithAvailability().find((p) => p.id === job.params?.presetId);
+  if (!preset) return res.status(400).json({ error: 'The mode of this job no longer exists' });
+  if (!preset.available) return res.status(400).json({ error: 'Models not downloaded: ' + preset.missing.map((m) => m.name).join(', ') });
+  if (job.params.image && !fs.existsSync(path.join(dirs.uploads, path.basename(job.params.image)))) {
+    return res.status(400).json({ error: 'The source image of this job has been deleted' });
+  }
+  res.json(await callWorker(`/v1/jobs/${job.id}/retry`, { method: 'POST', body: { spec: jobSpec(preset) } }));
+});
+
 api.delete('/jobs/:id', async (req, res) => {
   const job = await findJob(req.params.id);
   if (!canManage(req, job)) return res.status(403).json({ error: 'This job belongs to another user' });

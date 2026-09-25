@@ -9,7 +9,7 @@ import Gallery from './Gallery.jsx';
 export default function Studio({ kind, user, jobs, presets, templates, system, now, refresh, reloadPresets, goModels }) {
   const [reuse, setReuse] = useState(null);
   const running = jobs.find((j) => j.status === 'running');
-  const queuedAll = jobs.filter((j) => j.status === 'queued').sort((a, b) => a.createdAt - b.createdAt);
+  const queuedAll = jobs.filter((j) => j.status === 'queued').sort((a, b) => (a.queuedAt ?? a.createdAt) - (b.queuedAt ?? b.createdAt));
   const finished = jobs
     .filter((j) => jobKind(j) === kind && ['done', 'failed', 'cancelled'].includes(j.status))
     .sort((a, b) => (b.finishedAt || b.createdAt) - (a.finishedAt || a.createdAt));
@@ -25,6 +25,7 @@ export default function Studio({ kind, user, jobs, presets, templates, system, n
   const canManage = (job) => user.role === 'admin' || job.user === user.username;
   const onCancel = (job) => act(() => api(`/api/jobs/${job.id}/cancel`, { method: 'POST' }));
   const onDelete = (job) => act(() => api(`/api/jobs/${job.id}`, { method: 'DELETE' }));
+  const onRetry = (job) => act(() => api(`/api/jobs/${job.id}/retry`, { method: 'POST' }));
   const onReuse = (job) => {
     setReuse({ ...job.params, _t: Date.now() });
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -58,7 +59,7 @@ export default function Studio({ kind, user, jobs, presets, templates, system, n
           </div>
         )}
         <QueueList jobs={queuedAll} onCancel={onCancel} canManage={canManage} />
-        <Gallery kind={kind} jobs={finished} onDelete={onDelete} onReuse={onReuse} canManage={canManage} />
+        <Gallery kind={kind} jobs={finished} onDelete={onDelete} onReuse={onReuse} onRetry={onRetry} canManage={canManage} />
       </section>
     </main>
   );

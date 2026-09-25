@@ -9,6 +9,9 @@ const FILTERS = [
   { key: 'bad', label: 'Failed and cancelled' },
 ];
 
+// Failed and cancelled jobs can be put back into the queue as they were
+const canRetry = (job, canManage) => ['failed', 'cancelled'].includes(job.status) && canManage(job);
+
 function confirmDelete(job, onDelete) {
   if (confirm(t('Delete the generation together with its files?'))) onDelete(job);
 }
@@ -16,7 +19,7 @@ function confirmDelete(job, onDelete) {
 const isVideoFile = (f) => /\.(mp4|webm)$/i.test(f);
 const isImageFile = (f) => /\.(png|jpe?g|webp)$/i.test(f);
 
-function Modal({ job, onClose, onDelete, onReuse, canManage }) {
+function Modal({ job, onClose, onDelete, onReuse, onRetry, canManage }) {
   const [showLog, setShowLog] = useState(job.status === 'failed');
   const [idx, setIdx] = useState(0);
   const files = job.files || [];
@@ -64,6 +67,9 @@ function Modal({ job, onClose, onDelete, onReuse, canManage }) {
           {job.warning && <div className="warn small">{tError(job.warning)}</div>}
           <div className="modal-actions">
             {file && <a className="btn primary" href={`/api/jobs/${job.id}/download/${idx}`}>{t('Download')}{files.length > 1 ? ` (${idx + 1}/${files.length})` : ''}</a>}
+            {canRetry(job, canManage) && (
+              <button className="btn primary" onClick={() => { onRetry(job); onClose(); }}>{t('Restart')}</button>
+            )}
             <button className="btn" onClick={() => { onReuse(job); onClose(); }}>{t('Repeat with these settings')}</button>
             {canManage(job) && (
               <button className="btn ghost danger" onClick={() => confirmDelete(job, (j) => { onDelete(j); onClose(); })}>{t('Delete')}</button>
@@ -77,7 +83,7 @@ function Modal({ job, onClose, onDelete, onReuse, canManage }) {
   );
 }
 
-export default function Gallery({ kind, jobs, onDelete, onReuse, canManage }) {
+export default function Gallery({ kind, jobs, onDelete, onReuse, onRetry, canManage }) {
   const [filter, setFilter] = useState('all');
   const [openId, setOpenId] = useState(null);
   const shown = jobs.filter((j) => (filter === 'all' ? true : filter === 'done' ? j.status === 'done' : j.status !== 'done'));
@@ -118,6 +124,9 @@ export default function Gallery({ kind, jobs, onDelete, onReuse, canManage }) {
                   <span className="muted small">{fmtDate(j.createdAt)}{j.durationSec ? ` · ${fmtDuration(j.durationSec)}` : ''}</span>
                   <span className="tile-actions">
                     {j.files?.length > 0 && <a className="btn-icon" href={`/api/jobs/${j.id}/download/0`} title={t('Download')}>⤓</a>}
+                    {canRetry(j, canManage) && (
+                      <button className="btn-icon" title={t('Restart: the same job again, with the same seed')} onClick={() => onRetry(j)}>⟲</button>
+                    )}
                     <button className="btn-icon" title={t('Repeat')} onClick={() => onReuse(j)}>↻</button>
                     {canManage(j) && <button className="btn-icon danger" title={t('Delete')} onClick={() => confirmDelete(j, onDelete)}>🗑</button>}
                   </span>
@@ -127,7 +136,7 @@ export default function Gallery({ kind, jobs, onDelete, onReuse, canManage }) {
           ))}
         </div>
       )}
-      {open && <Modal job={open} onClose={() => setOpenId(null)} onDelete={onDelete} onReuse={onReuse} canManage={canManage} />}
+      {open && <Modal job={open} onClose={() => setOpenId(null)} onDelete={onDelete} onReuse={onReuse} onRetry={onRetry} canManage={canManage} />}
     </div>
   );
 }

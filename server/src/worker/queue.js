@@ -325,9 +325,12 @@ export function setDrain(seconds) {
 }
 setInterval(() => nextJob(), 5000).unref();
 
+// A restarted job keeps its createdAt (history, file names) but joins the end of the queue
+const queuedAt = (j) => j.queuedAt ?? j.createdAt;
+
 export function nextJob() {
   if (current || draining()) return;
-  const job = jobs.filter((j) => j.status === 'queued').sort((a, b) => a.createdAt - b.createdAt)[0];
+  const job = jobs.filter((j) => j.status === 'queued').sort((a, b) => queuedAt(a) - queuedAt(b))[0];
   if (job) run(job);
 }
 
@@ -343,6 +346,19 @@ export function enqueueJob({ user, params, spec }) {
     spec,
   };
   jobs.push(job);
+  save(true);
+  nextJob();
+  return job;
+}
+
+// Puts a failed or cancelled job back into the queue with the same parameters and seed.
+// The web container passes a fresh spec, so jobs from older versions can be restarted too.
+export function retryJob(job, spec) {
+  if (!['failed', 'cancelled'].includes(job.status)) throw new Error('Only failed or cancelled jobs can be restarted');
+  for (const k of ['error', 'warning', 'lastErrors', 'progress', 'startedAt', 'finishedAt', 'durationSec', 'cmd', 'files', 'thumb', '_saved']) {
+    delete job[k];
+  }
+  Object.assign(job, { status: 'queued', queuedAt: Date.now(), retries: (job.retries || 0) + 1, spec });
   save(true);
   nextJob();
   return job;
