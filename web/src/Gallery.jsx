@@ -104,7 +104,7 @@ export function Tile({ job: j, onOpen, onDelete, onReuse, onRetry, canManage, sh
         <div className="tile-prompt" title={j.params.prompt}>{j.params.prompt}</div>
         {j.status === 'failed' && j.error && <div className="tile-err" title={tError(j.error)}>{tError(j.error)}</div>}
         <div className="tile-meta">
-          <span className="muted small">{fmtDate(j.createdAt)}{j.durationSec ? ` · ${fmtDuration(j.durationSec)}` : ''}</span>
+          <span className="muted small">{fmtDate(j.finishedAt || j.createdAt)}{j.durationSec ? ` · ${fmtDuration(j.durationSec)}` : ''}</span>
           <span className="tile-actions">
             {j.files?.length > 0 && <a className="btn-icon" href={`/api/jobs/${j.id}/download/0`} title={t('Download')}>⤓</a>}
             {canRetry(j, canManage) && (
