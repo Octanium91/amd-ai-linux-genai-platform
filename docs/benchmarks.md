@@ -15,6 +15,7 @@ All numbers are measured, not estimated, unless marked as an estimate.
 | AnimateLCM, extra 5 s | same, continuation strength 0.75 | 208 s + ~214 s | — | 531 s |
 | Wan 2.2 TI2V 5B Q8_0 | 832×480, 17 frames, 10 steps | 676 s (~63 s/step) | 2027 s (tiled VAE) | 45 min |
 | Wan 2.2 TI2V 5B Q8_0 | 832×480, 49 frames, 25 steps | ~172 s/step | — | ≈ 2.5–3 h (estimate) |
+| Wan 2.2 TI2V 5B Q8_0, **High** | 832×480, 49 frames (2 s), 40 steps, CFG 5 | 10 400–10 500 s (~265 s/step) | 5 100–5 170 s (tiled VAE) | **4 h 20 min** (two clips, through the UI) |
 | Wan 2.2 TI2V 5B Q8_0 | 832×480, 65 frames, 40 steps | ~207 s/step | — | > 3 h (estimate) |
 
 Peak GTT usage: AnimateDiff and AnimateLCM ~8 GB; Wan 2.2 5B ~16 GB during sampling and up to 22.3 GB during VAE decoding.
@@ -26,6 +27,7 @@ With continuation strength 0.55 the second segment of an extra-length clip keeps
 | Mode | Parameters | Total |
 |---|---|---|
 | Realistic Vision 6 | 512×768, 25 steps, dpm++2m karras, CFG 5.5, **2 variants** | **85 s** (sampling 43 s, decoding 8 s) — ~40 s per image |
+| Realistic Vision 6, **Extra** | 768×1024 or 1024×768, 80 steps, dpm++2m karras, CFG 5.5, 1 image | **5–6 min** (sampling 290–350 s at ~4.3 s/step, decoding 9–12 s); the first of eight took 3 min 53 s at 2.9 s/step |
 
 ## What affects speed
 
