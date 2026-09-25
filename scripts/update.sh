@@ -37,11 +37,10 @@ if [ "$(docker inspect -f '{{.State.Running}}' genai-worker 2>/dev/null || echo 
   docker compose up -d --no-deps worker
   exit 0
 fi
-running_image=$(docker inspect -f '{{.Image}}' genai-worker)
-new_image=$(docker image inspect -f '{{.Id}}' genai-platform-worker:latest)
-running_hash=$(docker inspect -f '{{index .Config.Labels "com.docker.compose.config-hash"}}' genai-worker)
-new_hash=$(docker compose config --hash worker | awk '{print $2}')
-if [ "$running_image" = "$new_image" ] && [ "$running_hash" = "$new_hash" ]; then
+# Ask compose itself whether it would recreate the worker (new image or changed settings).
+# Comparing image IDs by hand is unreliable: with the containerd image store a container and its
+# image report different digests for the same image.
+if ! docker compose up -d --no-deps --dry-run worker 2>&1 | grep -q Recreate; then
   echo "  unchanged, not restarted"
   exit 0
 fi
