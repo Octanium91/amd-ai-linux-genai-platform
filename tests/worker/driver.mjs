@@ -106,6 +106,20 @@ fs.utimesSync(`${DATA}/telemetry/19990101-000000_old.json`, new Date(2000, 0, 1)
 fs.writeFileSync(`${DATA}/state/settings.json`, JSON.stringify({ telemetry: { enabled: true, maxMb: 1 } }));
 let tj = (await api('/v1/jobs', 'POST', video(2))).body;
 tj = await waitFor(tj.id, (j) => ['done', 'failed'].includes(j.status));
+// The document is written right after the job is marked done: wait for it
+const telDoc = async (id) => {
+  for (let t0 = Date.now(); Date.now() - t0 < 15000; await sleep(200)) {
+    const f = fs.readdirSync(`${DATA}/telemetry`).find((x) => x.includes(id));
+    if (f) {
+      try {
+        const d = JSON.parse(fs.readFileSync(`${DATA}/telemetry/${f}`, 'utf8'));
+        if (d.complete) return f;
+      } catch {}
+    }
+  }
+  return null;
+};
+await telDoc(tj.id);
 const telFiles = fs.readdirSync(`${DATA}/telemetry`);
 const docFile = telFiles.find((f) => f.includes(tj.id));
 let doc = null;
@@ -133,6 +147,7 @@ check('the worker event loop delay is not the histogram floor', (doc?.phases || 
 const imgSpec = { ...spec, kind: 'image' };
 let ib = (await api('/v1/jobs', 'POST', { user: 'test', spec: imgSpec, params: { kind: 'image', presetId: 't', prompt: 'batch', negative: '', width: 64, height: 64, steps: 6, cfg: 1, sampler: 'euler', seed: 3, count: 2 } })).body;
 ib = await waitFor(ib.id, (j) => ['done', 'failed'].includes(j.status));
+await telDoc(ib.id);
 const idoc = JSON.parse(fs.readFileSync(`${DATA}/telemetry/${fs.readdirSync(`${DATA}/telemetry`).find((f) => f.includes(ib.id))}`, 'utf8'));
 const iph = idoc.phases.map((p) => `${p.name}${p.image ? '#' + p.image : ''}`);
 const images = new Set(idoc.steps.rows.map((r) => r[1]));
