@@ -11,20 +11,22 @@ import Users, { ChangePassword } from './Users.jsx';
 import Setup from './Setup.jsx';
 import System from './System.jsx';
 
-// Content generation sections (one per content kind) and platform management sections are separate groups
+// Three separate groups: what can be generated (one section per content kind), the gallery of
+// everything generated, and platform management
 const GEN_TABS = [
   { key: 'video', label: 'Video' },
   { key: 'image', label: 'Images' },
-  { key: 'gallery', label: 'Gallery' },
 ];
+const LIBRARY_TABS = [{ key: 'gallery', label: 'Gallery', icon: 'gallery' }];
 const ADMIN_TABS = [
   { key: 'models', label: 'Models', icon: 'models' },
   { key: 'users', label: 'Users', icon: 'users', admin: true },
   { key: 'system', label: 'System', icon: 'system', admin: true },
 ];
-const TABS = [...GEN_TABS, ...ADMIN_TABS];
+const TABS = [...GEN_TABS, ...LIBRARY_TABS, ...ADMIN_TABS];
 
 const ICONS = {
+  gallery: 'M4 4h7v7H4V4Zm2 2v3h3V6H6Zm7-2h7v7h-7V4Zm2 2v3h3V6h-3ZM4 13h7v7H4v-7Zm2 2v3h3v-3H6Zm7-2h7v7h-7v-7Zm2 2v3h3v-3h-3Z',
   models: 'M12 2 3 7v10l9 5 9-5V7l-9-5Zm0 2.3L18.7 8 12 11.7 5.3 8 12 4.3ZM5 9.7l6 3.3v6.7l-6-3.3V9.7Zm8 10V13l6-3.3v6.7l-6 3.3Z',
   system: 'M3 12h4l2-6 4 12 2-6h6v-2h-4.6L15 4.5 11 16.8 9 10.5 8.3 10H3v2Z',
   users: 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0-6a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm7.5 6a3.5 3.5 0 1 0 0-7 1 1 0 0 0 0 2 1.5 1.5 0 1 1 0 3 1 1 0 0 0 0 2ZM9 13c-3.9 0-7 2-7 4.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5C16 15 12.9 13 9 13Zm5 6H4v-1.5c0-1.2 2.1-2.5 5-2.5s5 1.3 5 2.5V19Zm3-5.8a1 1 0 0 0-.4 1.9c1.4.6 2.4 1.5 2.4 2.4V19h-1a1 1 0 0 0 0 2h2a1 1 0 0 0 1-1v-2.5c0-1.9-1.6-3.5-4-4.3Z',
@@ -215,6 +217,7 @@ export default function App() {
     },
   };
   const adminTabs = ADMIN_TABS.filter((x) => !x.admin || user.role === 'admin');
+  const doneCount = jobs.filter((j) => j.status === 'done').length;
 
   return (
     <div className="app">
@@ -226,11 +229,21 @@ export default function App() {
             <div className="brand-sub">AMD Ryzen AI · Linux · Vulkan</div>
           </div>
         </div>
-        <nav className="nav" aria-label={t('Generation')}>
-          {GEN_TABS.map((x) => (
-            <button key={x.key} className={`nav-tab ${tab === x.key ? 'on' : ''}`} onClick={() => go(x.key)}>{t(x.label)}</button>
-          ))}
-        </nav>
+        <div className="nav-main">
+          <nav className="nav" aria-label={t('Generation')}>
+            {GEN_TABS.map((x) => (
+              <button key={x.key} className={`nav-tab ${tab === x.key ? 'on' : ''}`} onClick={() => go(x.key)}>{t(x.label)}</button>
+            ))}
+          </nav>
+          <nav className="nav" aria-label={t('Gallery')}>
+            {LIBRARY_TABS.map((x) => (
+              <button key={x.key} className={`nav-tab nav-tab-icon ${tab === x.key ? 'on' : ''}`} onClick={() => go(x.key)}>
+                <Icon name={x.icon} /> {t(x.label)}
+                {doneCount > 0 && <span className="nav-count">{doneCount}</span>}
+              </button>
+            ))}
+          </nav>
+        </div>
         <nav className="nav-admin" aria-label={t('Management')}>
           {adminTabs.map((x) => (
             <button key={x.key} className={`nav-link ${tab === x.key ? 'on' : ''}`} onClick={() => go(x.key)} title={t(x.label)}>

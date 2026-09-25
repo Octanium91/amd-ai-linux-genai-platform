@@ -374,3 +374,9 @@ input[type="range"].extra { accent-color: var(--bad); }
 .grid-all .thumb { aspect-ratio: 4 / 3; }
 .gal-more { display: flex; justify-content: center; margin-top: 14px; }
 @media (max-width: 640px) { .gal-search { width: 100%; } }
+
+/* Navigation: the generation group and the gallery are separate controls */
+.nav-main { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.nav-tab-icon { display: inline-flex; align-items: center; gap: 7px; }
+.nav-count { font-size: 11.5px; font-weight: 600; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; line-height: 18px; }
+.nav-tab.on .nav-count { color: var(--text); }
