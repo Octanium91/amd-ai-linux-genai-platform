@@ -48,7 +48,7 @@ ENV NODE_ENV=production DATA_DIR=/data WORKER_PORT=7861 \
     HOME=/tmp XDG_CACHE_HOME=/data/state/cache
 WORKDIR /app/server
 HEALTHCHECK --interval=30s --timeout=15s --start-period=30s --retries=4 \
-  CMD node -e "fetch('http://127.0.0.1:7861/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD ["bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/7861 && printf 'GET /v1/health HTTP/1.0\r\n\r\n' >&3 && head -1 <&3 | grep -q ' 200 '"]
 CMD ["node", "src/worker/index.js"]
 
 # ---------- web ----------
@@ -64,5 +64,5 @@ ENV NODE_ENV=production DATA_DIR=/data CATALOG_DIR=/app/catalog PORT=7860 \
 WORKDIR /app/server
 EXPOSE 7860
 HEALTHCHECK --interval=30s --timeout=15s --start-period=30s --retries=4 \
-  CMD node -e "fetch('http://127.0.0.1:7860/api/auth/me').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"
+  CMD ["bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/7860 && printf 'GET /api/auth/status HTTP/1.0\r\n\r\n' >&3 && head -1 <&3 | grep -q ' 200 '"]
 CMD ["node", "src/web/index.js"]

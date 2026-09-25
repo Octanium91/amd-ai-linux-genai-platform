@@ -25,9 +25,12 @@ setInterval(() => {
   if (lag > 1000) console.warn(`[worker] event loop stalled for ${lag} ms${runningJob() ? ' during a job' : ''}`);
 }, 10000).unref();
 
-// Short health summary for the header badge; the full list lives in /v1/diagnostics
+// Short health summary for the header badge; the full list lives in /v1/diagnostics.
+// Not refreshed while a job runs: the checks start vulkaninfo (a Vulkan instance on the busy GPU),
+// sd-cli and ffmpeg, which only adds memory pressure; the last result stays in place meanwhile.
 let health = null;
-const refreshHealth = () => diagnostics().then((d) => {
+const refreshHealth = () => (runningJob() && health ? Promise.resolve() : diagnostics()).then((d) => {
+  if (!d) return;
   health = { status: d.status, problems: d.checks.filter((c) => c.status === 'fail' || c.status === 'warn').map((c) => ({ id: c.id, status: c.status })) };
 }).catch(() => {});
 

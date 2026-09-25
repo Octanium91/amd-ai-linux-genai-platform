@@ -55,6 +55,8 @@ services:
       target: web
     image: genai-platform-web:latest
     container_name: genai-web
+    # memory.low: under host memory pressure (a large Wan job) the kernel reclaims the UI last
+    mem_reservation: 256m
     ports:
       - "${BIND_ADDR:-0.0.0.0}:${PORT:-7860}:7860"
     environment:

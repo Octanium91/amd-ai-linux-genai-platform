@@ -159,15 +159,15 @@ let sizes = { models: 0, output: 0, at: 0 };
 async function sample() {
   const s = { cpuBusy: await cpuUsage() };
   if (gpuDir) {
-    const [gttUsed, gttTotal, vramUsed, vramTotal, gpuBusy] = await Promise.all(
-      ['mem_info_gtt_used', 'mem_info_gtt_total', 'mem_info_vram_used', 'mem_info_vram_total', 'gpu_busy_percent']
-        .map((f) => readNumAsync(`${gpuDir}/${f}`)),
-    );
-    Object.assign(s, { gttUsed, gttTotal, vramUsed, vramTotal, gpuBusy });
+    // One file at a time: a stalled amdgpu read then occupies one libuv worker thread, not the whole
+    // pool that log and jobs.json writes share
+    const files = { gttUsed: 'mem_info_gtt_used', gttTotal: 'mem_info_gtt_total', vramUsed: 'mem_info_vram_used',
+      vramTotal: 'mem_info_vram_total', gpuBusy: 'gpu_busy_percent' };
+    for (const [key, f] of Object.entries(files)) s[key] = await readNumAsync(`${gpuDir}/${f}`);
   }
   try {
     const mi = await fsp.readFile('/proc/meminfo', 'utf8');
-    const kb = (k) => Number(mi.match(new RegExp(`^${k}:\s+(\d+)`, 'm'))?.[1]) * 1024;
+    const kb = (k) => Number(mi.match(new RegExp(`^${k}:\\s+(\\d+)`, 'm'))?.[1]) * 1024;
     s.memTotal = kb('MemTotal');
     s.memAvailable = kb('MemAvailable');
   } catch {}
