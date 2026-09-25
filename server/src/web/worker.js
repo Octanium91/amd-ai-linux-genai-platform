@@ -19,8 +19,10 @@ export async function callWorker(path, { method = 'GET', body, timeout = 5000 } 
       body: body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(timeout),
     });
-  } catch {
-    throw new WorkerUnavailable();
+  } catch (e) {
+    const err = new WorkerUnavailable();
+    err.reason = e.name === 'TimeoutError' ? `no answer within ${timeout} ms` : e.cause?.code || e.message;
+    throw err;
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -33,14 +35,30 @@ export async function callWorker(path, { method = 'GET', body, timeout = 5000 } 
 
 let last = { jobs: [], system: null, health: null, inUse: [] };
 let online = false;
+let lastOkAt = 0;
+let failingSince = 0;
+
+// The worker counts as unavailable only after OFFLINE_AFTER without a single answer: under heavy
+// jobs it can pause for a second or two (swap, a busy disk), which is not an outage. Transitions
+// are logged with the reason so real outages leave a trace.
+const OFFLINE_AFTER = 15000;
 
 export async function workerState() {
   try {
-    const s = await callWorker('/v1/state', { timeout: 3000 });
+    const s = await callWorker('/v1/state', { timeout: 5000 });
     last = s;
+    lastOkAt = Date.now();
+    const pause = failingSince ? Math.round((Date.now() - failingSince) / 1000) : 0;
+    if (!online && failingSince) console.log(`[web] the worker answers again after ${pause} s`);
+    else if (pause >= 3) console.log(`[web] the worker answered after a ${pause} s pause`);
     online = true;
-  } catch {
-    online = false;
+    failingSince = 0;
+  } catch (e) {
+    if (!failingSince) failingSince = Date.now();
+    if (online && Date.now() - lastOkAt > OFFLINE_AFTER) {
+      online = false;
+      console.warn(`[web] the worker has not answered for ${Math.round((Date.now() - lastOkAt) / 1000)} s: ${e.reason || e.message}`);
+    }
   }
   return {
     ...last,

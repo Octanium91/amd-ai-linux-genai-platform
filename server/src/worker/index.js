@@ -2,6 +2,7 @@
 // It is updated rarely and only when idle (scripts/update.sh drains it first), so restarting the
 // web container never interrupts a generation. No npm dependencies on purpose.
 import http from 'node:http';
+import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { config, WORKER_API } from '../common/config.js';
 import { tokenMatches, workerToken } from '../common/token.js';
 import { diagnostics, logDiagnostics } from './diagnostics.js';
@@ -11,6 +12,18 @@ import {
 import { systemInfo } from './system.js';
 
 workerToken();
+
+// Event loop watch: a stall (swapped-out pages under memory pressure, a slow syscall) is logged
+// with its length, and the worst recent delay is reported by /v1/health for diagnostics
+const loopDelay = monitorEventLoopDelay({ resolution: 50 });
+loopDelay.enable();
+let worstLagMs = 0;
+setInterval(() => {
+  const lag = Math.round(loopDelay.max / 1e6);
+  loopDelay.reset();
+  worstLagMs = lag;
+  if (lag > 1000) console.warn(`[worker] event loop stalled for ${lag} ms${runningJob() ? ' during a job' : ''}`);
+}, 10000).unref();
 
 // Short health summary for the header badge; the full list lives in /v1/diagnostics
 let health = null;
@@ -23,6 +36,7 @@ const status = () => ({
   busy: !!runningJob(),
   queued: jobs.filter((j) => j.status === 'queued').length,
   draining: draining(),
+  lagMs: worstLagMs,
 });
 
 class HttpError extends Error {

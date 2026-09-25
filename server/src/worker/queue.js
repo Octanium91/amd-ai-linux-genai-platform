@@ -253,6 +253,7 @@ async function run(job) {
   job.startedAt = Date.now();
   job.progress = newProgress(1, segments);
   current = { job, proc: null };
+  const previewTimer = setInterval(() => watchPreview(job), 2000);
   const log = fs.createWriteStream(path.join(dirs.logs, job.id + '.log'));
   const cleanup = () => {
     for (let i = 0; i < segments; i++) {
@@ -308,6 +309,9 @@ async function run(job) {
   }
   log.end();
   job.durationSec = Math.round((job.finishedAt - job.startedAt) / 1000);
+  clearInterval(previewTimer);
+  delete job.previewAt;
+  delete job.previewExt;
   current = null;
   save(true);
   nextJob();
@@ -396,16 +400,19 @@ export function deleteJob(job) {
 
 export function jobSummary(j) {
   const { cmd, spec, ...out } = j;
-  if (j.status === 'running') {
-    for (const ext of ['.webp', '.png']) {
-      try {
-        out.previewAt = fs.statSync(path.join(dirs.previews, j.id + ext)).mtimeMs;
-        out.previewExt = ext;
-        break;
-      } catch {}
-    }
-  }
   return out;
+}
+
+// The latent preview's timestamp is polled in the background, not on every state request
+async function watchPreview(job) {
+  for (const ext of ['.webp', '.png']) {
+    try {
+      const st = await fs.promises.stat(path.join(dirs.previews, job.id + ext));
+      job.previewAt = st.mtimeMs;
+      job.previewExt = ext;
+      return;
+    } catch {}
+  }
 }
 
 // Models used by the current generation cannot be deleted

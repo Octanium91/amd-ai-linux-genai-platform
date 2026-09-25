@@ -21,18 +21,32 @@ export function writeJson(file, value, mode) {
   fs.renameSync(tmp, file);
 }
 
-// Debounced writes for frequently changing data (job progress)
+// Debounced writes for frequently changing data (job progress). Important changes (now = true)
+// are written synchronously; the frequent progress writes are asynchronous, so a slow disk under
+// memory pressure does not stall the event loop. A progress write that finishes after a newer
+// synchronous one is dropped instead of overwriting it.
 export function debouncedWriter(file, getValue, delay = 2000) {
   let timer = null;
+  let version = 0;
+  const writeLater = async () => {
+    const mine = ++version;
+    const tmp = file + '.progress.tmp';
+    try {
+      await fs.promises.writeFile(tmp, JSON.stringify(getValue(), null, 1));
+      if (mine === version) fs.renameSync(tmp, file);
+      else await fs.promises.rm(tmp, { force: true });
+    } catch {}
+  };
   return (now = false) => {
     if (now) {
       if (timer) clearTimeout(timer);
       timer = null;
+      version++;
       writeJson(file, getValue());
     } else if (!timer) {
       timer = setTimeout(() => {
         timer = null;
-        writeJson(file, getValue());
+        writeLater();
       }, delay);
     }
   };

@@ -4,14 +4,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config } from '../common/config.js';
 
-const readNum = (f) => {
-  try {
-    return Number(fs.readFileSync(f, 'utf8').trim());
-  } catch {
-    return null;
-  }
-};
-
 let gpuDir = null;
 try {
   const card = fs.readdirSync('/sys/class/drm').find(
@@ -99,11 +91,24 @@ execFile('vulkaninfo', ['--summary'], { timeout: 20000 }, (err, stdout = '') => 
   }
 });
 
-// CPU load from the difference of /proc/stat counters between two polls
-let prevCpu = null;
-function cpuUsage() {
+// Live metrics are sampled in the background with asynchronous I/O and served from a snapshot.
+// Requests never touch sysfs or /proc themselves: under memory pressure (a large Wan job pushing
+// pages to swap) or a busy GPU those reads can stall, and a stalled read on the only Node thread
+// would make the worker look dead to the web container and to the Docker healthcheck.
+const fsp = fs.promises;
+const readNumAsync = async (f) => {
   try {
-    const line = fs.readFileSync('/proc/stat', 'utf8').split('\n')[0];
+    return Number((await fsp.readFile(f, 'utf8')).trim());
+  } catch {
+    return null;
+  }
+};
+
+// CPU load from the difference of /proc/stat counters between two samples
+let prevCpu = null;
+async function cpuUsage() {
+  try {
+    const line = (await fsp.readFile('/proc/stat', 'utf8')).split('\n')[0];
     const v = line.trim().split(/\s+/).slice(1).map(Number);
     const idle = v[3] + (v[4] || 0);
     const total = v.reduce((a, b) => a + b, 0);
@@ -115,44 +120,29 @@ function cpuUsage() {
     return null;
   }
 }
-cpuUsage();
 
-// Directory sizes are cached: walking thousands of files on every poll is unnecessary
-const dirSizeCache = new Map();
-function dirSize(dir) {
-  const c = dirSizeCache.get(dir);
-  if (c && Date.now() - c.at < 60000) return c.size;
+async function dirSize(dir) {
   let size = 0;
-  const walk = (d) => {
-    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+  const walk = async (d) => {
+    for (const e of await fsp.readdir(d, { withFileTypes: true })) {
       const p = path.join(d, e.name);
-      if (e.isDirectory()) walk(p);
-      else if (e.isFile()) size += fs.statSync(p).size;
+      if (e.isDirectory()) await walk(p);
+      else if (e.isFile()) size += (await fsp.stat(p)).size;
     }
   };
   try {
-    walk(dir);
+    await walk(dir);
   } catch {}
-  dirSizeCache.set(dir, { at: Date.now(), size });
   return size;
 }
 
-function disk(dir) {
+async function disk(dir) {
   try {
-    const s = fs.statfsSync(dir);
-    return { dev: fs.statSync(dir).dev, free: s.bavail * s.bsize, total: s.blocks * s.bsize };
+    const [s, st] = await Promise.all([fsp.statfs(dir), fsp.stat(dir)]);
+    return { dev: st.dev, free: s.bavail * s.bsize, total: s.blocks * s.bsize };
   } catch {
     return null;
   }
-}
-
-function storageInfo() {
-  const models = disk(config.dirs.models);
-  const data = disk(config.dirs.output);
-  return {
-    models: models && { free: models.free, total: models.total, used: dirSize(config.dirs.models) },
-    data: data && { free: data.free, total: data.total, used: dirSize(config.dirs.output), sameDisk: models?.dev === data.dev },
-  };
 }
 
 const threads = (() => {
@@ -163,20 +153,43 @@ const threads = (() => {
   }
 })();
 
-export function systemInfo() {
-  const s = { ...info, cpuBusy: cpuUsage(), threads, storage: storageInfo() };
+let snapshot = {};
+let sizes = { models: 0, output: 0, at: 0 };
+
+async function sample() {
+  const s = { cpuBusy: await cpuUsage() };
   if (gpuDir) {
-    s.gttUsed = readNum(`${gpuDir}/mem_info_gtt_used`);
-    s.gttTotal = readNum(`${gpuDir}/mem_info_gtt_total`);
-    s.vramUsed = readNum(`${gpuDir}/mem_info_vram_used`);
-    s.vramTotal = readNum(`${gpuDir}/mem_info_vram_total`);
-    s.gpuBusy = readNum(`${gpuDir}/gpu_busy_percent`);
+    const [gttUsed, gttTotal, vramUsed, vramTotal, gpuBusy] = await Promise.all(
+      ['mem_info_gtt_used', 'mem_info_gtt_total', 'mem_info_vram_used', 'mem_info_vram_total', 'gpu_busy_percent']
+        .map((f) => readNumAsync(`${gpuDir}/${f}`)),
+    );
+    Object.assign(s, { gttUsed, gttTotal, vramUsed, vramTotal, gpuBusy });
   }
   try {
-    const mi = fs.readFileSync('/proc/meminfo', 'utf8');
-    const kb = (k) => Number(mi.match(new RegExp(`^${k}:\\s+(\\d+)`, 'm'))?.[1]) * 1024;
+    const mi = await fsp.readFile('/proc/meminfo', 'utf8');
+    const kb = (k) => Number(mi.match(new RegExp(`^${k}:\s+(\d+)`, 'm'))?.[1]) * 1024;
     s.memTotal = kb('MemTotal');
     s.memAvailable = kb('MemAvailable');
   } catch {}
-  return s;
+  // Directory sizes change slowly and walking them is the most expensive part: once a minute
+  if (Date.now() - sizes.at > 60000) {
+    sizes = { models: await dirSize(config.dirs.models), output: await dirSize(config.dirs.output), at: Date.now() };
+  }
+  const [models, data] = await Promise.all([disk(config.dirs.models), disk(config.dirs.output)]);
+  s.storage = {
+    models: models && { free: models.free, total: models.total, used: sizes.models },
+    data: data && { free: data.free, total: data.total, used: sizes.output, sameDisk: models?.dev === data.dev },
+  };
+  s.sampledAt = Date.now();
+  snapshot = s;
+}
+
+// A new sample starts only after the previous one finished, so a stalled read cannot pile up
+(async function loop() {
+  await sample().catch(() => {});
+  setTimeout(loop, 2000).unref();
+})();
+
+export function systemInfo() {
+  return { ...info, threads, ...snapshot };
 }
