@@ -40,7 +40,9 @@ fi
 # Ask compose itself whether it would recreate the worker (new image or changed settings).
 # Comparing image IDs by hand is unreliable: with the containerd image store a container and its
 # image report different digests for the same image.
-if ! docker compose up -d --no-deps --dry-run worker 2>&1 | grep -q Recreate; then
+# (Captured first: grep -q in a pipe would cut compose off with SIGPIPE, and pipefail would fail it.)
+plan=$(docker compose up -d --no-deps --dry-run worker 2>&1)
+if ! grep -q Recreate <<<"$plan"; then
   echo "  unchanged, not restarted"
   exit 0
 fi
