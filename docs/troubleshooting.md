@@ -65,3 +65,7 @@ The engine version is pinned in `SD_CPP_REF` (`.env`, the tested commit `88411ef
 ## A UI string is not translated
 
 Run `node scripts/i18n-keys.mjs`: it lists keys missing from `web/src/locales/uk.js` or `ru.js`. Add the translation and rebuild the image.
+
+## Testing changes to the worker
+
+`./tests/worker/run.sh` runs the job queue against a fake `sd-cli` in a throwaway container of the worker image, without a GPU and without touching a running deployment. It covers a two-segment video, cancelling at a segment boundary, restarting a job, deleting during finalization, leftover temporary files and a damaged `jobs.json`. Build the image first (`docker compose build worker`).

@@ -8,9 +8,21 @@ export function statePath(name) {
 }
 
 export function readJson(file, fallback) {
+  let text;
   try {
-    return JSON.parse(fs.readFileSync(file, 'utf8'));
+    text = fs.readFileSync(file, 'utf8');
   } catch {
+    return fallback;
+  }
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    // Never replace a damaged state file silently: keep it aside for recovery and say so
+    const aside = `${file}.corrupt-${Date.now()}`;
+    try {
+      fs.renameSync(file, aside);
+    } catch {}
+    console.error(`[state] ${path.basename(file)} is damaged (${e.message}); kept as ${path.basename(aside)}, starting empty`);
     return fallback;
   }
 }
@@ -28,14 +40,30 @@ export function writeJson(file, value, mode) {
 export function debouncedWriter(file, getValue, delay = 2000) {
   let timer = null;
   let version = 0;
+  // At most one asynchronous write at a time: two writes into the same temporary file on a slow
+  // disk would interleave and leave broken JSON. Changes made meanwhile are written right after.
+  let writing = false;
+  let dirty = false;
   const writeLater = async () => {
-    const mine = ++version;
+    if (writing) {
+      dirty = true;
+      return;
+    }
+    writing = true;
     const tmp = file + '.progress.tmp';
     try {
-      await fs.promises.writeFile(tmp, JSON.stringify(getValue(), null, 1));
-      if (mine === version) fs.renameSync(tmp, file);
-      else await fs.promises.rm(tmp, { force: true });
-    } catch {}
+      do {
+        dirty = false;
+        const mine = ++version;
+        await fs.promises.writeFile(tmp, JSON.stringify(getValue(), null, 1));
+        if (mine === version) fs.renameSync(tmp, file);
+        else await fs.promises.rm(tmp, { force: true });
+      } while (dirty);
+    } catch (e) {
+      console.error(`[state] could not write ${path.basename(file)}: ${e.message}`);
+    } finally {
+      writing = false;
+    }
   };
   return (now = false) => {
     if (now) {

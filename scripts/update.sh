@@ -41,7 +41,11 @@ fi
 # Comparing image IDs by hand is unreliable: with the containerd image store a container and its
 # image report different digests for the same image.
 # (Captured first: grep -q in a pipe would cut compose off with SIGPIPE, and pipefail would fail it.)
-plan=$(docker compose up -d --no-deps --dry-run worker 2>&1)
+if ! plan=$(docker compose up -d --no-deps --dry-run worker 2>&1); then
+  echo "$plan"
+  echo "  could not check the worker (docker compose with --dry-run is required); it was NOT updated" >&2
+  exit 1
+fi
 if ! grep -q Recreate <<<"$plan"; then
   echo "  unchanged, not restarted"
   exit 0
@@ -53,8 +57,19 @@ trap 'release; echo; echo "Interrupted: the worker keeps running the old version
 
 # The drain is a lease: renewed on every poll, it expires by itself if this script dies
 first=1
+fails=0
 while :; do
-  status=$(ctl drain 120)
+  if ! status=$(ctl drain 120 2>&1); then
+    # A transient docker exec / network hiccup is retried; a persistent one stops the update
+    fails=$((fails + 1))
+    if [ $fails -ge 4 ]; then
+      release
+      echo; echo "  the worker does not answer ($status); it was NOT updated" >&2
+      exit 1
+    fi
+    sleep 5; continue
+  fi
+  fails=0
   [ "$(echo "$status" | grep -o '"busy":[a-z]*' | cut -d: -f2)" = false ] && break
   if [ $first = 1 ]; then
     echo "  a job is running: the worker restarts after it, new jobs wait in the queue"

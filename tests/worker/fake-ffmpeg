@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Slows down the last-frame extraction between segments and marks it, so a test can cancel there
+case " $* " in *" -sseof "*) touch /data/t/extracting; sleep 3;; esac
+exec /usr/bin/ffmpeg "$@"

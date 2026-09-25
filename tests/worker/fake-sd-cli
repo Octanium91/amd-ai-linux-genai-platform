@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# A stand-in for sd-cli: prints progress the way sd-cli does and writes a small result with ffmpeg.
+[ "${1:-}" = "--version" ] && { echo "stable-diffusion.cpp version fake"; exit 0; }
+out=""; frames=1; mode=img_gen
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o) out="$2"; shift;;
+    --video-frames) frames="$2"; shift;;
+    -M) mode="$2"; shift;;
+  esac
+  shift
+done
+steps=${FAKE_STEPS:-6}
+if [ "$mode" = vid_gen ]; then echo "generate_video 64x64x$frames"; else echo "generating image: 1/1"; fi
+for i in $(seq 1 "$steps"); do
+  printf '\r  |==========>          | %d/%d - 0.50s/it' "$i" "$steps"
+  sleep "${FAKE_SLEEP:-0.3}"
+done
+echo
+echo "sampling completed"
+echo "decode_first_stage completed"
+if [ "$mode" = vid_gen ]; then
+  ffmpeg -loglevel error -y -f lavfi -i "testsrc=size=64x64:rate=8" -frames:v "$frames" -c:v mjpeg "$out" || exit 3
+else
+  ffmpeg -loglevel error -y -f lavfi -i "testsrc=size=64x64:rate=1" -frames:v 1 "$out" || exit 3
+  echo "save result image 0 to '$out'"
+fi

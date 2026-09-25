@@ -209,6 +209,7 @@ export default {
   "Repeat": "Повторить",
   "Repeat the password": "Повторите пароль",
   "Repeat with these settings": "Повторить с этими параметрами",
+  "The job is still stopping, try again in a few seconds": "Задача ещё останавливается, попробуйте через несколько секунд",
   "Only PNG, JPEG and WebP images are accepted": "Принимаются только изображения PNG, JPEG и WebP",
   "The prompt is too long (at most 4000 characters)": "Промпт слишком длинный (не больше 4000 символов)",
   "Too many jobs in the queue (at most 20 per user)": "Слишком много задач в очереди (не больше 20 на пользователя)",

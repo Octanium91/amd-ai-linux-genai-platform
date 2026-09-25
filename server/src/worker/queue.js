@@ -29,6 +29,13 @@ for (const j of jobs) {
 }
 if (interrupted) save(true);
 
+// Temporary segment files (.<job id>_s<n>…) of jobs interrupted by a restart are useless: remove them
+try {
+  for (const f of fs.readdirSync(dirs.output)) {
+    if (/^\.[0-9a-f]{12}_s\d+/.test(f)) fs.rmSync(path.join(dirs.output, f), { force: true });
+  }
+} catch {}
+
 let current = null; // { job, proc }
 export const runningJob = () => current?.job || null;
 
@@ -145,10 +152,13 @@ async function finalizeVideo(job, segments) {
     for (const f of segments) fs.rmSync(f, { force: true });
     job.files = [base + '.mp4'];
   } else {
-    // Without ffmpeg keep at least the first segment as is
-    fs.renameSync(segments[0], path.join(dirs.output, base + '.avi'));
-    for (const f of segments.slice(1)) fs.rmSync(f, { force: true });
-    job.files = [base + '.avi'];
+    // Without an mp4 keep every segment as is: they may be hours of GPU work
+    fs.rmSync(mp4, { force: true });
+    job.files = segments.map((f, i) => {
+      const name = segments.length > 1 ? `${base}_${i + 1}.avi` : `${base}.avi`;
+      fs.renameSync(f, path.join(dirs.output, name));
+      return name;
+    });
     job.warning = 'Could not build the mp4: ' + conv.err.trim().slice(0, 300);
   }
   await makeThumb(job, path.join(dirs.output, job.files[0]));
@@ -255,6 +265,8 @@ async function run(job) {
   current = { job, proc: null };
   const previewTimer = setInterval(() => watchPreview(job), 2000);
   const log = fs.createWriteStream(path.join(dirs.logs, job.id + '.log'));
+  // A full or read-only disk must fail the job, not crash the worker with an unhandled error
+  log.on('error', (e) => console.error(`[worker] log of ${job.id}: ${e.message}`));
   const cleanup = () => {
     for (let i = 0; i < segments; i++) {
       fs.rmSync(`${tmpBase}_s${i}.avi`, { force: true });
@@ -275,6 +287,7 @@ async function run(job) {
         init = `${tmpBase}_s${i - 1}_last.png`;
         const r = await runCmd('ffmpeg', ['-loglevel', 'error', '-y', '-sseof', '-0.5', '-i', outputs[i - 1],
           '-update', '1', '-q:v', '1', init]);
+        if (job.status !== 'running') break;
         if (r.code !== 0 || !fs.existsSync(init)) throw new Error('Could not extract the last frame of the segment: ' + r.err.trim());
         const prev = job.progress;
         job.progress = newProgress(i + 1, segments,
@@ -294,27 +307,41 @@ async function run(job) {
         outputs.push(`${outBase}.avi`);
       }
     }
-    if (job.status === 'cancelled') {
+    if (job.status !== 'running') {
       cleanup();
     } else {
       setStage(job, 'saving');
       if (preset.kind === 'image') await finalizeImages(job);
       else await finalizeVideo(job, outputs);
       cleanup();
-      finish(job, 'done');
+      if (job.status === 'running' && jobs.includes(job)) {
+        finish(job, 'done');
+      } else {
+        // Cancelled or deleted while the result was being assembled: nothing may be left behind
+        for (const f of job.files || []) fs.rmSync(path.join(dirs.output, f), { force: true });
+        if (job.thumb) fs.rmSync(path.join(dirs.thumbs, job.thumb), { force: true });
+        delete job.files;
+        delete job.thumb;
+      }
     }
   } catch (e) {
     cleanup();
-    if (job.status !== 'cancelled') finish(job, 'failed', e.message);
+    if (job.status === 'running') finish(job, 'failed', e.message);
+  } finally {
+    // Whatever happened above (even a full disk), the queue must move on
+    log.end();
+    if (job.finishedAt && job.startedAt) job.durationSec = Math.round((job.finishedAt - job.startedAt) / 1000);
+    clearInterval(previewTimer);
+    delete job.previewAt;
+    delete job.previewExt;
+    current = null;
+    try {
+      save(true);
+    } catch (e) {
+      console.error(`[worker] could not save jobs.json: ${e.message}`);
+    }
+    nextJob();
   }
-  log.end();
-  job.durationSec = Math.round((job.finishedAt - job.startedAt) / 1000);
-  clearInterval(previewTimer);
-  delete job.previewAt;
-  delete job.previewExt;
-  current = null;
-  save(true);
-  nextJob();
 }
 
 // ---------- drain: finish the current job, start nothing new (engine updates) ----------
@@ -359,6 +386,9 @@ export function enqueueJob({ user, params, spec }) {
 // The web container passes a fresh spec, so jobs from older versions can be restarted too.
 export function retryJob(job, spec) {
   if (!['failed', 'cancelled'].includes(job.status)) throw new Error('Only failed or cancelled jobs can be restarted');
+  // A cancelled job may still be stopping (sd-cli exiting, ffmpeg running): wait for it
+  if (current?.job === job) throw new Error('The job is still stopping, try again in a few seconds');
+  for (const ext of ['.webp', '.png']) fs.rmSync(path.join(dirs.previews, job.id + ext), { force: true });
   for (const k of ['error', 'warning', 'lastErrors', 'progress', 'startedAt', 'finishedAt', 'durationSec', 'cmd', 'files', 'thumb', '_saved']) {
     delete job[k];
   }
@@ -371,9 +401,10 @@ export function retryJob(job, spec) {
 export function cancelJob(job) {
   if (job.status === 'queued') {
     finish(job, 'cancelled');
-  } else if (job.status === 'running' && current?.job === job) {
-    finish(job, 'cancelled');
-    // Between segments sd-cli is not running: the loop sees the cancelled status and stops by itself
+  } else if (current?.job === job) {
+    if (job.status === 'running') finish(job, 'cancelled');
+    // Between segments sd-cli is not running: the loop sees the status and stops by itself.
+    // A repeated cancel still stops a process that is running for this job.
     const { proc } = current;
     if (proc && proc.exitCode === null) {
       proc.kill('SIGTERM');
