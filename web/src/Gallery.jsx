@@ -89,7 +89,8 @@ export function Tile({ job: j, onOpen, onDelete, onReuse, onRetry, canManage, sh
   return (
     <div className={`tile ${j.status}`}>
       <button className={`thumb ${video ? '' : 'thumb-img'}`} onClick={() => onOpen(j)} title={t('Open')}>
-        {j.thumb ? <img src={`/files/thumbs/${j.thumb}`} alt="" loading="lazy" /> : <div className="thumb-empty">{t(STATUS_LABEL[j.status])}</div>}
+        {/* Thumbnails are cached for days: the version changes when a restarted job finishes again */}
+        {j.thumb ? <img src={`/files/thumbs/${j.thumb}?v=${j.finishedAt || 0}`} alt="" loading="lazy" /> : <div className="thumb-empty">{t(STATUS_LABEL[j.status])}</div>}
         {j.status === 'done' && video && <span className="play">▶</span>}
         <span className="badge">
           {showKind ? `${video ? t('Video') : t('Image')} · ` : ''}
