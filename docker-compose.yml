@@ -45,6 +45,8 @@ services:
       # Generated videos and images
       - ${OUTPUT_PATH:-./output}:/data/output
       - ./config/drirc:/etc/drirc:ro
+      # The host OS release for telemetry (the image has its own /etc/os-release)
+      - /etc/os-release:/host/os-release:ro
       - /etc/localtime:/etc/localtime:ro
 
   # UI, API, users and model downloads. No GPU access; safe to restart at any time.

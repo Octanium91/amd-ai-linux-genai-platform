@@ -98,6 +98,33 @@ try {
 } catch {}
 check('jobs.json is valid JSON', parsed);
 
+// 7. Telemetry: enabled in settings.json, one document per job, the size limit is kept
+process.env.FAKE_STEPS = '6';
+fs.mkdirSync(`${DATA}/telemetry`, { recursive: true });
+fs.writeFileSync(`${DATA}/telemetry/19990101-000000_old.json`, JSON.stringify({ filler: 'x'.repeat(2 * 1024 * 1024) }));
+fs.utimesSync(`${DATA}/telemetry/19990101-000000_old.json`, new Date(2000, 0, 1), new Date(2000, 0, 1));
+fs.writeFileSync(`${DATA}/state/settings.json`, JSON.stringify({ telemetry: { enabled: true, maxMb: 1 } }));
+let tj = (await api('/v1/jobs', 'POST', video(2))).body;
+tj = await waitFor(tj.id, (j) => ['done', 'failed'].includes(j.status));
+const telFiles = fs.readdirSync(`${DATA}/telemetry`);
+const docFile = telFiles.find((f) => f.includes(tj.id));
+let doc = null;
+try {
+  doc = JSON.parse(fs.readFileSync(`${DATA}/telemetry/${docFile}`, 'utf8'));
+} catch {}
+const phaseNames = doc?.phases?.map((p) => `${p.name}#${p.segment}`) || [];
+check('telemetry document is written for the job', doc?.schema === 'genai-platform.telemetry/1' && doc.complete === true && doc.job.status === 'done', docFile || 'none');
+check('telemetry has phases per stage and command', ['sampling#1', 'sampling#2', 'ffmpeg.last_frame#1', 'ffmpeg.encode#2'].every((n) => phaseNames.includes(n)), phaseNames.join(' '));
+check('telemetry has metrics, series, steps and commands',
+  Object.keys(doc?.phases?.find((p) => p.name === 'sampling')?.metrics || {}).length > 0 && doc.series.points.length > 0
+  && doc.steps.rows.length >= 12 && doc.commands.filter((c) => c.program === 'sd-cli').length === 2,
+  `metrics ${Object.keys(doc?.phases?.[0]?.metrics || {}).length}, points ${doc?.series?.points?.length}, steps ${doc?.steps?.rows?.length}, commands ${doc?.commands?.length}`);
+check('telemetry resource describes the host and runtime',
+  doc?.resource?.['process.runtime.name'] === 'node' && !!doc.resource['os.kernel.release'] && !!doc.resource['host.cpu']?.['model.name'] && doc.resource['deployment.mode'] === 'docker',
+  `${doc?.resource?.['os.description']} · ${doc?.resource?.['host.cpu']?.['model.name']} · ${doc?.resource?.['deployment.mode']}`);
+check('telemetry size limit removes the oldest documents', !telFiles.includes('19990101-000000_old.json'), telFiles.join(' '));
+console.log(`  telemetry document: ${fs.statSync(`${DATA}/telemetry/${docFile}`).size} bytes, sample metrics: ${Object.keys(doc?.phases?.find((p) => p.name === 'sampling')?.metrics || {}).join(', ')}`);
+
 worker.kill();
 console.log(failed ? `${failed} FAILED` : 'ALL PASSED');
 process.exit(failed ? 1 : 0);

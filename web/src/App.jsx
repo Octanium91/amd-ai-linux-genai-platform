@@ -10,6 +10,7 @@ import Models from './Models.jsx';
 import Users, { ChangePassword } from './Users.jsx';
 import Setup from './Setup.jsx';
 import System from './System.jsx';
+import Settings from './Settings.jsx';
 
 // Three separate groups: what can be generated (one section per content kind), the gallery of
 // everything generated, and platform management
@@ -22,10 +23,12 @@ const ADMIN_TABS = [
   { key: 'models', label: 'Models', icon: 'models' },
   { key: 'users', label: 'Users', icon: 'users', admin: true },
   { key: 'system', label: 'System', icon: 'system', admin: true },
+  { key: 'settings', label: 'Settings', icon: 'settings', admin: true },
 ];
 const TABS = [...GEN_TABS, ...LIBRARY_TABS, ...ADMIN_TABS];
 
 const ICONS = {
+  settings: 'M19.4 13a7.6 7.6 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-1.7-1L15 3.5h-4l-.4 2.5a7.4 7.4 0 0 0-1.7 1l-2.4-1-2 3.4L6.6 11a7.6 7.6 0 0 0 0 2l-2 1.6 2 3.4 2.4-1c.5.4 1.1.7 1.7 1l.4 2.5h4l.4-2.5c.6-.3 1.2-.6 1.7-1l2.4 1 2-3.4-2-1.6ZM13 15a3 3 0 1 1 0-6 3 3 0 0 1 0 6Z',
   gallery: 'M4 4h7v7H4V4Zm2 2v3h3V6H6Zm7-2h7v7h-7V4Zm2 2v3h3V6h-3ZM4 13h7v7H4v-7Zm2 2v3h3v-3H6Zm7-2h7v7h-7v-7Zm2 2v3h3v-3h-3Z',
   models: 'M12 2 3 7v10l9 5 9-5V7l-9-5Zm0 2.3L18.7 8 12 11.7 5.3 8 12 4.3ZM5 9.7l6 3.3v6.7l-6-3.3V9.7Zm8 10V13l6-3.3v6.7l-6 3.3Z',
   system: 'M3 12h4l2-6 4 12 2-6h6v-2h-4.6L15 4.5 11 16.8 9 10.5 8.3 10H3v2Z',
@@ -314,6 +317,7 @@ export default function App() {
       {tab === 'models' && <Models user={user} onChange={loadPresets} />}
       {tab === 'users' && user.role === 'admin' && <Users me={user} />}
       {tab === 'system' && user.role === 'admin' && <System />}
+      {tab === 'settings' && user.role === 'admin' && <Settings />}
     </div>
   );
 }

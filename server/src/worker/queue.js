@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config } from '../common/config.js';
 import { debouncedWriter, readJson, statePath } from '../common/store.js';
+import { closeInterrupted, startTelemetry } from './telemetry.js';
 
 const { dirs } = config;
 const JOBS_FILE = statePath('jobs.json');
@@ -17,17 +18,18 @@ export const save = debouncedWriter(JOBS_FILE, () => jobs);
 
 // A job that was running when the container stopped (restart, power loss) cannot resume.
 // Persist the change right away so the state file never keeps a stale "running" job.
-let interrupted = 0;
+const interrupted = [];
 for (const j of jobs) {
   if (j.status === 'running') {
     j.status = 'failed';
     j.error = 'Interrupted by a container restart';
     j.finishedAt ??= Date.now();
     if (j.startedAt) j.durationSec = Math.round((j.finishedAt - j.startedAt) / 1000);
-    interrupted++;
+    interrupted.push(j);
   }
 }
-if (interrupted) save(true);
+if (interrupted.length) save(true);
+closeInterrupted(interrupted);
 
 // Temporary segment files (.<job id>_s<n>…) of jobs interrupted by a restart are useless: remove them
 try {
@@ -53,6 +55,7 @@ function setStage(job, stage) {
   pr.stage = stage;
   pr.stages[stage] = { startedAt: now };
   pr.loading = null;
+  if (current?.job === job) current.tel?.phase(stage, { segment: pr.segment });
 }
 
 function parseLine(job, line) {
@@ -74,6 +77,7 @@ function parseLine(job, line) {
     let sit = Number(m[3]);
     if (m[4] === 'it/s') sit = sit > 0 ? 1 / sit : 0;
     Object.assign(pr.stages[pr.stage], { cur: Number(m[1]), total: Number(m[2]), sit });
+    if (current?.job === job) current.tel?.step(pr.segment, pr.stage, Number(m[1]), Number(m[2]), sit);
     return;
   }
   if ((m = line.match(LOAD_BAR))) {
@@ -85,13 +89,25 @@ function parseLine(job, line) {
 
 // ---------- helpers ----------
 
-function runCmd(cmd, args) {
+// Helper commands (ffmpeg); with telemetry on, each one is a phase of its own and is recorded
+function runCmd(cmd, args, phase) {
+  const tel = current?.tel;
+  if (tel && phase) tel.phase(phase, { segment: current.job.progress?.segment });
+  const startedAt = Date.now();
   return new Promise((resolve) => {
     const p = spawn(cmd, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    if (tel) tel.pid = p.pid;
     let err = '';
     p.stderr.on('data', (d) => (err += d));
-    p.on('error', (e) => resolve({ code: -1, err: e.message }));
-    p.on('close', (code) => resolve({ code, err }));
+    const done = (r) => {
+      if (tel) {
+        tel.pid = null;
+        tel.command({ program: cmd, phase: phase || null, args, exitCode: r.code, startedAt, endedAt: Date.now(), error: r.code ? r.err.trim().slice(-500) : null });
+      }
+      resolve(r);
+    };
+    p.on('error', (e) => done({ code: -1, err: e.message }));
+    p.on('close', (code) => done({ code, err }));
   });
 }
 
@@ -119,7 +135,7 @@ const baseName = (job) => `${stamp(job.createdAt)}_${slug(job.params.prompt)}_${
 async function makeThumb(job, src) {
   const thumb = path.join(dirs.thumbs, job.id + '.jpg');
   const t = await runCmd('ffmpeg', ['-loglevel', 'error', '-y', '-i', src,
-    '-vf', 'thumbnail,scale=480:-2', '-frames:v', '1', '-q:v', '4', thumb]);
+    '-vf', 'thumbnail,scale=480:-2', '-frames:v', '1', '-q:v', '4', thumb], 'ffmpeg.thumbnail');
   if (t.code === 0) job.thumb = job.id + '.jpg';
 }
 
@@ -141,7 +157,7 @@ async function finalizeVideo(job, segments) {
       : '[0:v]null[c]';
     const graph = `${chain};[c]${withInterp && interp ? interp : 'null'}[out]`;
     return runCmd('ffmpeg', ['-loglevel', 'error', '-y', ...inputs, '-filter_complex', graph, '-map', '[out]',
-      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', '-movflags', '+faststart', mp4]);
+      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', '-movflags', '+faststart', mp4], withInterp && interp ? 'ffmpeg.encode+interpolate' : 'ffmpeg.encode');
   };
   let conv = await encode(true);
   if (conv.code !== 0 && interp) {
@@ -228,6 +244,9 @@ function runSd(job, args, log) {
     log.write('$ ' + [config.sdCli, ...args].map((a) => (/[\s"']/.test(a) ? JSON.stringify(a) : a)).join(' ') + '\n');
     const proc = spawn(config.sdCli, args, { env: process.env });
     current.proc = proc;
+    const tel = current.tel;
+    const startedAt = Date.now();
+    if (tel) tel.pid = proc.pid;
     let buf = '';
     const onData = (chunk) => {
       const s = chunk.toString();
@@ -246,6 +265,11 @@ function runSd(job, args, log) {
     proc.on('error', (e) => (spawnError = e));
     proc.on('close', (code, signal) => {
       if (buf) parseLine(job, buf.replace(ANSI, ''));
+      if (tel) {
+        tel.pid = null;
+        tel.command({ program: 'sd-cli', segment: job.progress?.segment, args, exitCode: code, signal, startedAt, endedAt: Date.now(),
+          error: code ? spawnError?.message || job.lastErrors?.at(-1) || null : null });
+      }
       resolve({ code, signal, spawnError });
     });
   });
@@ -262,7 +286,7 @@ async function run(job) {
   const outputs = [];
   job.startedAt = Date.now();
   job.progress = newProgress(1, segments);
-  current = { job, proc: null };
+  current = { job, proc: null, tel: null };
   const previewTimer = setInterval(() => watchPreview(job), 2000);
   const log = fs.createWriteStream(path.join(dirs.logs, job.id + '.log'));
   // A full or read-only disk must fail the job, not crash the worker with an unhandled error
@@ -277,6 +301,11 @@ async function run(job) {
   };
 
   try {
+    // Telemetry never breaks a job: a failure to start it is only logged
+    current.tel = await startTelemetry(job).catch((e) => {
+      console.error(`[telemetry] not started: ${e.message}`);
+      return null;
+    });
     if (!preset) throw new Error('Queued by an older version of the platform, submit it again');
     job.status = 'running';
     save(true);
@@ -286,12 +315,13 @@ async function run(job) {
         // Continuation: the last frame of the previous segment becomes the init image of the next one
         init = `${tmpBase}_s${i - 1}_last.png`;
         const r = await runCmd('ffmpeg', ['-loglevel', 'error', '-y', '-sseof', '-0.5', '-i', outputs[i - 1],
-          '-update', '1', '-q:v', '1', init]);
+          '-update', '1', '-q:v', '1', init], 'ffmpeg.last_frame');
         if (job.status !== 'running') break;
         if (r.code !== 0 || !fs.existsSync(init)) throw new Error('Could not extract the last frame of the segment: ' + r.err.trim());
         const prev = job.progress;
         job.progress = newProgress(i + 1, segments,
           [...prev.doneSegments, { startedAt: prev.stages.prepare.startedAt, endedAt: Date.now() }]);
+        current.tel?.phase('prepare', { segment: i + 1 });
       }
       const outBase = `${tmpBase}_s${i}`;
       const args = buildArgs(job, preset, outBase, init);
@@ -334,6 +364,7 @@ async function run(job) {
     clearInterval(previewTimer);
     delete job.previewAt;
     delete job.previewExt;
+    await current.tel?.finish().catch((e) => console.error(`[telemetry] ${e.message}`));
     current = null;
     try {
       save(true);

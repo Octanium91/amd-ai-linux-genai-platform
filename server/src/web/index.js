@@ -15,6 +15,7 @@ import {
 import { jobParams, jobSpec } from './params.js';
 import { loadPresets, loadTemplates, presetsWithAvailability } from './presets.js';
 import { readJson } from '../common/store.js';
+import { settingsRoutes } from './settings.js';
 import { callWorker, workerState } from './worker.js';
 
 const { dirs } = config;
@@ -262,6 +263,8 @@ api.delete('/models/:id', requireAdmin, async (req, res) => {
   deleteModel(entry);
   res.json({ ok: true });
 });
+
+settingsRoutes(api, requireAdmin);
 
 app.use('/api', api);
 

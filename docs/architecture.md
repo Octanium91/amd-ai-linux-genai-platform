@@ -67,6 +67,8 @@ The first run after the single-container version waits until that container has 
 | `/data/state/{logs,thumbs,previews}` | | sd-cli logs, thumbnails, previews | worker |
 | `/data/state/worker.token` | | web ↔ worker API token, mode 600 | the first container to start |
 | `/data/state/cache` | | Mesa shader cache (`XDG_CACHE_HOME`) | worker |
+| `/data/telemetry` | `DATA_PATH/telemetry` | optional generation telemetry, one JSON document per job ([telemetry.md](telemetry.md)) | worker |
+| `/data/state/settings.json` | | settings changed in the UI (telemetry on/off, size limit) | web |
 
 The images can be rebuilt and updated at will: none of this is stored in them. Both containers run as the host user (`PUID`/`PGID`), so the files belong to that user and the directories can be copied to another disk or server, see [moving.md](moving.md).
 
@@ -107,6 +109,8 @@ Every route except sign-in requires a session. Mutating requests require the `X-
 | GET | `/api/models` | user | catalog, statuses, download progress, disk space |
 | POST | `/api/models/download` `{ids}` · `/api/models/:id/cancel` | admin | download / cancel |
 | DELETE | `/api/models/:id` | admin | delete (refused while the model is in use) |
+| GET/PUT | `/api/settings` | admin | platform settings (telemetry on/off and size limit) |
+| GET/DELETE | `/api/telemetry` · `/api/telemetry/export` · `/api/telemetry/:name` | admin | list, download all as one JSON array, download one, delete all |
 | GET | `/files/{output,thumbs,previews,uploads}/…` | user | files (with Range support for video) |
 
 ## System check

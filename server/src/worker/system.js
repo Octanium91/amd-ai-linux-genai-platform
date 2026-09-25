@@ -190,6 +190,9 @@ async function sample() {
   setTimeout(loop, 2000).unref();
 })();
 
+// The amdgpu sysfs directory of the GPU (null without one), for the telemetry collector
+export const gpuDevDir = () => gpuDir;
+
 export function systemInfo() {
   return { ...info, threads, ...snapshot };
 }

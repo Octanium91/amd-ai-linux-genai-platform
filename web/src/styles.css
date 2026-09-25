@@ -380,3 +380,11 @@ input[type="range"].extra { accent-color: var(--bad); }
 .nav-tab-icon { display: inline-flex; align-items: center; gap: 7px; }
 .nav-count { font-size: 11.5px; font-weight: 600; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; line-height: 18px; }
 .nav-tab.on .nav-count { color: var(--text); }
+
+/* Settings */
+.check { display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 550; }
+.check input { width: 18px; height: 18px; accent-color: var(--accent); padding: 0; }
+.field-narrow { max-width: 220px; }
+.usage-row { display: flex; align-items: center; gap: 12px; margin: 4px 0 8px; }
+.meter-wide { width: 240px; }
+.btn.disabled { pointer-events: none; opacity: 0.5; }

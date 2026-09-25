@@ -30,6 +30,7 @@ export const config = {
     previews: path.join(DATA, 'state', 'previews'),
     thumbs: path.join(DATA, 'state', 'thumbs'),
     cache: path.join(DATA, 'state', 'cache'),
+    telemetry: path.join(DATA, 'telemetry'),
   },
 };
 

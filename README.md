@@ -12,6 +12,7 @@ The UI is available in English (default), Ukrainian and Russian.
 - **Gallery:** everything generated, videos and images together, with filters by kind, status and author and a search by prompt. A failed or cancelled job can be **restarted** as it was (same parameters and seed); "repeat" fills the form with a job's settings.
 - **Time estimates:** before the first run of a mode the form scales a real reference measurement to this GPU (compute units × clock); afterwards it uses this machine's own history.
 - **Updates without interruptions:** the UI/API (`web`) and the GPU engine (`worker`) are separate containers; `./scripts/update.sh` restarts the web part at once and the engine only after the current job.
+- **Generation telemetry (optional):** a JSON document per job with the system snapshot (OS, kernel, runtime, CPU, GPU, drivers, clocks), all job parameters and per-phase hardware metrics (utilization, memory, swap, clocks, power, temperatures), with a size limit. Stays on the server. See [docs/telemetry.md](docs/telemetry.md).
 - **Models:** a catalog with sources, sizes and licenses. One-click downloads with resume, conversion into the stable-diffusion.cpp format, deletion. A mode without its models offers to download them.
 - **First-run setup:** while nothing is usable yet, the administrator gets a checklist of model packs with sizes and explanations; the required base is locked, recommendations depend on the hardware.
 - **System check:** the platform checks itself — the link to the engine, GPU via Vulkan, render node access, CPU family and GPU architecture, kernel, GTT size, the unified Vulkan heap, memory for heavy modes, swap, disk, engine, NPU — and shows concrete advice with copyable commands. Critical problems show a banner for administrators and are logged at startup.
@@ -70,6 +71,7 @@ GTT (the memory the GPU can use) is the key parameter for video. If `setup.sh` w
 | [docs/models.md](docs/models.md) | Model and mode catalog, licenses, templates, adding your own |
 | [docs/benchmarks.md](docs/benchmarks.md) | Speed measurements and what affects them |
 | [docs/architecture.md](docs/architecture.md) | How the platform works, data layout, API, security, i18n |
+| [docs/telemetry.md](docs/telemetry.md) | Generation telemetry: what is collected, format, units |
 | [docs/moving.md](docs/moving.md) | Moving to another disk or server, backup and restore |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | Common problems and fixes |
 
