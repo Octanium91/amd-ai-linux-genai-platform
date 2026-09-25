@@ -113,7 +113,7 @@ try {
   doc = JSON.parse(fs.readFileSync(`${DATA}/telemetry/${docFile}`, 'utf8'));
 } catch {}
 const phaseNames = doc?.phases?.map((p) => `${p.name}#${p.segment}`) || [];
-check('telemetry document is written for the job', doc?.schema === 'genai-platform.telemetry/1' && doc.complete === true && doc.job.status === 'done', docFile || 'none');
+check('telemetry document is written for the job', doc?.schema === 'genai-platform.telemetry/2' && doc.complete === true && doc.job.status === 'done', docFile || 'none');
 check('telemetry has phases per stage and command', ['sampling#1', 'sampling#2', 'ffmpeg.last_frame#1', 'ffmpeg.encode#2'].every((n) => phaseNames.includes(n)), phaseNames.join(' '));
 check('telemetry has metrics, series, steps and commands',
   Object.keys(doc?.phases?.find((p) => p.name === 'sampling')?.metrics || {}).length > 0 && doc.series.points.length > 0
@@ -124,6 +124,24 @@ check('telemetry resource describes the host and runtime',
   `${doc?.resource?.['os.description']} · ${doc?.resource?.['host.cpu']?.['model.name']} · ${doc?.resource?.['deployment.mode']}`);
 check('telemetry size limit removes the oldest documents', !telFiles.includes('19990101-000000_old.json'), telFiles.join(' '));
 console.log(`  telemetry document: ${fs.statSync(`${DATA}/telemetry/${docFile}`).size} bytes, sample metrics: ${Object.keys(doc?.phases?.find((p) => p.name === 'sampling')?.metrics || {}).join(', ')}`);
+const sm = doc?.summary || {};
+check('telemetry summary', sm.steps === 12 && sm.secondsPerStep > 0 && sm.samplingSec > 0 && sm.durationSec > 0 && 'stepSlowdown' in sm && 'energyWh' in sm,
+  `steps ${sm.steps}, s/step ${sm.secondsPerStep}, sampling ${sm.samplingSec}s, first step ${sm.firstStepSec}s, energy ${sm.energyWh} Wh, slowdown ${sm.stepSlowdown}`);
+check('the worker event loop delay is not the histogram floor', (doc?.phases || []).every((p) => !p.metrics['process.worker.event_loop.delay.max'] || p.metrics['process.worker.event_loop.delay.max'].avg < 0.02));
+
+// 8. A batch of two images: one sampling phase per image, one decoding, steps know the image
+const imgSpec = { ...spec, kind: 'image' };
+let ib = (await api('/v1/jobs', 'POST', { user: 'test', spec: imgSpec, params: { kind: 'image', presetId: 't', prompt: 'batch', negative: '', width: 64, height: 64, steps: 6, cfg: 1, sampler: 'euler', seed: 3, count: 2 } })).body;
+ib = await waitFor(ib.id, (j) => ['done', 'failed'].includes(j.status));
+const idoc = JSON.parse(fs.readFileSync(`${DATA}/telemetry/${fs.readdirSync(`${DATA}/telemetry`).find((f) => f.includes(ib.id))}`, 'utf8'));
+const iph = idoc.phases.map((p) => `${p.name}${p.image ? '#' + p.image : ''}`);
+const images = new Set(idoc.steps.rows.map((r) => r[1]));
+check('image batch: a sampling phase per image, one decoding, no empty phases',
+  ib.status === 'done' && ib.files?.length === 2 && iph.filter((n) => n.startsWith('sampling')).join() === 'sampling#1,sampling#2'
+  && iph.filter((n) => n.startsWith('decoding')).length === 1 && idoc.phases.every((p) => p.durationSec > 0 || Object.keys(p.metrics).length),
+  `${ib.status} files ${ib.files?.length}; ${iph.join(' ')}`);
+check('image batch: steps carry the image index', images.has(1) && images.has(2) && idoc.steps.rows.length === 12 && idoc.summary.secondsPerImage > 0,
+  `images ${[...images]}, rows ${idoc.steps.rows.length}, s/image ${idoc.summary.secondsPerImage}`);
 
 worker.kill();
 console.log(failed ? `${failed} FAILED` : 'ALL PASSED');

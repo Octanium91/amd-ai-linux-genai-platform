@@ -388,3 +388,4 @@ input[type="range"].extra { accent-color: var(--bad); }
 .usage-row { display: flex; align-items: center; gap: 12px; margin: 4px 0 8px; }
 .meter-wide { width: 240px; }
 .btn.disabled { pointer-events: none; opacity: 0.5; }
+.check-sm { font-weight: 450; font-size: 13.5px; margin-bottom: 6px; }

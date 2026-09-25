@@ -23,12 +23,13 @@ import { gpuDevDir, systemInfo } from './system.js';
 
 const fsp = fs.promises;
 const { dirs } = config;
-const SCHEMA = 'genai-platform.telemetry/1';
+const SCHEMA = 'genai-platform.telemetry/2';
 const SAMPLE_MS = 5000;
 const MAX_POINTS = 720;
 const MAX_STEPS = 20000;
 const MAX_COMMANDS = 200;
 const CHECKPOINT_MS = 5 * 60 * 1000;
+const LOOP_RESOLUTION_MS = 20;
 
 // The worker's own version: a hash of its sources (server/src/worker and common). A git revision
 // baked into the image would change the image on every commit and restart the worker needlessly.
@@ -386,6 +387,59 @@ class Series {
   }
 }
 
+// ---------- the summary: the numbers one wants first, computed from phases and steps ----------
+
+function summarize(job, phases, steps, startedAt) {
+  const sum = (name) => phases.filter((p) => p.name === name).reduce((s, p) => s + (p.durationSec || 0), 0);
+  const peak = (k) => phases.reduce((m, p) => (p.metrics[k] ? Math.max(m ?? -Infinity, p.metrics[k].max) : m), null);
+  // Energy: the average package power of every phase times its length
+  const energyJ = phases.reduce((s, p) => s + (p.metrics['hw.power.package']?.avg || 0) * (p.durationSec || 0), 0);
+  const sampling = steps.filter((r) => r[2] === 'sampling');
+  const avg = (rows) => (rows.length ? rows.reduce((s, r) => s + r[5], 0) / rows.length : null);
+  const tenth = Math.max(1, Math.floor(sampling.length / 10));
+  const firstSteps = avg(sampling.slice(0, tenth));
+  const lastSteps = avg(sampling.slice(-tenth));
+  // Clock trend over the sampling phases: first vs last phase with a GPU clock
+  const clocks = phases.filter((p) => p.name === 'sampling' && p.metrics['hw.gpu.frequency.sclk']);
+  const sclkFirst = clocks[0]?.metrics['hw.gpu.frequency.sclk'].max ?? null;
+  const sclkLast = clocks.at(-1)?.metrics['hw.gpu.frequency.sclk'].avg ?? null;
+  const durationSec = job.finishedAt && job.startedAt ? (job.finishedAt - job.startedAt) / 1000 : (Date.now() - startedAt) / 1000;
+  const images = job.params?.kind === 'image' ? job.params.count || 1 : null;
+  const round = (v, n = 3) => (v == null || !Number.isFinite(v) ? null : Math.round(v * 10 ** n) / 10 ** n);
+  return {
+    durationSec: round(durationSec, 1),
+    // Model loading and preparation until the first sampling step
+    firstStepSec: sampling.length ? round(Math.max(0, (sampling[0][6] - sampling[0][5] * 1000) / 1000), 1) : null,
+    samplingSec: round(sum('sampling'), 1),
+    decodingSec: round(sum('decoding'), 1),
+    ffmpegSec: round(phases.filter((p) => p.name.startsWith('ffmpeg')).reduce((s, p) => s + (p.durationSec || 0), 0), 1),
+    steps: sampling.length,
+    secondsPerStep: round(avg(sampling)),
+    secondsPerStepFirst: round(firstSteps),
+    secondsPerStepLast: round(lastSteps),
+    // Positive: the last tenth of the steps was slower than the first one (heat, throttling)
+    stepSlowdown: firstSteps && lastSteps ? round(lastSteps / firstSteps - 1) : null,
+    'hw.gpu.frequency.sclk.first': sclkFirst,
+    'hw.gpu.frequency.sclk.last': round(sclkLast, 0),
+    // Positive: the GPU clock dropped during sampling
+    gpuClockDrop: sclkFirst && sclkLast ? round(1 - sclkLast / sclkFirst) : null,
+    energyWh: energyJ ? round(energyJ / 3600) : null,
+    secondsPerImage: images ? round(durationSec / images, 1) : null,
+    secondsPerVideoSecond: job.params?.kind === 'video' && job.params.duration ? round(durationSec / job.params.duration, 1) : null,
+    'energyWh.perImage': images && energyJ ? round(energyJ / 3600 / images) : null,
+    'peak.hw.temperature.gpu': peak('hw.temperature.gpu'),
+    'peak.hw.temperature.cpu': peak('hw.temperature.cpu'),
+    'peak.hw.temperature.memory': peak('hw.temperature.memory'),
+    'peak.hw.temperature.storage': peak('hw.temperature.storage'),
+    'peak.hw.power.package': peak('hw.power.package'),
+    'peak.hw.gpu.memory.gtt.usage': peak('hw.gpu.memory.gtt.usage'),
+    'peak.system.memory.usage': peak('system.memory.usage'),
+    'peak.system.paging.usage': peak('system.paging.usage'),
+    'peak.process.engine.memory.usage': peak('process.engine.memory.usage'),
+    'peak.system.pressure.memory.some': peak('system.pressure.memory.some'),
+  };
+}
+
 // ---------- a job's telemetry session ----------
 
 const fileSafe = (s) => String(s).replace(/[^\w.-]/g, '');
@@ -416,7 +470,7 @@ class Session {
     }
     // A baseline for the counters that are rates (CPU time, paging), so the first sample has them
     await sampleMetrics(this.state, null).catch(() => {});
-    this.loop = monitorEventLoopDelay({ resolution: 50 });
+    this.loop = monitorEventLoopDelay({ resolution: LOOP_RESOLUTION_MS });
     this.loop.enable();
     this.timer = setInterval(() => this.sample(), SAMPLE_MS);
     this.timer.unref();
@@ -432,7 +486,8 @@ class Session {
       const at = Date.now();
       const m = await sampleMetrics(this.state, this.pid);
       if (this.loop) {
-        m['process.worker.event_loop.delay.max'] = this.loop.max / 1e9;
+        // The histogram's floor is its resolution: only the part above it is a real delay
+        m['process.worker.event_loop.delay.max'] = Math.max(0, this.loop.max / 1e9 - LOOP_RESOLUTION_MS / 1000);
         this.loop.reset();
       }
       this.current?.stats.add(m);
@@ -447,18 +502,20 @@ class Session {
     const now = Date.now();
     if (this.current) {
       this.current.endedAt = now;
-      this.phases.push(this.current);
+      // A phase that lasted a moment and got no sample carries no information
+      const empty = now - this.current.startedAt < 50 && !Object.keys(this.current.stats.s).length;
+      if (!empty) this.phases.push(this.current);
     }
     this.current = { name, ...extra, startedAt: now, stats: new Stats() };
     // Every phase gets at least one sample, however short it is
     if (this.timer) setTimeout(() => this.sample(), 300).unref();
   }
 
-  step(segment, stage, step, total, secondsPerStep) {
+  step(segment, image, stage, step, total, secondsPerStep) {
     if (this.steps.length >= MAX_STEPS) return;
     const last = this.steps.at(-1);
-    if (last && last[0] === segment && last[1] === stage && last[2] === step) return;
-    this.steps.push([segment, stage, step, total, Math.round(secondsPerStep * 1000) / 1000, Date.now() - this.startedAt]);
+    if (last && last[0] === segment && last[1] === image && last[2] === stage && last[3] === step) return;
+    this.steps.push([segment, image, stage, step, total, Math.round(secondsPerStep * 1000) / 1000, Date.now() - this.startedAt]);
   }
 
   command(entry) {
@@ -477,6 +534,7 @@ class Session {
       schema: SCHEMA,
       complete,
       writtenAt: Date.now(),
+      summary: summarize(this.job, phases, this.steps, this.startedAt),
       resource: this.resource || null,
       job: {
         ...job,
@@ -486,7 +544,7 @@ class Session {
       },
       phases,
       series: this.series.out(),
-      steps: { fields: ['segment', 'stage', 'step', 'total', 'secondsPerStep', 't'], rows: this.steps },
+      steps: { fields: ['segment', 'image', 'stage', 'step', 'total', 'secondsPerStep', 't'], rows: this.steps },
       commands: this.commands,
       events: this.events,
     };

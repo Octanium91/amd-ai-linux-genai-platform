@@ -19,7 +19,8 @@ const loopDelay = monitorEventLoopDelay({ resolution: 50 });
 loopDelay.enable();
 let worstLagMs = 0;
 setInterval(() => {
-  const lag = Math.round(loopDelay.max / 1e6);
+  // The histogram's floor is its resolution (50 ms): only the part above it is a real delay
+  const lag = Math.max(0, Math.round(loopDelay.max / 1e6) - 50);
   loopDelay.reset();
   worstLagMs = lag;
   if (lag > 1000) console.warn(`[worker] event loop stalled for ${lag} ms${runningJob() ? ' during a job' : ''}`);

@@ -55,7 +55,7 @@ function setStage(job, stage) {
   pr.stage = stage;
   pr.stages[stage] = { startedAt: now };
   pr.loading = null;
-  if (current?.job === job) current.tel?.phase(stage, { segment: pr.segment });
+  if (current?.job === job) current.tel?.phase(stage, { segment: pr.segment, ...(pr.image ? { image: pr.image } : {}) });
 }
 
 function parseLine(job, line) {
@@ -70,14 +70,26 @@ function parseLine(job, line) {
     return;
   }
   // Wan goes through video.cpp, SD 1.5 / AnimateDiff through image.cpp
-  if (/generate_video \d+x\d+x\d+|generating image: \d+\/\d+/.test(line)) return setStage(job, 'sampling');
-  if (/sampling completed|generating \d+ latent images completed/.test(line)) return setStage(job, 'decoding');
+  // A batch of images is sampled one image after another and decoded together at the end
+  if ((m = line.match(/generating image: (\d+)\/(\d+)/))) {
+    const again = pr.stage === 'sampling';
+    pr.image = Number(m[1]);
+    pr.images = Number(m[2]);
+    if (again && current?.job === job) current.tel?.phase('sampling', { segment: pr.segment, image: pr.image });
+    return setStage(job, 'sampling');
+  }
+  if (/generate_video \d+x\d+x\d+/.test(line)) return setStage(job, 'sampling');
+  if (/generating \d+ latent images completed/.test(line)) return setStage(job, 'decoding');
+  if (/sampling completed/.test(line)) {
+    if (pr.images && pr.image < pr.images) return;
+    return setStage(job, 'decoding');
+  }
   if (/decode_first_stage completed/.test(line)) return setStage(job, 'saving');
   if ((m = line.match(STEP_BAR))) {
     let sit = Number(m[3]);
     if (m[4] === 'it/s') sit = sit > 0 ? 1 / sit : 0;
     Object.assign(pr.stages[pr.stage], { cur: Number(m[1]), total: Number(m[2]), sit });
-    if (current?.job === job) current.tel?.step(pr.segment, pr.stage, Number(m[1]), Number(m[2]), sit);
+    if (current?.job === job) current.tel?.step(pr.segment, pr.image || 1, pr.stage, Number(m[1]), Number(m[2]), sit);
     return;
   }
   if ((m = line.match(LOAD_BAR))) {

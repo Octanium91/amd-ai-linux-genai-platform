@@ -12,15 +12,30 @@ File name: `<job created, local time>_<job id>[_r<retry>].json`. Top-level field
 
 | Field | Contents |
 |---|---|
-| `schema` | `genai-platform.telemetry/1` |
+| `schema` | `genai-platform.telemetry/2` (version 2 added `summary` and the image index in `steps`) |
 | `complete` | `false` while the job runs (a checkpoint is written every 5 minutes), `true` at the end; a job interrupted by a restart is closed with `interrupted: true` |
+| `summary` | the key numbers at a glance, see below |
 | `resource` | the system at the job start, see below |
 | `job` | the job as the worker knows it: id, user, status, error/warning, timestamps, `params` (mode, prompt, negative, size, steps, CFG, sampler, seed, frames, fps, segments…), `spec` (model files by role with sizes, flags), stage timestamps, result files with sizes |
-| `phases` | one entry per stage and command: `name` (`prepare`, `sampling`, `decoding`, `saving`, `ffmpeg.last_frame`, `ffmpeg.encode`, `ffmpeg.encode+interpolate`, `ffmpeg.thumbnail`), `segment`, `startedAt`, `endedAt`, `durationSec`, and `metrics`: for every metric `{min, avg, max, n}` over the phase |
+| `phases` | one entry per stage and command: `name` (`prepare`, `sampling`, `decoding`, `saving`, `ffmpeg.last_frame`, `ffmpeg.encode`, `ffmpeg.encode+interpolate`, `ffmpeg.thumbnail`), `segment`, `image` (the image of a batch: images are sampled one after another and decoded together), `startedAt`, `endedAt`, `durationSec`, and `metrics`: for every metric `{min, avg, max, n}` over the phase. A phase shorter than 50 ms without a single sample is left out |
 | `series` | `{startedAt, bucketSec, fields, points}`: bucket averages as rows, `t` in seconds from the start |
-| `steps` | `{fields, rows}`: every sampling step as `[segment, stage, step, total, secondsPerStep, t]` |
+| `steps` | `{fields, rows}`: every sampling step as `[segment, image, stage, step, total, secondsPerStep, t]`, `t` in milliseconds from the start |
 | `commands` | every `sd-cli` and `ffmpeg` run: program, phase, full arguments, exit code, signal, start/end, error tail |
 | `events` | reserved for notable events |
+
+### `summary`
+
+| Key | Meaning |
+|---|---|
+| `durationSec` | the whole job |
+| `firstStepSec` | from the start to the first sampling step: model loading and preparation |
+| `samplingSec`, `decodingSec`, `ffmpegSec` | time in the sampling and decoding phases and in ffmpeg |
+| `steps`, `secondsPerStep` | the number of sampling steps and their average time |
+| `secondsPerStepFirst`, `secondsPerStepLast`, `stepSlowdown` | the average step of the first and the last tenth of the steps, and how much slower the last one is (a sign of heat and throttling) |
+| `hw.gpu.frequency.sclk.first`, `.last`, `gpuClockDrop` | the peak GPU clock of the first sampling phase, the average of the last one, and the relative drop |
+| `energyWh`, `energyWh.perImage` | the package power integrated over the phases |
+| `secondsPerImage`, `secondsPerVideoSecond` | the whole job per image, or per second of the clip |
+| `peak.*` | the highest temperatures, package power, GTT, RAM, swap, engine memory and memory pressure of the job |
 
 ### `resource`
 
@@ -57,7 +72,18 @@ File name: `<job created, local time>_<job id>[_r<retry>].json`. Top-level field
 | `process.engine.memory.usage`, `.swap`, `process.engine.cpu.utilization` | By, 1 | the running `sd-cli`/`ffmpeg` process |
 | `process.worker.memory.usage`, `process.worker.event_loop.delay.max` | By, s | the worker itself |
 
-A metric that the hardware does not report is simply absent.
+A metric that the hardware does not report is simply absent. `process.worker.event_loop.delay.max` is the delay above the 20 ms measuring resolution, so an idle event loop reports 0.
+
+## Anonymized downloads
+
+The **Anonymize downloads** option on the Settings page (on by default) applies to "Download all" and to single documents (`?anonymize=1` in the API). The stored files stay as they are; the downloaded copy gets `anonymized: true` and:
+
+- prompt and negative prompt replaced with `[removed, N characters]`, also in the `sd-cli` arguments;
+- the user name replaced with a pseudonym (`user-1a2b3c4d`) that is the same for all jobs of one download and different between downloads;
+- result, thumbnail and upload names replaced (they contain a part of the prompt), paths in command arguments reduced to `/data/output/[file].png` and the like;
+- disk UUIDs removed from the kernel command line.
+
+Everything else — hardware, drivers, parameters, timings and metrics — is kept, which is what makes the documents useful for comparing machines.
 
 ### Downsampling
 

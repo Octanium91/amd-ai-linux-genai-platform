@@ -209,6 +209,7 @@ export default {
   "Repeat": "Повторить",
   "Repeat the password": "Повторите пароль",
   "Repeat with these settings": "Повторить с этими параметрами",
+  "Anonymize downloads: remove prompts, user names, file names and disk IDs": "Обезличивать скачивания: убирать промпты, имена пользователей, имена файлов и ID дисков",
   "Collect generation telemetry": "Собирать телеметрию генерации",
   "Collected documents": "Собранные документы",
   "Delete all": "Удалить всё",

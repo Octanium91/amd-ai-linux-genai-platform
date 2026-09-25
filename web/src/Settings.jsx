@@ -9,6 +9,8 @@ export default function Settings() {
   const [form, setForm] = useState(null);
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
+  const [anonymize, setAnonymize] = useState(true);
+  const q = anonymize ? '?anonymize=1' : '';
 
   const load = useCallback(async () => {
     try {
@@ -79,10 +81,14 @@ export default function Settings() {
         <div className="gal-head">
           <h3>{t('Collected documents')} · {info.count}</h3>
           <div className="modal-actions">
-            <a className={`btn ${info.count ? '' : 'disabled'}`} href="/api/telemetry/export">{t('Download all (JSON)')}</a>
+            <a className={`btn ${info.count ? '' : 'disabled'}`} href={`/api/telemetry/export${q}`}>{t('Download all (JSON)')}</a>
             <button className="btn ghost danger" disabled={!info.count} onClick={clear}>{t('Delete all')}</button>
           </div>
         </div>
+        <label className="check check-sm">
+          <input type="checkbox" checked={anonymize} onChange={(e) => setAnonymize(e.target.checked)} />
+          <span>{t('Anonymize downloads: remove prompts, user names, file names and disk IDs')}</span>
+        </label>
         <div className="usage-row">
           <div className="meter meter-wide"><div style={{ width: pct + '%' }} className={pct > 90 ? 'hot' : ''} /></div>
           <span className="muted small">{t('{used} of {limit}', { used: fmtBytes(info.bytes), limit: fmtBytes(limit) })}</span>
@@ -100,7 +106,7 @@ export default function Settings() {
                   <td><code>{d.name}</code></td>
                   <td>{fmtBytes(d.size)}</td>
                   <td>{fmtDate(d.modifiedAt)}</td>
-                  <td className="users-actions"><a className="btn" href={`/api/telemetry/${encodeURIComponent(d.name)}`}>{t('Download')}</a></td>
+                  <td className="users-actions"><a className="btn" href={`/api/telemetry/${encodeURIComponent(d.name)}${q}`}>{t('Download')}</a></td>
                 </tr>
               ))}
             </tbody>
