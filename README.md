@@ -6,12 +6,15 @@ The UI is available in English (default), Ukrainian and Russian.
 
 ## Features
 
-- **Video:** text-to-video and image-to-video. AnimateLCM (fast, ~2.5 min per 2 s on a Radeon 890M), AnimateDiff v3 (more detailed), Wan 2.2 5B (coherent motion, for Strix Halo). Output FPS of 24/30/50/60/120 via motion interpolation. **Extra duration** (up to 2× the model limit) is built from two chained segments; **Extra quality** uses twice the steps of High.
+- **Video:** text-to-video and image-to-video. AnimateLCM (the fastest), AnimateDiff v3 (more detailed), Wan 2.2 5B (coherent motion, for Strix Halo). Output FPS of 24/30/50/60/120 via motion interpolation. **Extra duration** (up to 2× the model limit) is built from two chained segments; **Extra quality** uses twice the steps of High.
 - **Images:** photorealistic images with Realistic Vision 6 (SD 1.5), several variants at once, image-to-image.
 - **Queue and progress:** jobs run strictly one at a time (there is one GPU). Stages, steps, speed, time left, a latent preview and a live log are shown.
+- **Gallery:** everything generated, videos and images together, with filters by kind, status and author and a search by prompt. A failed or cancelled job can be **restarted** as it was (same parameters and seed); "repeat" fills the form with a job's settings.
+- **Time estimates:** before the first run of a mode the form scales a real reference measurement to this GPU (compute units × clock); afterwards it uses this machine's own history.
+- **Updates without interruptions:** the UI/API (`web`) and the GPU engine (`worker`) are separate containers; `./scripts/update.sh` restarts the web part at once and the engine only after the current job.
 - **Models:** a catalog with sources, sizes and licenses. One-click downloads with resume, conversion into the stable-diffusion.cpp format, deletion. A mode without its models offers to download them.
 - **First-run setup:** while nothing is usable yet, the administrator gets a checklist of model packs with sizes and explanations; the required base is locked, recommendations depend on the hardware.
-- **System check:** the platform checks itself — GPU via Vulkan, render node access, CPU family and GPU architecture, kernel, GTT size, the unified Vulkan heap, memory for heavy modes, swap, disk, engine, NPU — and shows concrete advice with copyable commands. Critical problems show a banner for administrators and are logged at startup.
+- **System check:** the platform checks itself — the link to the engine, GPU via Vulkan, render node access, CPU family and GPU architecture, kernel, GTT size, the unified Vulkan heap, memory for heavy modes, swap, disk, engine, NPU — and shows concrete advice with copyable commands. Critical problems show a banner for administrators and are logged at startup.
 - **Users:** the first administrator is created on first start, then it is sign-in only (scrypt passwords). The administrator adds users; admin/user roles, everyone owns their jobs.
 - **Start templates:** on open, the form is filled with one of 10 hidden templates (car, animal, person, architecture, nature…) with settings tuned for maximum quality.
 - **Extensible:** modes and models are described in JSON (`catalog/`); your own are added without a rebuild via `data/state/*.local.json`.
