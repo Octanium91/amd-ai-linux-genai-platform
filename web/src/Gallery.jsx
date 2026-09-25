@@ -61,7 +61,7 @@ export function Modal({ job, onClose, onDelete, onReuse, onRetry, canManage }) {
           {job.params.negative && <div className="muted small">{t('Negative:')} {job.params.negative}</div>}
           <ParamChips p={job.params} user={job.user} />
           <div className="muted small">
-            {fmtDate(job.createdAt)}
+            {fmtDate(job.finishedAt || job.createdAt)}
             {job.durationSec ? ` · ${t('generated in {time}', { time: fmtDuration(job.durationSec) })}` : ''}
           </div>
           {job.warning && <div className="warn small">{tError(job.warning)}</div>}
