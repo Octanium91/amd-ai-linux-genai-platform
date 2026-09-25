@@ -67,6 +67,8 @@ export function enqueueDownloads(ids) {
   for (const id of ids) {
     const entry = catalog.find((m) => m.id === id);
     if (!entry) throw new Error(`Model ${id} is not in the catalog`);
+    // A failed download may be started again; a queued or running one is left alone
+    if (downloads.get(id)?.status === 'error') downloads.delete(id);
     if (downloads.has(id) || isInstalled(entry)) continue;
     downloads.set(id, { status: 'queued', received: 0, total: entry.size || 0, rate: 0 });
     queue.push(entry);
@@ -130,7 +132,7 @@ async function download(entry, d) {
   if (!entry.size || start < entry.size) {
     const headers = {};
     if (start) headers.Range = `bytes=${start}-`;
-    if (config.hfToken && new URL(entry.url).hostname.endsWith('huggingface.co')) {
+    if (config.hfToken && /(^|\.)huggingface\.co$/.test(new URL(entry.url).hostname)) {
       headers.Authorization = `Bearer ${config.hfToken}`;
     }
     const res = await fetch(entry.url, { headers, signal: d.abort.signal, redirect: 'follow' });

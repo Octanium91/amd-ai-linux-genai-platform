@@ -29,6 +29,18 @@ function verifyPassword(user, password) {
   return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(user.hash, 'hex'));
 }
 
+// Sign-in hashes asynchronously (scrypt takes tens of ms and would block the event loop for every
+// attempt), and an unknown user costs the same as a wrong password so names cannot be probed
+const scryptAsync = (password, salt) => new Promise((resolve, reject) => {
+  crypto.scrypt(password, salt, 64, { N: 16384, r: 8, p: 1 }, (err, key) => (err ? reject(err) : resolve(key)));
+});
+const DUMMY = { salt: crypto.randomBytes(16).toString('hex'), hash: '00'.repeat(64) };
+async function verifyPasswordAsync(user, password) {
+  const u = user || DUMMY;
+  const key = await scryptAsync(password, u.salt);
+  return !!user && crypto.timingSafeEqual(key, Buffer.from(u.hash, 'hex'));
+}
+
 const tokenKey = (token) => crypto.createHash('sha256').update(token).digest('hex');
 const publicUser = (u) => ({ username: u.username, role: u.role, createdAt: u.createdAt });
 
@@ -47,25 +59,39 @@ export function logStartupHint() {
   if (needsSetup()) console.log('[auth] no users yet — open the web UI and create the administrator');
 }
 
-// --- brute-force protection: 10 failed attempts per 15 minutes per IP ---
+// --- brute-force protection: per IP (10 failures per 15 minutes) and per account (30), so a
+// client that forges X-Forwarded-For still cannot guess one account's password faster ---
 const failures = new Map();
 const WINDOW = 15 * 60 * 1000;
-function tooManyFailures(ip) {
-  const f = failures.get(ip);
+const LIMITS = { ip: 10, user: 30 };
+function tooManyFailures(key, limit) {
+  const f = failures.get(key);
   if (!f || Date.now() - f.first > WINDOW) return false;
-  return f.count >= 10;
+  return f.count >= limit;
 }
 function noteFailure(ip) {
   const f = failures.get(ip);
   if (!f || Date.now() - f.first > WINDOW) failures.set(ip, { first: Date.now(), count: 1 });
   else f.count++;
+  // Bounded memory: drop expired entries, then the oldest ones
+  if (failures.size > 5000) {
+    for (const [k, v] of failures) if (Date.now() - v.first > WINDOW) failures.delete(k);
+    for (const k of failures.keys()) {
+      if (failures.size <= 5000) break;
+      failures.delete(k);
+    }
+  }
 }
 
 function parseCookies(header = '') {
   const out = {};
   for (const part of header.split(';')) {
     const i = part.indexOf('=');
-    if (i > 0) out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
+    if (i <= 0) continue;
+    // Cookies of other services on the same host may be malformed; they must not break sign-in
+    try {
+      out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
+    } catch {}
   }
   return out;
 }
@@ -129,17 +155,22 @@ export function authRoutes(app) {
     res.json(publicUser(user));
   });
 
-  app.post('/api/auth/login', (req, res) => {
-    const ip = req.ip;
+  app.post('/api/auth/login', async (req, res) => {
+    const ip = `ip:${req.ip}`;
     if (req.get(CSRF_HEADER) !== CSRF_VALUE) return res.status(403).json({ error: 'Request rejected (CSRF)' });
-    if (tooManyFailures(ip)) return res.status(429).json({ error: 'Too many attempts, wait 15 minutes' });
     const { username, password } = req.body || {};
+    const account = `user:${String(username || '').slice(0, 64)}`;
+    if (tooManyFailures(ip, LIMITS.ip) || tooManyFailures(account, LIMITS.user)) {
+      return res.status(429).json({ error: 'Too many attempts, wait 15 minutes' });
+    }
     const user = users.find((u) => u.username === username);
-    if (!user || typeof password !== 'string' || !verifyPassword(user, password)) {
+    if (typeof password !== 'string' || password.length > 1024 || !(await verifyPasswordAsync(user, password))) {
       noteFailure(ip);
+      noteFailure(account);
       return res.status(401).json({ error: 'Invalid username or password' });
     }
     failures.delete(ip);
+    failures.delete(account);
     startSession(res, user);
     res.json(publicUser(user));
   });

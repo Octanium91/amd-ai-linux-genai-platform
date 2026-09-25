@@ -25,9 +25,15 @@ export function rewrite(srcFile, dstFile, entries, meta) {
   const out = {};
   if (meta) out.__metadata__ = meta;
   let offset = 0;
+  const srcSize = fs.statSync(srcFile).size;
   for (const e of entries) {
     const t = header[e.src];
     if (!t) throw new Error(`missing tensor ${e.src}`);
+    const [a, b] = t.data_offsets || [];
+    // Offsets come from a downloaded file: out-of-range values would make the copy loop spin forever
+    if (!Number.isSafeInteger(a) || !Number.isSafeInteger(b) || a < 0 || b < a || dataStart + b > srcSize) {
+      throw new Error(`invalid offsets of tensor ${e.src}`);
+    }
     const size = t.data_offsets[1] - t.data_offsets[0];
     out[e.name] = { dtype: t.dtype, shape: t.shape, data_offsets: [offset, offset + size] };
     offset += size;
@@ -48,6 +54,7 @@ export function rewrite(srcFile, dstFile, entries, meta) {
       const [a, b] = header[e.src].data_offsets;
       for (let pos = a; pos < b; ) {
         const n = fs.readSync(src, chunk, 0, Math.min(chunk.length, b - pos), dataStart + pos);
+        if (n <= 0) throw new Error('unexpected end of the source file');
         fs.writeSync(dst, chunk, 0, n);
         pos += n;
       }

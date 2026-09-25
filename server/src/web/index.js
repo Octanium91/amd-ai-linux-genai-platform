@@ -21,7 +21,9 @@ const { dirs } = config;
 logStartupHint();
 
 const app = express();
-if (config.trustProxy) app.set('trust proxy', true);
+// Trust exactly one proxy hop: with `true` the client could set X-Forwarded-For and bypass the
+// sign-in rate limit with a new "IP" on every attempt
+if (config.trustProxy) app.set('trust proxy', 1);
 app.disable('x-powered-by');
 app.use(express.json({ limit: '1mb' }));
 app.use((req, res, next) => {
@@ -37,17 +39,36 @@ authRoutes(app);
 const api = express.Router();
 api.use(requireAuth);
 
+// Uploads are named by the server; the extension comes from the file's content, not from the
+// client, and only PNG, JPEG and WebP are kept (an SVG or HTML "image" would run scripts in the
+// platform's origin when opened)
 const upload = multer({
   storage: multer.diskStorage({
     destination: dirs.uploads,
-    filename: (req, file, cb) => {
-      const ext = (path.extname(file.originalname) || '.png').toLowerCase().replace(/[^.a-z0-9]/g, '');
-      cb(null, `${Date.now()}-${crypto.randomBytes(3).toString('hex')}${ext}`);
-    },
+    filename: (req, file, cb) => cb(null, `${Date.now()}-${crypto.randomBytes(3).toString('hex')}.upload`),
   }),
-  limits: { fileSize: 25 * 1024 * 1024 },
+  limits: { fileSize: 25 * 1024 * 1024, files: 1, fields: 40, fieldSize: 64 * 1024, parts: 42 },
   fileFilter: (req, file, cb) => cb(null, /^image\//.test(file.mimetype)),
 });
+const UPLOAD_NAME = /^\d+-[0-9a-f]{6}\.(png|jpg|webp)$/;
+
+function imageType(file) {
+  const b = Buffer.alloc(12);
+  const fd = fs.openSync(file, 'r');
+  try {
+    fs.readSync(fd, b, 0, 12, 0);
+  } finally {
+    fs.closeSync(fd);
+  }
+  if (b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'png';
+  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'jpg';
+  if (b.toString('latin1', 0, 4) === 'RIFF' && b.toString('latin1', 8, 12) === 'WEBP') return 'webp';
+  return null;
+}
+
+// Limits against oversized requests: prompts, and jobs one user may keep waiting in the queue
+const MAX_PROMPT = 4000;
+const MAX_QUEUED_PER_USER = 20;
 
 // Express 5 passes rejected promises to the error handler; worker errors keep their HTTP status
 const findJob = (id) => callWorker(`/v1/jobs/${encodeURIComponent(id)}`);
@@ -73,7 +94,9 @@ api.get('/state', async (req, res) => {
 api.get('/diagnostics', async (req, res) => {
   const { worker } = await workerState();
   let d = { checks: [], at: Date.now() };
-  if (worker.online) d = await callWorker(`/v1/diagnostics${req.query.refresh === '1' ? '?refresh=1' : ''}`, { timeout: 90000 });
+  // A fresh run starts vulkaninfo, sd-cli and ffmpeg: only administrators may force it
+  const refresh = req.query.refresh === '1' && req.user.role === 'admin';
+  if (worker.online) d = await callWorker(`/v1/diagnostics${refresh ? '?refresh=1' : ''}`, { timeout: 90000 });
   const checks = [workerCheck(worker), ...d.checks];
   const status = checks.some((c) => c.status === 'fail') ? 'fail' : checks.some((c) => c.status === 'warn') ? 'warn' : 'ok';
   res.json({ ...d, checks, status });
@@ -92,12 +115,30 @@ api.post('/jobs', upload.single('image'), async (req, res) => {
   if (!preset) return reject('Unknown mode');
   if (!preset.available) return reject('Models not downloaded: ' + preset.missing.map((m) => m.name).join(', '));
   if (!String(b.prompt || '').trim()) return reject('Enter a prompt');
+  if (String(b.prompt).length > MAX_PROMPT || String(b.negative ?? '').length > MAX_PROMPT) {
+    return reject('The prompt is too long (at most 4000 characters)');
+  }
 
   let image = null;
-  if (req.file) image = req.file.filename;
-  else if (b.imageRef && fs.existsSync(path.join(dirs.uploads, path.basename(b.imageRef)))) image = path.basename(b.imageRef);
-  if (preset.image === 'none') image = null;
+  if (req.file) {
+    const type = imageType(req.file.path);
+    if (!type) return reject('Only PNG, JPEG and WebP images are accepted');
+    image = req.file.filename.replace(/\.upload$/, `.${type}`);
+    fs.renameSync(req.file.path, path.join(dirs.uploads, image));
+    req.file.path = path.join(dirs.uploads, image);
+  } else if (UPLOAD_NAME.test(String(b.imageRef || ''))) {
+    const ref = path.join(dirs.uploads, b.imageRef);
+    if (fs.statSync(ref, { throwIfNoEntry: false })?.isFile()) image = b.imageRef;
+  }
+  if (preset.image === 'none' && image) {
+    if (req.file) fs.rmSync(req.file.path, { force: true });
+    image = null;
+  }
   if (preset.image === 'required' && !image) return reject('This mode requires an image');
+  const { jobs } = await workerState();
+  if (jobs.filter((j) => j.status === 'queued' && j.user === req.user.username).length >= MAX_QUEUED_PER_USER) {
+    return reject('Too many jobs in the queue (at most 20 per user)');
+  }
 
   try {
     res.json(await callWorker('/v1/jobs', {
@@ -227,6 +268,11 @@ app.use('/api', api);
 // Result files are for signed-in users only as well
 const files = express.Router();
 files.use(requireAuth);
+// Files are data, never documents: even if one were opened directly, it could not run scripts
+files.use((req, res, next) => {
+  res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'; sandbox");
+  next();
+});
 files.use('/output', express.static(dirs.output, { index: false, dotfiles: 'ignore' }));
 files.use('/thumbs', express.static(dirs.thumbs, { maxAge: '7d' }));
 files.use('/uploads', express.static(dirs.uploads, { maxAge: '7d' }));
