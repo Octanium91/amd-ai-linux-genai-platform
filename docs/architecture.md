@@ -49,7 +49,7 @@ The split follows how often things change: the UI and API change often, the engi
 `scripts/update.sh`:
 1. builds both images;
 2. restarts `web` immediately;
-3. compares the running worker's image and compose config hash with the new ones; if nothing changed, the worker is left alone;
+3. asks compose (`up --dry-run`) whether the worker would be recreated, i.e. its image or settings changed; if not, the worker is left alone;
 4. otherwise it drains the worker, waits for the current job and restarts the worker. The new worker takes the queue from `jobs.json`.
 
 The first run after the single-container version waits until that container has no running or queued job, then replaces it with the two containers.
