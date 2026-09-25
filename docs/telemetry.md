@@ -31,8 +31,8 @@ File name: `<job created, local time>_<job id>[_r<retry>].json`. Top-level field
 | `firstStepSec` | from the start to the first sampling step: model loading and preparation |
 | `samplingSec`, `decodingSec`, `ffmpegSec` | time in the sampling and decoding phases and in ffmpeg |
 | `steps`, `secondsPerStep` | the number of sampling steps and their average time |
-| `secondsPerStepFirst`, `secondsPerStepLast`, `stepSlowdown` | the average step of the first and the last tenth of the steps, and how much slower the last one is (a sign of heat and throttling) |
-| `hw.gpu.frequency.sclk.first`, `.last`, `gpuClockDrop` | the peak GPU clock of the first sampling phase, the average of the last one, and the relative drop |
+| `secondsPerStepFirst`, `secondsPerStepLast`, `stepSlowdown` | the average step of the first and the last tenth of the steps, and how much slower the last one is (a sign of heat and throttling); the first step of every image and segment is warm-up and is left out |
+| `hw.gpu.frequency.sclk.first`, `.last`, `gpuClockDrop` | the average GPU clock under full load (time series points with the GPU at least 90 % busy, the ramp-up point left out) in the first and the last quarter, and the relative drop |
 | `energyWh`, `energyWh.perImage` | the package power integrated over the phases |
 | `secondsPerImage`, `secondsPerVideoSecond` | the whole job per image, or per second of the clip |
 | `peak.*` | the highest temperatures, package power, GTT, RAM, swap, engine memory and memory pressure of the job |

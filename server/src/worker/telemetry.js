@@ -389,20 +389,28 @@ class Series {
 
 // ---------- the summary: the numbers one wants first, computed from phases and steps ----------
 
-function summarize(job, phases, steps, startedAt) {
+export function summarize(job, phases, steps, startedAt, series) {
   const sum = (name) => phases.filter((p) => p.name === name).reduce((s, p) => s + (p.durationSec || 0), 0);
   const peak = (k) => phases.reduce((m, p) => (p.metrics[k] ? Math.max(m ?? -Infinity, p.metrics[k].max) : m), null);
   // Energy: the average package power of every phase times its length
   const energyJ = phases.reduce((s, p) => s + (p.metrics['hw.power.package']?.avg || 0) * (p.durationSec || 0), 0);
   const sampling = steps.filter((r) => r[2] === 'sampling');
   const avg = (rows) => (rows.length ? rows.reduce((s, r) => s + r[5], 0) / rows.length : null);
-  const tenth = Math.max(1, Math.floor(sampling.length / 10));
-  const firstSteps = avg(sampling.slice(0, tenth));
-  const lastSteps = avg(sampling.slice(-tenth));
-  // Clock trend over the sampling phases: first vs last phase with a GPU clock
-  const clocks = phases.filter((p) => p.name === 'sampling' && p.metrics['hw.gpu.frequency.sclk']);
-  const sclkFirst = clocks[0]?.metrics['hw.gpu.frequency.sclk'].max ?? null;
-  const sclkLast = clocks.at(-1)?.metrics['hw.gpu.frequency.sclk'].avg ?? null;
+  // The first step of every image and segment includes warm-up: it is left out of the trend
+  const steady = sampling.filter((r) => r[3] > 1);
+  const tenth = Math.max(1, Math.floor(steady.length / 10));
+  const firstSteps = avg(steady.slice(0, tenth));
+  const lastSteps = avg(steady.slice(-tenth));
+  // Clock trend under full load: the time series points with the GPU busy (the first one, where the
+  // clock ramps up, is left out), first quarter against last quarter
+  const col = (k) => series.fields.indexOf(k);
+  const iu = col('hw.gpu.utilization');
+  const ic = col('hw.gpu.frequency.sclk');
+  const loaded = iu > 0 && ic > 0 ? series.points.filter((pt) => pt[iu] >= 0.9 && pt[ic]).map((pt) => pt[ic]).slice(1) : [];
+  const quarter = Math.max(1, Math.floor(loaded.length / 4));
+  const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
+  const sclkFirst = loaded.length >= 2 ? mean(loaded.slice(0, quarter)) : null;
+  const sclkLast = loaded.length >= 2 ? mean(loaded.slice(-quarter)) : null;
   const durationSec = job.finishedAt && job.startedAt ? (job.finishedAt - job.startedAt) / 1000 : (Date.now() - startedAt) / 1000;
   const images = job.params?.kind === 'image' ? job.params.count || 1 : null;
   const round = (v, n = 3) => (v == null || !Number.isFinite(v) ? null : Math.round(v * 10 ** n) / 10 ** n);
@@ -417,11 +425,11 @@ function summarize(job, phases, steps, startedAt) {
     secondsPerStep: round(avg(sampling)),
     secondsPerStepFirst: round(firstSteps),
     secondsPerStepLast: round(lastSteps),
-    // Positive: the last tenth of the steps was slower than the first one (heat, throttling)
+    // Positive: the last tenth of the steps (without warm-up steps) was slower than the first one
     stepSlowdown: firstSteps && lastSteps ? round(lastSteps / firstSteps - 1) : null,
-    'hw.gpu.frequency.sclk.first': sclkFirst,
+    'hw.gpu.frequency.sclk.first': round(sclkFirst, 0),
     'hw.gpu.frequency.sclk.last': round(sclkLast, 0),
-    // Positive: the GPU clock dropped during sampling
+    // Positive: the GPU clock under full load dropped from the first to the last quarter
     gpuClockDrop: sclkFirst && sclkLast ? round(1 - sclkLast / sclkFirst) : null,
     energyWh: energyJ ? round(energyJ / 3600) : null,
     secondsPerImage: images ? round(durationSec / images, 1) : null,
@@ -534,7 +542,7 @@ class Session {
       schema: SCHEMA,
       complete,
       writtenAt: Date.now(),
-      summary: summarize(this.job, phases, this.steps, this.startedAt),
+      summary: summarize(this.job, phases, this.steps, this.startedAt, this.series.out()),
       resource: this.resource || null,
       job: {
         ...job,
