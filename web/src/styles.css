@@ -364,3 +364,12 @@ input[type="range"].extra { accent-color: var(--bad); }
 .cmd { display: flex; align-items: center; gap: 6px; }
 .cmd code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; padding: 5px 8px; }
 .cmd .btn-icon { width: 28px; height: 28px; font-size: 13px; }
+
+/* Gallery page: everything generated, videos and images together */
+.gallery-page { display: block; }
+.gal-filters { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.gal-search { width: 280px; max-width: 100%; }
+.grid-all { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.grid-all .thumb { aspect-ratio: 4 / 3; }
+.gal-more { display: flex; justify-content: center; margin-top: 14px; }
+@media (max-width: 640px) { .gal-search { width: 100%; } }

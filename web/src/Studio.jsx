@@ -1,35 +1,17 @@
-import { useState } from 'react';
-import { api, jobKind } from './util.js';
+import { jobKind } from './util.js';
 import { t } from './i18n.js';
 import GenerateForm from './GenerateForm.jsx';
 import { ActiveJob, QueueList } from './Jobs.jsx';
 import Gallery from './Gallery.jsx';
 
 // Studio for one content type. The GPU is shared, so the current generation is shown in every section.
-export default function Studio({ kind, user, jobs, presets, templates, system, now, refresh, reloadPresets, goModels }) {
-  const [reuse, setReuse] = useState(null);
+export default function Studio({ kind, user, jobs, presets, templates, system, now, refresh, reloadPresets, goModels, reuse, actions, goGallery }) {
+  const { canManage, onCancel, onDelete, onRetry, onReuse } = actions;
   const running = jobs.find((j) => j.status === 'running');
   const queuedAll = jobs.filter((j) => j.status === 'queued').sort((a, b) => (a.queuedAt ?? a.createdAt) - (b.queuedAt ?? b.createdAt));
   const finished = jobs
     .filter((j) => jobKind(j) === kind && ['done', 'failed', 'cancelled'].includes(j.status))
     .sort((a, b) => (b.finishedAt || b.createdAt) - (a.finishedAt || a.createdAt));
-
-  const act = async (fn) => {
-    try {
-      await fn();
-    } catch (e) {
-      alert(e.message);
-    }
-    refresh();
-  };
-  const canManage = (job) => user.role === 'admin' || job.user === user.username;
-  const onCancel = (job) => act(() => api(`/api/jobs/${job.id}/cancel`, { method: 'POST' }));
-  const onDelete = (job) => act(() => api(`/api/jobs/${job.id}`, { method: 'DELETE' }));
-  const onRetry = (job) => act(() => api(`/api/jobs/${job.id}/retry`, { method: 'POST' }));
-  const onReuse = (job) => {
-    setReuse({ ...job.params, _t: Date.now() });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
 
   return (
     <main className="layout">
@@ -59,7 +41,7 @@ export default function Studio({ kind, user, jobs, presets, templates, system, n
           </div>
         )}
         <QueueList jobs={queuedAll} onCancel={onCancel} canManage={canManage} />
-        <Gallery kind={kind} jobs={finished} onDelete={onDelete} onReuse={onReuse} onRetry={onRetry} canManage={canManage} />
+        <Gallery kind={kind} jobs={finished} onDelete={onDelete} onReuse={onReuse} onRetry={onRetry} canManage={canManage} onOpenAll={goGallery} />
       </section>
     </main>
   );

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, fmtBytes, setUnauthorizedHandler } from './util.js';
+import { api, fmtBytes, jobKind, setUnauthorizedHandler } from './util.js';
 import { t, useLang } from './i18n.js';
 import { LangSwitch } from './LangSwitch.jsx';
 import { Logo } from './Logo.jsx';
 import Login from './Login.jsx';
 import Studio from './Studio.jsx';
+import GalleryPage from './GalleryPage.jsx';
 import Models from './Models.jsx';
 import Users, { ChangePassword } from './Users.jsx';
 import Setup from './Setup.jsx';
@@ -14,6 +15,7 @@ import System from './System.jsx';
 const GEN_TABS = [
   { key: 'video', label: 'Video' },
   { key: 'image', label: 'Images' },
+  { key: 'gallery', label: 'Gallery' },
 ];
 const ADMIN_TABS = [
   { key: 'models', label: 'Models', icon: 'models' },
@@ -138,6 +140,7 @@ export default function App() {
   const [online, setOnline] = useState(true);
   const [health, setHealth] = useState(null);
   const [worker, setWorker] = useState(null); // generation engine (worker container) status
+  const [reuse, setReuse] = useState(null); // job parameters to fill the form with ("repeat")
   const [now, setNow] = useState(Date.now());
   const skew = useRef(0);
 
@@ -188,6 +191,28 @@ export default function App() {
   const go = (key) => {
     location.hash = key;
     setTab(key);
+  };
+
+  // Job actions shared by the studios and the gallery page
+  const act = async (fn) => {
+    try {
+      await fn();
+    } catch (e) {
+      alert(e.message);
+    }
+    refresh();
+  };
+  const actions = {
+    canManage: (job) => user.role === 'admin' || job.user === user.username,
+    onCancel: (job) => act(() => api(`/api/jobs/${job.id}/cancel`, { method: 'POST' })),
+    onDelete: (job) => act(() => api(`/api/jobs/${job.id}`, { method: 'DELETE' })),
+    onRetry: (job) => act(() => api(`/api/jobs/${job.id}/retry`, { method: 'POST' })),
+    // "Repeat" fills the form of the job's studio, switching to it from the gallery
+    onReuse: (job) => {
+      setReuse({ ...job.params, _t: Date.now() });
+      if (tab !== jobKind(job)) go(jobKind(job));
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
   };
   const adminTabs = ADMIN_TABS.filter((x) => !x.admin || user.role === 'admin');
 
@@ -257,8 +282,12 @@ export default function App() {
           refresh={refresh}
           reloadPresets={loadPresets}
           goModels={() => go('models')}
+          reuse={reuse}
+          actions={actions}
+          goGallery={() => go('gallery')}
         />
       )}
+      {tab === 'gallery' && <GalleryPage user={user} jobs={jobs} {...actions} />}
       {tab === 'models' && <Models user={user} onChange={loadPresets} />}
       {tab === 'users' && user.role === 'admin' && <Users me={user} />}
       {tab === 'system' && user.role === 'admin' && <System />}
