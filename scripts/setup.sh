@@ -12,6 +12,20 @@ warn() { printf '  \033[33m!\033[0m %s\n' "$*"; WARN=1; }
 fail() { printf '  \033[31m✗\033[0m %s\n' "$*"; FAIL=1; }
 WARN=0; FAIL=0
 
+# The platform runs as the user who will own data/, models/ and output/. Under sudo that is the
+# invoking user, not root; plain root is refused (the containers would write root-owned files).
+if [ "$(id -u)" = 0 ]; then
+  if [ -n "${SUDO_UID:-}" ] && [ "$SUDO_UID" != 0 ]; then
+    RUN_UID=$SUDO_UID; RUN_GID=$SUDO_GID; RUN_USER=$SUDO_USER
+  else
+    echo "Run setup.sh as the user who will run the platform (sudo is used where needed)." >&2
+    exit 1
+  fi
+else
+  RUN_UID=$(id -u); RUN_GID=$(id -g); RUN_USER=$(id -un)
+fi
+RUN_HOME=$(getent passwd "$RUN_USER" | cut -d: -f6)
+
 echo "== CPU and graphics"
 CPU=$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | xargs)
 echo "  $CPU"
@@ -55,7 +69,7 @@ VIDEO_GID=$(getent group video | cut -d: -f3)
 if command -v vulkaninfo >/dev/null; then
   DEV=$(vulkaninfo --summary 2>/dev/null | grep -m1 -E 'deviceName.*RADV' | cut -d= -f2- | xargs)
   if [ -n "$DEV" ]; then ok "Vulkan: $DEV"
-  else warn "Vulkan on the host only sees llvmpipe. The container is not affected, but to check: sudo usermod -aG render,video $USER and log in again"; fi
+  else warn "Vulkan on the host only sees llvmpipe. The container is not affected, but to check: sudo usermod -aG render,video $RUN_USER and log in again"; fi
 fi
 
 echo "== GPU memory (GTT)"
@@ -82,29 +96,38 @@ if [ ! -f .env ]; then cp .env.example .env; ok "created .env from .env.example"
 set_env() { grep -q "^$1=" .env && sed -i "s|^$1=.*|$1=$2|" .env || echo "$1=$2" >> .env; }
 [ -n "$RENDER_GID" ] && set_env RENDER_GID "$RENDER_GID"
 [ -n "$VIDEO_GID" ] && set_env VIDEO_GID "$VIDEO_GID"
-set_env PUID "$(id -u)"
+set_env PUID "$RUN_UID"
 HOST_TZ=$(timedatectl show -p Timezone --value 2>/dev/null || true)
 [ -n "$HOST_TZ" ] || HOST_TZ=$(readlink /etc/localtime 2>/dev/null | sed 's|.*/zoneinfo/||')
 [ -n "$HOST_TZ" ] && set_env TZ "$HOST_TZ" && ok "time zone: $HOST_TZ"
-set_env PGID "$(id -g)"
-ok "the containers run as $(id -un) (PUID $(id -u), PGID $(id -g))"
+set_env PGID "$RUN_GID"
+ok "the containers run as $RUN_USER (PUID $RUN_UID, PGID $RUN_GID)"
 chmod 600 .env
-DATA_PATH=$(grep -E '^DATA_PATH=' .env | cut -d= -f2-); DATA_PATH=${DATA_PATH:-./data}
+[ "$(id -u)" = 0 ] && chown "$RUN_UID:$RUN_GID" .env
+# Read a path from .env the way docker compose does: without quotes, with ~ expanded
+env_path() {
+  local v
+  v=$(grep -E "^$1=" .env | tail -1 | cut -d= -f2-)
+  v=${v%\"}; v=${v#\"}; v=${v%\'}; v=${v#\'}
+  case "$v" in "~"|"~/"*) v="$RUN_HOME${v#\~}";; esac
+  echo "${v:-$2}"
+}
+DATA_PATH=$(env_path DATA_PATH ./data)
+MODELS_PATH=$(env_path MODELS_PATH ./models)
+OUTPUT_PATH=$(env_path OUTPUT_PATH ./output)
 mkdir -p "$DATA_PATH" && ok "data directory: $DATA_PATH"
-MODELS_PATH=$(grep -E '^MODELS_PATH=' .env | cut -d= -f2-); MODELS_PATH=${MODELS_PATH:-./models}
 mkdir -p "$MODELS_PATH" && ok "models directory: $MODELS_PATH ($(df -h "$MODELS_PATH" | awk 'NR==2{print $4}') free)"
-OUTPUT_PATH=$(grep -E '^OUTPUT_PATH=' .env | cut -d= -f2-); OUTPUT_PATH=${OUTPUT_PATH:-./output}
 mkdir -p "$OUTPUT_PATH" && ok "output directory: $OUTPUT_PATH"
 # Mount points of the models/output volumes inside DATA_PATH; otherwise Docker creates them as root
 mkdir -p "$DATA_PATH/models" "$DATA_PATH/output"
 
 # Files left by an older root-running container (or copied with sudo) must belong to the host user
-FOREIGN=$(find "$DATA_PATH" "$MODELS_PATH" "$OUTPUT_PATH" ! -user "$(id -u)" 2>/dev/null | head -1)
+FOREIGN=$(find "$DATA_PATH" "$MODELS_PATH" "$OUTPUT_PATH" ! -user "$RUN_UID" 2>/dev/null | head -1)
 if [ -n "$FOREIGN" ]; then
-  if [ $INSTALL = 1 ]; then
-    sudo chown -R "$(id -u):$(id -g)" "$DATA_PATH" "$MODELS_PATH" "$OUTPUT_PATH" && ok "ownership of data/models/output fixed"
+  if [ $INSTALL = 1 ] || [ "$(id -u)" = 0 ]; then
+    sudo chown -R "$RUN_UID:$RUN_GID" "$DATA_PATH" "$MODELS_PATH" "$OUTPUT_PATH" && ok "ownership of data/models/output fixed"
   else
-    warn "some files are not owned by $(id -un) (e.g. $FOREIGN) → ./scripts/setup.sh --install, or: sudo chown -R $(id -u):$(id -g) $DATA_PATH $MODELS_PATH $OUTPUT_PATH"
+    warn "some files are not owned by $RUN_USER (e.g. $FOREIGN) → ./scripts/setup.sh --install, or: sudo chown -R $RUN_UID:$RUN_GID \"$DATA_PATH\" \"$MODELS_PATH\" \"$OUTPUT_PATH\""
   fi
 fi
 

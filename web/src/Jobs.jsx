@@ -100,7 +100,18 @@ function StageDetail({ job, now }) {
   );
 }
 
-export function ActiveJob({ job, now, onCancel }) {
+// The running job's clock: only this card re-renders every second, not the whole app
+function useNow(skew = 0) {
+  const [now, setNow] = useState(() => Date.now() + skew);
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now() + skew), 1000);
+    return () => clearInterval(t);
+  }, [skew]);
+  return now;
+}
+
+export function ActiveJob({ job, skew, onCancel }) {
+  const now = useNow(skew);
   const [showLog, setShowLog] = useState(false);
   const pr = job.progress || {};
   const stages = STAGES[jobKind(job)] || STAGES.video;

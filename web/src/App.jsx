@@ -143,7 +143,6 @@ export default function App() {
   const [health, setHealth] = useState(null);
   const [worker, setWorker] = useState(null); // generation engine (worker container) status
   const [reuse, setReuse] = useState(null); // job parameters to fill the form with ("repeat")
-  const [now, setNow] = useState(Date.now());
   const skew = useRef(0);
 
   useEffect(() => {
@@ -154,9 +153,18 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
-  const refresh = useCallback(async () => {
+  // One state request at a time, with a timeout; an answer older than the latest applied one is
+  // dropped (a refresh right after a delete must not be overwritten by a request sent before it)
+  const polling = useRef({ inFlight: false, seq: 0, applied: 0 });
+  const refresh = useCallback(async ({ force = false } = {}) => {
+    const p = polling.current;
+    if (p.inFlight && !force) return;
+    const seq = ++p.seq;
+    p.inFlight = true;
     try {
-      const s = await api('/api/state');
+      const s = await api('/api/state', { signal: AbortSignal.timeout(10000) });
+      if (seq < p.applied) return;
+      p.applied = seq;
       skew.current = s.now - Date.now();
       setJobs(s.jobs);
       setSystem(s.system);
@@ -164,7 +172,9 @@ export default function App() {
       setWorker(s.worker);
       setOnline(true);
     } catch (e) {
-      if (e.status !== 401) setOnline(false);
+      if (e.status !== 401 && seq >= p.applied) setOnline(false);
+    } finally {
+      if (seq === p.seq) p.inFlight = false;
     }
   }, []);
   const loadPresets = useCallback(() => {
@@ -179,8 +189,7 @@ export default function App() {
     api('/api/templates').then(setTemplates).catch(() => setTemplates({}));
     const a = setInterval(refresh, 2000);
     const b = setInterval(loadPresets, 15000);
-    const c = setInterval(() => setNow(Date.now()), 1000);
-    return () => [a, b, c].forEach(clearInterval);
+    return () => [a, b].forEach(clearInterval);
   }, [user, refresh, loadPresets]);
 
   if (user === undefined) return <div className="login-wrap muted">{t('Loading…')}</div>;
@@ -202,7 +211,7 @@ export default function App() {
     } catch (e) {
       alert(e.message);
     }
-    refresh();
+    refresh({ force: true });
   };
   const actions = {
     canManage: (job) => user.role === 'admin' || job.user === user.username,
@@ -291,11 +300,12 @@ export default function App() {
           presets={presets.filter((p) => (p.kind || 'video') === tab)}
           templates={templates ? templates[tab] || [] : undefined}
           system={system}
-          now={now + skew.current}
+          skew={skew.current}
           refresh={refresh}
           reloadPresets={loadPresets}
           goModels={() => go('models')}
           reuse={reuse}
+          onReuseApplied={() => setReuse(null)}
           actions={actions}
           goGallery={() => go('gallery')}
         />

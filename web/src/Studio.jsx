@@ -5,7 +5,7 @@ import { ActiveJob, QueueList } from './Jobs.jsx';
 import Gallery from './Gallery.jsx';
 
 // Studio for one content type. The GPU is shared, so the current generation is shown in every section.
-export default function Studio({ kind, user, jobs, presets, templates, system, now, refresh, reloadPresets, goModels, reuse, actions, goGallery }) {
+export default function Studio({ kind, user, jobs, presets, templates, system, skew, refresh, reloadPresets, goModels, reuse, onReuseApplied, actions, goGallery }) {
   const { canManage, onCancel, onDelete, onRetry, onReuse } = actions;
   const running = jobs.find((j) => j.status === 'running');
   const queuedAll = jobs.filter((j) => j.status === 'queued').sort((a, b) => (a.queuedAt ?? a.createdAt) - (b.queuedAt ?? b.createdAt));
@@ -25,15 +25,16 @@ export default function Studio({ kind, user, jobs, presets, templates, system, n
           system={system}
           jobs={jobs}
           reuse={reuse}
+          onReuseApplied={onReuseApplied}
           queueSize={queuedAll.length + (running ? 1 : 0)}
-          onCreated={refresh}
+          onCreated={() => refresh({ force: true })}
           reloadPresets={reloadPresets}
           goModels={goModels}
         />
       </aside>
       <section className="col-main">
         {running ? (
-          <ActiveJob job={running} now={now} onCancel={canManage(running) ? onCancel : null} />
+          <ActiveJob job={running} skew={skew} onCancel={canManage(running) ? onCancel : null} />
         ) : (
           <div className="card idle">
             <div className="idle-title">{t('GPU is idle')}</div>

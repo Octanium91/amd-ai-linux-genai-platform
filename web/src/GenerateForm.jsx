@@ -110,7 +110,8 @@ function MissingModels({ preset, user, goModels, reloadPresets }) {
   );
 }
 
-export default function GenerateForm({ kind, user, presets, templates, system, jobs, reuse, queueSize, onCreated, reloadPresets, goModels }) {
+export default function GenerateForm({ kind, user, presets, templates, system, jobs, reuse, onReuseApplied, queueSize, onCreated, reloadPresets, goModels }) {
+  const submitting = useRef(false);
   const [form, setForm] = useState(null);
   const [image, setImage] = useState(null); // File
   const [imageRef, setImageRef] = useState(null); // name of an already uploaded file
@@ -142,6 +143,8 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
     setForm((f) => ({ ...(f || {}), ...params }));
     setImage(null);
     setImageRef(img || null);
+    // Applied once: coming back to the tab later must not overwrite what the user typed since
+    onReuseApplied?.();
   }, [reuse, kind]);
 
   const previewUrl = useMemo(() => {
@@ -182,6 +185,9 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
 
   const submit = async (e) => {
     e.preventDefault();
+    // Ctrl+Enter bypasses the disabled button, and a held key repeats: one job per submit
+    if (submitting.current) return;
+    submitting.current = true;
     setError('');
     setBusy(true);
     try {
@@ -194,6 +200,7 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
     } catch (err) {
       setError(err.message);
     } finally {
+      submitting.current = false;
       setBusy(false);
     }
   };
@@ -238,7 +245,7 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
         <textarea rows={5} value={form.prompt} required
           placeholder={isVideo ? 'a red fox running through fresh snow, cinematic lighting, slow motion' : 'portrait photo of an old fisherman, golden hour, 85mm, detailed skin'}
           onChange={(e) => set('prompt')(e.target.value)}
-          onKeyDown={(e) => (e.ctrlKey || e.metaKey) && e.key === 'Enter' && e.currentTarget.form.requestSubmit()} />
+          onKeyDown={(e) => (e.ctrlKey || e.metaKey) && e.key === 'Enter' && !e.repeat && e.currentTarget.form.requestSubmit()} />
         <span className="field-hint">{t('English prompts work best. Ctrl+Enter submits.')}</span>
       </label>
 
@@ -253,6 +260,14 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
           <div
             className={`drop ${drag ? 'drag' : ''} ${previewUrl ? 'has' : ''}`}
             onClick={() => fileInput.current?.click()}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                fileInput.current?.click();
+              }
+            }}
             onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
             onDragLeave={() => setDrag(false)}
             onDrop={(e) => { e.preventDefault(); setDrag(false); onFile(e.dataTransfer.files[0]); }}

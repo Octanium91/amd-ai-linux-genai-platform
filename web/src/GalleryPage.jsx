@@ -37,7 +37,12 @@ export default function GalleryPage({ user, jobs, onDelete, onReuse, onRetry, ca
   // A new filter starts from the first page again
   useEffect(() => setLimit(PAGE), [kind, status, mine, query]);
   const open = jobs.find((j) => j.id === openId);
-  const count = (k) => finished.filter((j) => j.status === 'done' && (k === 'all' || jobKind(j) === k)).length;
+  const counts = useMemo(() => {
+    const c = { all: 0, video: 0, image: 0 };
+    for (const j of finished) if (j.status === 'done') { c.all++; c[jobKind(j)] = (c[jobKind(j)] || 0) + 1; }
+    return c;
+  }, [finished]);
+  const count = (k) => counts[k] || 0;
 
   return (
     <main className="gallery-page">

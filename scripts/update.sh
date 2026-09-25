@@ -12,7 +12,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 [ "${1:-}" = "--pull" ] && git pull --ff-only
-DATA_PATH=$(grep -E '^DATA_PATH=' .env 2>/dev/null | cut -d= -f2-); DATA_PATH=${DATA_PATH:-./data}
+DATA_PATH=$(grep -E '^DATA_PATH=' .env 2>/dev/null | tail -1 | cut -d= -f2- || true)
+DATA_PATH=${DATA_PATH%\"}; DATA_PATH=${DATA_PATH#\"}; DATA_PATH=${DATA_PATH%\'}; DATA_PATH=${DATA_PATH#\'}
+case "$DATA_PATH" in "~"|"~/"*) DATA_PATH="$HOME${DATA_PATH#\~}";; esac
+DATA_PATH=${DATA_PATH:-./data}
 
 echo "== Building images"
 docker compose build
