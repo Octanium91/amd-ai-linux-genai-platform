@@ -29,6 +29,7 @@ services:
       - "${RENDER_GID:?run scripts/setup.sh — RENDER_GID is missing in .env}"
       - "${VIDEO_GID:?run scripts/setup.sh — VIDEO_GID is missing in .env}"
     environment:
+      TZ: ${TZ:-UTC}
       # One DEVICE_LOCAL Vulkan heap spanning the whole GTT instead of the small UMA carve-out (512 MB etc.)
       radv_enable_unified_heap_on_apu: "true"
       # RADV only, no software llvmpipe
@@ -57,6 +58,7 @@ services:
     ports:
       - "${BIND_ADDR:-0.0.0.0}:${PORT:-7860}:7860"
     environment:
+      TZ: ${TZ:-UTC}
       HF_TOKEN: ${HF_TOKEN:-}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       TRUST_PROXY: ${TRUST_PROXY:-false}

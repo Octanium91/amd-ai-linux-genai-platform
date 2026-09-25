@@ -249,10 +249,19 @@ app.use((err, req, res, next) => {
 
 const server = app.listen(config.port, () => {
   console.log(`GenAI Platform: http://0.0.0.0:${config.port}`);
-  workerState().then(({ worker }) => {
-    if (!worker.online) console.warn(`[web] the worker is not reachable at ${config.workerUrl} yet`);
-    else if (!worker.compatible) console.warn(`[web] the worker speaks API v${worker.api}, expected v${WORKER_API}: update both containers`);
-  });
+  // Both containers start together: give the worker half a minute before reporting it missing
+  (async () => {
+    for (let i = 0; i < 15; i++) {
+      const { worker } = await workerState();
+      if (worker.online) {
+        if (worker.compatible) console.log(`[web] connected to the worker (API v${worker.api})`);
+        else console.warn(`[web] the worker speaks API v${worker.api}, expected v${WORKER_API}: update both containers`);
+        return;
+      }
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+    console.warn(`[web] the worker is not reachable at ${config.workerUrl}`);
+  })();
 });
 
 function shutdown() {

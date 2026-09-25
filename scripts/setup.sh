@@ -83,6 +83,9 @@ set_env() { grep -q "^$1=" .env && sed -i "s|^$1=.*|$1=$2|" .env || echo "$1=$2"
 [ -n "$RENDER_GID" ] && set_env RENDER_GID "$RENDER_GID"
 [ -n "$VIDEO_GID" ] && set_env VIDEO_GID "$VIDEO_GID"
 set_env PUID "$(id -u)"
+HOST_TZ=$(timedatectl show -p Timezone --value 2>/dev/null || true)
+[ -n "$HOST_TZ" ] || HOST_TZ=$(readlink /etc/localtime 2>/dev/null | sed 's|.*/zoneinfo/||')
+[ -n "$HOST_TZ" ] && set_env TZ "$HOST_TZ" && ok "time zone: $HOST_TZ"
 set_env PGID "$(id -g)"
 ok "the containers run as $(id -un) (PUID $(id -u), PGID $(id -g))"
 chmod 600 .env
