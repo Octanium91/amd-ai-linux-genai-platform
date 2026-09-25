@@ -18,7 +18,7 @@ echo "== Building images"
 docker compose build
 
 # One-time migration from the single-container version (container genai-platform)
-if docker inspect genai-platform >/dev/null 2>&1; then
+if docker container inspect genai-platform >/dev/null 2>&1; then
   echo "== Migrating from the single-container version: waiting until no job is running or queued"
   while grep -qE '"status": *"(running|queued)"' "$DATA_PATH/state/jobs.json" 2>/dev/null; do
     printf '.'; sleep 30
