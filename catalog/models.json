@@ -325,15 +325,15 @@
     }
   },
   {
-    "id": "wan21-vace-1.3b-q8",
-    "name": "Wan 2.1 VACE 1.3B (GGUF Q8_0)",
+    "id": "wan21-vace-1.3b",
+    "name": "Wan 2.1 VACE 1.3B (fp16)",
     "category": "diffusion",
     "description": "Wan 2.1 with VACE: a video from a reference photo (a person or object) or from the motion of another video.",
-    "file": "diffusion_models/wan2.1-vace-1.3b-q8_0.gguf",
-    "url": "https://huggingface.co/calcuis/wan-1.3b-gguf/resolve/main/wan2.1-vace-1.3b-q8_0.gguf",
-    "size": 2369289920,
+    "file": "diffusion_models/wan2.1_vace_1.3B_fp16.safetensors",
+    "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.1_vace_1.3B_fp16.safetensors",
+    "size": 4309519800,
     "license": "Apache-2.0",
-    "homepage": "https://huggingface.co/calcuis/wan-1.3b-gguf",
+    "homepage": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged",
     "i18n": {
       "uk": {
         "description": "Wan 2.1 з VACE: відео за референсним фото (людина чи предмет) або за рухом іншого відео."

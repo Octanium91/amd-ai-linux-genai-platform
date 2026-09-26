@@ -190,6 +190,29 @@ api.post('/jobs', jobFiles, async (req, res) => {
   }
 });
 
+// Upscale a finished image ×4: the result file becomes the photo of a new upscale job
+api.post('/jobs/:id/upscale', async (req, res) => {
+  const job = await findJob(req.params.id);
+  const file = job.files?.[Number(req.body?.index) || 0];
+  if (!file || !/\.(png|jpe?g|webp)$/i.test(file)) return res.status(400).json({ error: 'Only images can be upscaled' });
+  const preset = presetsWithAvailability().find((p) => p.tasks.includes('upscale') && p.available);
+  if (!preset) return res.status(400).json({ error: 'The upscaler is not downloaded: an administrator can download it in Models' });
+  const { jobs } = await workerState();
+  if (jobs.filter((j) => j.status === 'queued' && j.user === req.user.username).length >= MAX_QUEUED_PER_USER) {
+    return res.status(400).json({ error: 'Too many jobs in the queue (at most 20 per user)' });
+  }
+  const src = path.join(dirs.output, path.basename(file));
+  const type = fs.existsSync(src) && imageType(src);
+  if (!type) return res.status(404).json({ error: 'The file of this job has been deleted' });
+  const image = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}.${type}`;
+  fs.copyFileSync(src, path.join(dirs.uploads, image));
+  const body = { presetId: preset.id, prompt: job.params.prompt || '', negative: '' };
+  res.json(await callWorker('/v1/jobs', {
+    method: 'POST',
+    body: { user: req.user.username, params: jobParams(preset, body, image, { image, task: 'upscale' }), spec: jobSpec(preset) },
+  }));
+});
+
 api.post('/jobs/:id/cancel', async (req, res) => {
   const job = await findJob(req.params.id);
   if (!canManage(req, job)) return res.status(403).json({ error: 'This job belongs to another user' });

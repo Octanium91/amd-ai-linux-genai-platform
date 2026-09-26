@@ -25,7 +25,7 @@ Only administrators can download and delete models. On first start, while no mod
 | `umt5-xxl-q8` | [UMT5-XXL encoder](https://huggingface.co/city96/umt5-xxl-encoder-gguf), GGUF Q8_0 | Wan text encoder | 5.6 GB | Apache-2.0 |
 | `wan21-t2v-1.3b` | [Wan 2.1 T2V 1.3B](https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B) | lightweight Wan (experimental) | 2.6 GB | Apache-2.0 |
 | `wan21-vae` | Wan 2.1 VAE | Wan 2.1 | 0.2 GB | Apache-2.0 |
-| `wan21-vace-1.3b-q8` | [Wan 2.1 VACE 1.3B](https://huggingface.co/calcuis/wan-1.3b-gguf), GGUF Q8_0 | putting a person into a video, video → video | 2.2 GB | Apache-2.0 |
+| `wan21-vace-1.3b` | [Wan 2.1 VACE 1.3B](https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged), fp16 (the GGUF from calcuis/wan-1.3b-gguf does not load in sd-cli: its 5-dimensional patch embedding is rejected by ggml) | putting a person into a video, video → video | 4.0 GB | Apache-2.0 |
 | `realesrgan-x4plus` | [Real-ESRGAN x4plus](https://github.com/xinntao/Real-ESRGAN) | upscaling ×4 | 64 MB | BSD-3-Clause |
 
 Licenses are taken from the Hugging Face model cards. Check them yourself before using results commercially.

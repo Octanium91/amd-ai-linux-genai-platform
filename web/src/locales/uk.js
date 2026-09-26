@@ -474,4 +474,9 @@ export default {
   "Upscalers": "Апскейлери",
   "Upscaling": "Збільшення",
   "What to keep from the video": "Що зберегти з відео",
+  "Only images can be upscaled": "Збільшувати можна лише зображення",
+  "Queued: the upscaled image appears in the gallery.": "У черзі: збільшене зображення з'явиться в галереї.",
+  "The file of this job has been deleted": "Файл цього завдання видалено",
+  "The upscaler is not downloaded: an administrator can download it in Models": "Апскейлер не завантажено: адміністратор може завантажити його в розділі «Моделі»",
+  "Upscale ×4": "Збільшити ×4",
 };

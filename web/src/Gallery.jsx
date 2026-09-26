@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { clipSeconds, fileUrl, fmtDate, fmtDuration, jobKind, STATUS_LABEL } from './util.js';
+import { api, clipSeconds, fileUrl, fmtDate, fmtDuration, jobKind, STATUS_LABEL } from './util.js';
 import { t, tError } from './i18n.js';
 import { LogView, ParamChips } from './Jobs.jsx';
 
@@ -22,8 +22,20 @@ const isImageFile = (f) => /\.(png|jpe?g|webp)$/i.test(f);
 export function Modal({ job, onClose, onDelete, onReuse, onRetry, canManage }) {
   const [showLog, setShowLog] = useState(job.status === 'failed');
   const [idx, setIdx] = useState(0);
+  const [upMsg, setUpMsg] = useState(null);
   const files = job.files || [];
   const file = files[idx];
+  // A finished image can be upscaled ×4 in one click: a new job with this file as its photo
+  const canUpscale = file && isImageFile(file) && job.params.task !== 'upscale';
+  const upscale = async () => {
+    setUpMsg({ busy: true });
+    try {
+      await api(`/api/jobs/${job.id}/upscale`, { method: 'POST', json: { index: idx } });
+      setUpMsg({ text: t('Queued: the upscaled image appears in the gallery.') });
+    } catch (e) {
+      setUpMsg({ text: e.message, error: true });
+    }
+  };
   useEffect(() => {
     const k = (e) => {
       if (e.key === 'Escape') onClose();
@@ -71,10 +83,12 @@ export function Modal({ job, onClose, onDelete, onReuse, onRetry, canManage }) {
               <button className="btn primary" onClick={() => { onRetry(job); onClose(); }}>{t('Restart')}</button>
             )}
             <button className="btn" onClick={() => { onReuse(job); onClose(); }}>{t('Repeat with these settings')}</button>
+            {canUpscale && <button className="btn" disabled={upMsg?.busy} onClick={upscale}>{t('Upscale ×4')}</button>}
             {canManage(job) && (
               <button className="btn ghost danger" onClick={() => confirmDelete(job, (j) => { onDelete(j); onClose(); })}>{t('Delete')}</button>
             )}
           </div>
+          {upMsg?.text && <div className={`small ${upMsg.error ? 'warn' : 'muted'}`}>{upMsg.text}</div>}
           <button className="link" onClick={() => setShowLog((v) => !v)}>{showLog ? '▾' : '▸'} {t('sd-cli log')}</button>
           {showLog && <LogView jobId={job.id} />}
         </div>

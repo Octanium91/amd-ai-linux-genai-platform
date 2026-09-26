@@ -846,7 +846,7 @@
     ],
     "image": "optional",
     "models": {
-      "diffusion": "wan21-vace-1.3b-q8",
+      "diffusion": "wan21-vace-1.3b",
       "vae": "wan21-vae",
       "t5xxl": "umt5-xxl-q8"
     },

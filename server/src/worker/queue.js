@@ -144,7 +144,7 @@ function finish(job, status, error) {
 
 // The job id keeps names unique: two jobs queued in the same second with the same prompt and seed
 // (for example the same scene at two sizes) would otherwise write the same file
-const baseName = (job) => `${stamp(job.createdAt)}_${slug(job.params.prompt)}_${job.params.seed}_${job.id.slice(0, 6)}`;
+const baseName = (job) => `${stamp(job.createdAt)}_${job.params.task === 'upscale' ? 'upscale-x4_' : ''}${slug(job.params.prompt)}_${job.params.seed}_${job.id.slice(0, 6)}`;
 
 async function makeThumb(job, src) {
   const thumb = path.join(dirs.thumbs, job.id + '.jpg');
@@ -335,7 +335,8 @@ async function controlFrames(job, tmpBase) {
   fs.rmSync(dir, { recursive: true, force: true });
   fs.mkdirSync(dir, { recursive: true });
   const look = p.control === 'gray' ? 'format=gray' : 'edgedetect=low=0.08:high=0.2';
-  const vf = `fps=${p.fps},scale=${p.width}:${p.height}:force_original_aspect_ratio=increase,crop=${p.width}:${p.height},${look}`;
+  // sd-cli loads only RGB frames: contours and grayscale are written with three channels
+  const vf = `fps=${p.fps},scale=${p.width}:${p.height}:force_original_aspect_ratio=increase,crop=${p.width}:${p.height},${look},format=rgb24`;
   const r = await runCmd('ffmpeg', ['-loglevel', 'error', '-y', '-i', path.join(dirs.uploads, p.video), '-vf', vf,
     '-frames:v', String(p.frames), path.join(dir, 'frame_%04d.png')], 'ffmpeg.control_video');
   const n = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => f.endsWith('.png')).length : 0;

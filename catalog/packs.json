@@ -197,7 +197,7 @@
     "name": "Video · Wan 2.1 VACE — put a person in, change a video",
     "description": "A person or object from a photo in a new video, or the motion of your video with a new look. Experimental; uses the Wan 2.1 VAE and the UMT5 encoder.",
     "models": [
-      "wan21-vace-1.3b-q8",
+      "wan21-vace-1.3b",
       "wan21-vae",
       "umt5-xxl-q8"
     ],
