@@ -194,7 +194,7 @@
         768
       ]
     ],
-    "recommendedResolutions": [[512, 512]],
+    "recommendedResolutions": [[512, 512], [768, 512]],
     "preview": "proj",
     "imageArgs": [
       "--strength",

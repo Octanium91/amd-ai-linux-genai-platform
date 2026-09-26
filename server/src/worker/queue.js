@@ -142,7 +142,9 @@ function finish(job, status, error) {
   if (pr?.stages?.[pr.stage] && !pr.stages[pr.stage].endedAt) pr.stages[pr.stage].endedAt = job.finishedAt;
 }
 
-const baseName = (job) => `${stamp(job.createdAt)}_${slug(job.params.prompt)}_${job.params.seed}`;
+// The job id keeps names unique: two jobs queued in the same second with the same prompt and seed
+// (for example the same scene at two sizes) would otherwise write the same file
+const baseName = (job) => `${stamp(job.createdAt)}_${slug(job.params.prompt)}_${job.params.seed}_${job.id.slice(0, 6)}`;
 
 async function makeThumb(job, src) {
   const thumb = path.join(dirs.thumbs, job.id + '.jpg');
@@ -471,7 +473,8 @@ export function deleteJob(job) {
   cancelJob(job);
   jobs = jobs.filter((j) => j !== job);
   const rm = (p) => fs.rmSync(p, { force: true });
-  for (const f of job.files || []) rm(path.join(dirs.output, f));
+  // A file another job also points to (older versions could give two jobs one name) is kept
+  for (const f of job.files || []) if (!jobs.some((j) => j.files?.includes(f))) rm(path.join(dirs.output, f));
   rm(path.join(dirs.thumbs, job.id + '.jpg'));
   for (const ext of ['.webp', '.png']) rm(path.join(dirs.previews, job.id + ext));
   rm(path.join(dirs.logs, job.id + '.log'));

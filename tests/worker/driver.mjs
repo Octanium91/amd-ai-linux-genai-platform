@@ -56,6 +56,7 @@ check('damaged jobs.json is kept aside', fs.readdirSync(`${DATA}/state`).some((f
 let a = (await api('/v1/jobs', 'POST', video(2))).body;
 a = await waitFor(a.id, (j) => ['done', 'failed'].includes(j.status));
 check('two-segment video finishes', a.status === 'done' && a.files?.[0]?.endsWith('.mp4'), `${a.status} ${a.files} ${a.error || ''}`);
+check('result names carry the job id', a.files[0].includes(`_${a.id.slice(0, 6)}.`), a.files[0]);
 // The clip lasts exactly its frames: 2 segments x 9 frames at 8 fps, minus the repeated seam frame
 const { execFileSync } = await import('node:child_process');
 const dur = Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', `${DATA}/output/${a.files[0]}`]).toString().trim());

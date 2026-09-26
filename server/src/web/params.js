@@ -37,7 +37,8 @@ export function videoPlan(preset, duration, segmentFrames) {
   const frames = Math.min(seg, Math.max(minFrames, toFrames(wanted / segments)));
   return {
     frames, segments, fps, segmentFrames: seg, trainedFrames: trained, segSeconds, maxDuration, maxSegments, extendable,
-    duration: seconds(frames) * segments, beyondTraining: frames > trained,
+    // The real length: every seam drops the frame that repeats the previous pass's last one
+    duration: seconds(frames) * segments - (exact && segments > 1 ? (segments - 1) / fps : 0), beyondTraining: frames > trained,
   };
 }
 

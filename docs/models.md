@@ -53,7 +53,7 @@ Both extra settings are red in the UI: they work, with caveats.
 The defaults follow the models' training so that the result matches the prompt; going beyond is allowed, with a warning in the form:
 
 - **Frames per model pass** (Advanced): empty means the trained length. Up to `maxFrames` is possible, but beyond the training length the motion module loses the subject. Measured on the reference machine: AnimateDiff v3 with 32-frame passes at 768×512 produced only a sand-and-water texture for "a young woman on a windy beach", while 16 frames at 512×512 gave exactly that scene.
-- **Resolution:** sizes the mode was tested at are marked ✓ (`recommendedResolutions`); other sizes show a warning that the result may not follow the prompt.
+- **Resolution:** sizes the mode was tested at are marked ✓ (`recommendedResolutions`); other sizes show a warning that the result may not follow the prompt. AnimateDiff v3 was verified at 512×512 and 768×512 with 16-frame passes; an 8 s clip from four 2 s passes kept the same person and scene, with the contrast growing slightly from pass to pass.
 
 ## Start templates
 

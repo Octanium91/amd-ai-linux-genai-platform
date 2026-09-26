@@ -61,7 +61,8 @@ function videoPlan(preset, duration, segmentFrames) {
   const frames = Math.min(seg, Math.max(minFrames, toFrames(wanted / segments)));
   return {
     frames, segments, fps, segmentFrames: seg, trainedFrames: trained, segSeconds, maxDuration, maxSegments, extendable,
-    hardMax, minFrames, duration: seconds(frames) * segments, beyondTraining: frames > trained,
+    // The real length: every seam drops the frame that repeats the previous pass's last one
+    hardMax, minFrames, duration: seconds(frames) * segments - (exact && segments > 1 ? (segments - 1) / fps : 0), beyondTraining: frames > trained,
   };
 }
 
@@ -326,7 +327,7 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
           <label className="field">
             <span className="field-label field-label-row">
               <span>{t('Duration')} {extraDuration && <span className="extra-badge">{t('extra')}</span>}</span>
-              <b className={extraDuration ? 'extra-text' : ''}>{t('{s} s', { s: Number(form.duration).toFixed(1) })}</b>
+              <b className={extraDuration ? 'extra-text' : ''}>{t('{s} s', { s: (isVideo ? plan.duration : Number(form.duration)).toFixed(1) })}</b>
             </span>
             <div className="range-wrap" style={{ '--base': `${((plan.segSeconds - 0.5) / (plan.maxDuration - 0.5 || 1)) * 100}%` }}>
               <input type="range" className={`${extraDuration ? 'extra' : ''} ${plan.extendable && plan.maxSegments > 1 ? 'has-extra' : ''}`}
