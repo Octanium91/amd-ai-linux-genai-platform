@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { config } from '../common/config.js';
+import { activeReasons, POWER_REASONS, readGpuMetrics, THERMAL_REASONS, throttleDelta } from './gpumetrics.js';
 
 let gpuDir = null;
 try {
@@ -34,20 +35,64 @@ function npuInfo() {
   return { present, driver: fs.existsSync('/dev/accel') };
 }
 
-// Ryzen AI family derived from the iGPU name, used for UI hints and recommendations
-function platformFamily(gpu = '', cpu = '') {
-  const s = `${gpu} ${cpu}`;
-  if (/8060S|8050S|8040S|Ryzen AI MAX/i.test(s)) return 'Strix Halo';
-  if (/890M|880M|Ryzen AI 9/i.test(s)) return 'Strix Point';
-  if (/860M|840M|Ryzen AI [57] 3[34]0/i.test(s)) return 'Krackan Point';
+// Everything about the GPU comes from the driver stack, nothing from a model table:
+// - KFD topology (amdgpu): compute units, architecture (gfx target), maximum clocks
+// - libdrm's amdgpu.ids: the marketing name for the PCI device and revision, when it lists them
+// - Vulkan: the device name as sd.cpp sees it (the fallback name)
+function pciId(f) {
+  try {
+    return parseInt(fs.readFileSync(`${gpuDir}/${f}`, 'utf8').trim(), 16);
+  } catch {
+    return null;
+  }
+}
+
+function kfdNode() {
+  const device = pciId('device');
+  try {
+    const base = '/sys/class/kfd/kfd/topology/nodes';
+    for (const n of fs.readdirSync(base)) {
+      const props = Object.fromEntries(fs.readFileSync(`${base}/${n}/properties`, 'utf8').trim().split('\n')
+        .map((l) => l.split(/\s+/)).map(([k, v]) => [k, Number(v)]));
+      if (props.simd_count > 0 && (device == null || props.device_id === device)) return props;
+    }
+  } catch {}
   return null;
 }
 
+function idsName() {
+  const device = pciId('device');
+  const revision = pciId('revision');
+  if (device == null) return null;
+  for (const f of ['/usr/share/libdrm/amdgpu.ids', '/opt/amdgpu/share/libdrm/amdgpu.ids']) {
+    try {
+      for (const line of fs.readFileSync(f, 'utf8').split('\n')) {
+        const [d, r, name] = line.split(',').map((s) => s.trim());
+        if (name && parseInt(d, 16) === device && parseInt(r, 16) === revision) return name;
+      }
+    } catch {}
+  }
+  return null;
+}
+
+function gpuIdentity() {
+  const kfd = kfdNode();
+  const target = kfd?.gfx_target_version;
+  const arch = target ? `gfx${Math.floor(target / 10000)}${Math.floor(target / 100) % 100}${(target % 100).toString(16)}` : null;
+  return {
+    marketingName: idsName(),
+    arch,
+    cu: kfd?.simd_count && kfd?.simd_per_cu ? kfd.simd_count / kfd.simd_per_cu : null,
+    maxClockMhz: kfd?.max_engine_clk_fcompute || null,
+    cpuMaxClockMhz: kfd?.max_engine_clk_ccompute || null,
+  };
+}
+
+// The Ryzen AI generation from the GPU architecture the driver reports, for UI hints and recommendations
+const FAMILY_BY_ARCH = { gfx1150: 'Strix Point', gfx1151: 'Strix Halo', gfx1152: 'Krackan Point' };
+
 // Relative GPU power for time estimates: compute units × maximum shader clock, compared with the
-// reference machine the `reference` timings in catalog/presets.json were measured on (Radeon 890M).
-// Neither Vulkan nor sysfs reports the CU count, but on Ryzen AI the CPU model names the iGPU
-// ("… w/ Radeon 890M"), so the count comes from the lineup table.
-const IGPU_CU = { '890M': 16, '880M': 12, '860M': 8, '840M': 4, '8060S': 40, '8050S': 32, '8040S': 16 };
+// reference machine the `reference` timings in catalog/presets.json were measured on
 const REFERENCE_GPU = { name: 'Radeon 890M', cu: 16, clockMhz: 2900 };
 
 function maxShaderClock() {
@@ -59,35 +104,40 @@ function maxShaderClock() {
   }
 }
 
-function gpuPower(gpu = '', cpu = '') {
-  const name = `${gpu} ${cpu}`.match(/Radeon\s+(\d{3,4}[MS])\b/i)?.[1]?.toUpperCase();
-  const cu = name ? IGPU_CU[name] : null;
-  if (!cu) return null;
-  const clockMhz = maxShaderClock() || REFERENCE_GPU.clockMhz;
+function gpuPower(id, name) {
+  if (!id.cu) return null;
+  const clockMhz = maxShaderClock() || id.maxClockMhz;
+  if (!clockMhz) return null;
   return {
-    name: `Radeon ${name}`,
-    cu,
+    name,
+    cu: id.cu,
     clockMhz,
-    score: (cu * clockMhz) / (REFERENCE_GPU.cu * REFERENCE_GPU.clockMhz),
+    score: (id.cu * clockMhz) / (REFERENCE_GPU.cu * REFERENCE_GPU.clockMhz),
     reference: REFERENCE_GPU.name,
   };
 }
 
-const info = { cpu: cpuModel(), gpu: null, driver: null, npu: npuInfo(), family: null, gpuPower: null };
+const identity = gpuDir ? gpuIdentity() : {};
+const info = {
+  cpu: cpuModel(), gpu: null, gpuName: null, gpuArch: identity.arch || null, gpuCu: identity.cu || null,
+  driver: null, npu: npuInfo(), family: FAMILY_BY_ARCH[identity.arch] || null, gpuPower: null,
+};
 
-// Take the GPU name from Vulkan itself: it is exactly the device sd.cpp will run on
+// The Vulkan device is exactly the one sd.cpp will run on
 execFile('vulkaninfo', ['--summary'], { timeout: 20000 }, (err, stdout = '') => {
   const devs = [...stdout.matchAll(/deviceName\s*=\s*(.+)/g)].map((m) => m[1].trim());
   const drivers = [...stdout.matchAll(/driverInfo\s*=\s*(.+)/g)].map((m) => m[1].trim());
   const i = devs.findIndex((n) => !/llvmpipe/i.test(n));
   info.gpu = i >= 0 ? devs[i] : devs[0] || null;
   info.driver = i >= 0 ? drivers[i] : null;
-  info.family = platformFamily(info.gpu, info.cpu);
-  if (info.gpu && !/llvmpipe/i.test(info.gpu)) info.gpuPower = gpuPower(info.gpu, info.cpu);
+  if (info.gpu && !/llvmpipe/i.test(info.gpu)) {
+    info.gpuName = identity.marketingName || info.gpu.replace(/\s*\(RADV.*\)/, '');
+    info.gpuPower = gpuPower(identity, info.gpuName);
+  }
   if (!info.gpu || /llvmpipe/i.test(info.gpu)) {
     console.warn('[system] Vulkan sees no GPU (llvmpipe only): check the /dev/dri passthrough and the render/video groups');
   } else {
-    console.log(`[system] ${info.cpu} · ${info.gpu} · ${info.driver}`);
+    console.log(`[system] ${info.cpu} · ${info.gpuName} (${info.gpuArch || '?'}, ${info.gpuCu || '?'} CU) · ${info.driver}`);
   }
 });
 
@@ -257,8 +307,26 @@ async function sensorSample(s) {
     s.fabricMhz = await currentMhz(`${gpuDir}/pp_dpm_fclk`);
   }
   s.memTemp = await maxTemp(hw.memory);
+  // The SMU firmware's own view: memory and fabric clocks, the clock limits it currently enforces
+  // and its throttle counters. A reason stays reported for 30 s after the counter last grew.
+  const gm = await readGpuMetrics(gpuDir);
+  if (gm) {
+    s.memMhz = gm.uclkMhz ?? s.memMhz;
+    s.fabricMhz = gm.fclkMhz ?? s.fabricMhz;
+    s.socTemp = gm.tempSoc;
+    s.gpuLimitMhz = gm.gfxMaxMhz;
+    s.cpuLimitMhz = gm.coreMaxMhz;
+    const delta = throttleDelta(prevMetrics, gm);
+    prevMetrics = gm;
+    const now = Date.now();
+    for (const r of [...activeReasons(delta, THERMAL_REASONS), ...activeReasons(delta, POWER_REASONS)]) throttleSeen[r] = now;
+    const recent = (list) => list.filter((r) => now - (throttleSeen[r] || 0) < 30000);
+    s.throttle = { thermal: recent(THERMAL_REASONS), power: recent(POWER_REASONS) };
+  }
 }
 let cpuMaxMhz = null;
+let prevMetrics = null;
+const throttleSeen = {};
 
 let snapshot = {};
 let sizes = { models: 0, output: 0, at: 0 };

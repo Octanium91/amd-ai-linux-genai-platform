@@ -21,7 +21,7 @@ File name: `<job created, local time>_<job id>[_r<retry>].json`. Top-level field
 | `series` | `{startedAt, bucketSec, fields, points}`: bucket averages as rows, `t` in seconds from the start |
 | `steps` | `{fields, rows}`: every sampling step as `[segment, image, stage, step, total, secondsPerStep, t]`, `t` in milliseconds from the start |
 | `commands` | every `sd-cli` and `ffmpeg` run: program, phase, full arguments, exit code, signal, start/end, error tail |
-| `events` | reserved for notable events |
+| `events` | notable events with `t` in milliseconds from the start: `throttle.thermal.start` (reasons, GPU/CPU temperature, GPU clock and its limit at that moment) and `throttle.thermal.end` |
 
 ### `summary`
 
@@ -35,7 +35,24 @@ File name: `<job created, local time>_<job id>[_r<retry>].json`. Top-level field
 | `hw.gpu.frequency.sclk.first`, `.last`, `gpuClockDrop` | the average GPU clock under full load (time series points with the GPU at least 90 % busy, the ramp-up point left out) in the first and the last quarter, and the relative drop |
 | `energyWh`, `energyWh.perImage` | the package power integrated over the phases |
 | `secondsPerImage`, `secondsPerVideoSecond` | the whole job per image, or per second of the clip |
-| `peak.*` | the highest temperatures, package power, GTT, RAM, swap, engine memory and memory pressure of the job |
+| `peak.*` | the highest temperatures (GPU edge, CPU Tctl, the hottest CPU core, SoC, memory, disk), package power, GTT, RAM, swap, engine memory and memory pressure of the job |
+| `throttling` | what the SMU firmware counted during the job, see below; `null` without `gpu_metrics` format 3.0 |
+
+### `summary.throttling`
+
+The firmware keeps a residency counter for every reason it lowers the clocks. The worker reads them from `gpu_metrics` at every sample; a counter that grew means that reason was active in that interval.
+
+| Key | Meaning |
+|---|---|
+| `thermal` | `true` if a thermal limit (`thm_core`, `thm_gfx`, `thm_soc`) or `prochot` cut the clocks: **the machine overheats** |
+| `power` | `true` if a power limit (`spl` sustained, `fppt` fast, `sppt` slow) capped the clocks: the normal ceiling of a small machine, not a problem by itself |
+| `thermalShare`, `powerShare` | the fraction of samples in which a thermal / power counter grew |
+| `firstThermalSec`, `firstPowerSec` | seconds from the start to the first thermal / power event |
+| `reasons`, `counters` | the reasons that were active and how much each counter grew (firmware units) |
+| `hw.gpu.frequency.sclk.limit.min`, `.max` | the lowest and highest GPU clock limit the firmware enforced (Hz); a minimum below the maximum shader clock means the GPU was held back |
+| `system.cpu.frequency.limit.min`, `.max` | the same for the CPU cores (on hybrid Zen 5 / Zen 5c chips the limit sits below the boost clock even at idle) |
+
+Together with `stepSlowdown` and `gpuClockDrop` this answers whether a slow run was caused by heat: thermal throttling shows up here directly, with the moment it started in `events`.
 
 ### `resource`
 
@@ -50,7 +67,7 @@ File name: `<job created, local time>_<job id>[_r<retry>].json`. Top-level field
 | `host.arch`, `host.board` | architecture; DMI: vendor, product, board, BIOS vendor/version/date |
 | `host.cpu` | vendor, model name, family/model/stepping, microcode, cache, cores, threads, min/max frequency, scaling driver and governor, energy preference, boost |
 | `host.memory` | total RAM, swap, huge pages |
-| `hw.gpu` | name, Ryzen AI family, compute units, relative power, PCI ids and link, VBIOS version, driver and Mesa version, power profile and cap, VRAM and GTT sizes, all DPM clock levels (sclk, mclk, fclk, socclk), the Vulkan device (API and driver versions, conformance) |
+| `hw.gpu` | name (libdrm `amdgpu.ids`, otherwise Vulkan), the Vulkan name, architecture (`gfx1150`…) and compute units from the KFD topology, Ryzen AI family (from the architecture), relative power, PCI ids and link, VBIOS version, driver and Mesa version, power profile and cap, VRAM and GTT sizes, all DPM clock levels (sclk, mclk, fclk, socclk), the Vulkan device (API and driver versions, conformance) |
 | `hw.npu` | whether an XDNA NPU and its driver are present |
 | `engine` | `sd-cli --version`, `ffmpeg -version` |
 | `storage` | free/total space of the models and results disks |
@@ -66,9 +83,14 @@ File name: `<job created, local time>_<job id>[_r<retry>].json`. Top-level field
 | `system.pressure.{cpu,memory,io}.some`, `.full` | 1 | pressure stall information, 10 s average |
 | `hw.gpu.utilization` | 1 | `gpu_busy_percent` |
 | `hw.gpu.memory.gtt.usage`, `hw.gpu.memory.vram.usage` | By | amdgpu `mem_info_*` |
-| `hw.gpu.frequency.{sclk,mclk,fclk,socclk}` | Hz | amdgpu hwmon and DPM levels |
+| `hw.gpu.frequency.{sclk,mclk,fclk,socclk}` | Hz | amdgpu hwmon and DPM levels (`fclk` from `gpu_metrics` when DPM marks no level) |
+| `hw.gpu.frequency.sclk.limit`, `system.cpu.frequency.limit` | Hz | the GPU and CPU clock limits the firmware enforces right now (`gpu_metrics`) |
+| `hw.memory.frequency.uclk` | Hz | the memory controller clock (`gpu_metrics`) |
+| `hw.power.socket`, `hw.power.gfx`, `hw.power.cpu` | W | socket, GPU and all-core power (`gpu_metrics`) |
+| `hw.throttle.{prochot,spl,fppt,sppt,thm_core,thm_gfx,thm_soc}` | 1 | how much each throttle residency counter grew since the previous sample; above 0 means the reason was active |
 | `hw.power.package` | W | amdgpu hwmon PPT (the whole APU package) |
 | `hw.temperature.{gpu,cpu,memory,storage}` | Cel | amdgpu edge, k10temp Tctl, the hottest SPD5118 module, the hottest NVMe drive |
+| `hw.temperature.soc`, `hw.temperature.cpu.core.max` | Cel | the SoC and the hottest CPU core (`gpu_metrics`) |
 | `process.engine.memory.usage`, `.swap`, `process.engine.cpu.utilization` | By, 1 | the running `sd-cli`/`ffmpeg` process |
 | `process.worker.memory.usage`, `process.worker.event_loop.delay.max` | By, s | the worker itself |
 

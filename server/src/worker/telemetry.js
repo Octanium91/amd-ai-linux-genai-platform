@@ -19,6 +19,7 @@ import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
 import { config, WORKER_API } from '../common/config.js';
 import { readSettings } from '../common/settings.js';
+import { activeReasons, POWER_REASONS, readGpuMetrics, THERMAL_REASONS, throttleDelta } from './gpumetrics.js';
 import { findSensors, gpuDevDir, systemInfo } from './system.js';
 
 const fsp = fs.promises;
@@ -158,9 +159,12 @@ async function resourceSnapshot() {
       'hugepages.total': Number(mem.HugePages_Total) || 0,
     },
     'hw.gpu': {
-      name: sys.gpu,
+      // From the driver stack: libdrm's amdgpu.ids (or Vulkan), KFD topology for the CU count and architecture
+      name: sys.gpuName || sys.gpu,
+      'vulkan.name': sys.gpu,
+      arch: sys.gpuArch,
       family: sys.family,
-      'compute_units': sys.gpuPower?.cu ?? null,
+      'compute_units': sys.gpuCu,
       'relative_power': sys.gpuPower?.score ?? null,
       'pci.vendor': g && await read(`${g}/vendor`),
       'pci.device': g && await read(`${g}/device`),
@@ -274,6 +278,40 @@ async function sampleMetrics(state, pid) {
   };
   const memT = await maxTemp(s.memory);
   if (memT != null) m['hw.temperature.memory'] = memT;
+  // The SMU firmware's metrics table: clock limits it enforces and throttle residency counters
+  const gm = await readGpuMetrics(g);
+  if (gm) {
+    const mhz = (v) => (v == null ? null : v * 1e6);
+    const watts = (v) => (v == null ? null : v / 1000);
+    m['hw.temperature.soc'] = gm.tempSoc;
+    m['hw.temperature.cpu.core.max'] = gm.tempCoreMax;
+    m['hw.gpu.frequency.sclk.limit'] = mhz(gm.gfxMaxMhz);
+    m['system.cpu.frequency.limit'] = mhz(gm.coreMaxMhz);
+    m['hw.memory.frequency.uclk'] = mhz(gm.uclkMhz);
+    if (m['hw.gpu.frequency.fclk'] == null) m['hw.gpu.frequency.fclk'] = mhz(gm.fclkMhz);
+    m['hw.power.socket'] = watts(gm.socketPowerMw);
+    m['hw.power.gfx'] = watts(gm.gfxPowerMw);
+    m['hw.power.cpu'] = watts(gm.corePowerMw);
+    // Totals for the summary: per-reason counter growth, when each reason first appeared, the lowest
+    // clock limits. The baseline sample before the job only sets the previous reading.
+    const delta = throttleDelta(state.gpuMetrics, gm);
+    state.gpuMetrics = gm;
+    const t = (state.throttle ||= { totals: {}, firstAt: {}, limits: {}, samples: 0, thermalSamples: 0, powerSamples: 0 });
+    if (delta) {
+      t.samples++;
+      for (const [r, v] of Object.entries(delta)) {
+        if (v == null) continue;
+        m[`hw.throttle.${r}`] = v;
+        t.totals[r] = (t.totals[r] || 0) + v;
+        if (v > 0 && t.firstAt[r] == null) t.firstAt[r] = now;
+      }
+      if (activeReasons(delta, THERMAL_REASONS).length) t.thermalSamples++;
+      if (activeReasons(delta, POWER_REASONS).length) t.powerSamples++;
+      for (const [k, v] of [['sclk', gm.gfxMaxMhz], ['cpu', gm.coreMaxMhz]]) {
+        if (v != null) t.limits[k] = { min: Math.min(t.limits[k]?.min ?? Infinity, v), max: Math.max(t.limits[k]?.max ?? 0, v) };
+      }
+    }
+  }
   const stT = await maxTemp(s.storage.map((x) => x.dir));
   if (stT != null) m['hw.temperature.storage'] = stT;
   // The engine process (sd-cli or ffmpeg) and the worker itself
@@ -368,9 +406,35 @@ class Series {
   }
 }
 
+// Throttling as the SMU firmware counted it. thermal: a thermal limit or PROCHOT cut the clocks, the
+// machine overheats. power: a power limit capped the clocks, the normal ceiling of a small machine.
+// Shares are the fraction of samples in which the counter grew.
+function throttleSummary(t, startedAt, round) {
+  if (!t?.samples) return null;
+  const firstOf = (list) => {
+    const at = list.map((r) => t.firstAt[r]).filter((v) => v != null);
+    return at.length ? round((Math.min(...at) - startedAt) / 1000, 1) : null;
+  };
+  const counters = Object.fromEntries(Object.entries(t.totals).filter(([, v]) => v > 0));
+  return {
+    thermal: t.thermalSamples > 0,
+    power: t.powerSamples > 0,
+    thermalShare: round(t.thermalSamples / t.samples),
+    powerShare: round(t.powerSamples / t.samples),
+    firstThermalSec: firstOf(THERMAL_REASONS),
+    firstPowerSec: firstOf(POWER_REASONS),
+    reasons: Object.keys(counters),
+    counters,
+    'hw.gpu.frequency.sclk.limit.min': t.limits.sclk ? t.limits.sclk.min * 1e6 : null,
+    'hw.gpu.frequency.sclk.limit.max': t.limits.sclk ? t.limits.sclk.max * 1e6 : null,
+    'system.cpu.frequency.limit.min': t.limits.cpu ? t.limits.cpu.min * 1e6 : null,
+    'system.cpu.frequency.limit.max': t.limits.cpu ? t.limits.cpu.max * 1e6 : null,
+  };
+}
+
 // ---------- the summary: the numbers one wants first, computed from phases and steps ----------
 
-export function summarize(job, phases, steps, startedAt, series) {
+export function summarize(job, phases, steps, startedAt, series, throttle = null) {
   const sum = (name) => phases.filter((p) => p.name === name).reduce((s, p) => s + (p.durationSec || 0), 0);
   const peak = (k) => phases.reduce((m, p) => (p.metrics[k] ? Math.max(m ?? -Infinity, p.metrics[k].max) : m), null);
   // Energy: the average package power of every phase times its length
@@ -420,6 +484,9 @@ export function summarize(job, phases, steps, startedAt, series) {
     'peak.hw.temperature.cpu': peak('hw.temperature.cpu'),
     'peak.hw.temperature.memory': peak('hw.temperature.memory'),
     'peak.hw.temperature.storage': peak('hw.temperature.storage'),
+    'peak.hw.temperature.soc': peak('hw.temperature.soc'),
+    'peak.hw.temperature.cpu.core.max': peak('hw.temperature.cpu.core.max'),
+    throttling: throttleSummary(throttle, startedAt, round),
     'peak.hw.power.package': peak('hw.power.package'),
     'peak.hw.gpu.memory.gtt.usage': peak('hw.gpu.memory.gtt.usage'),
     'peak.system.memory.usage': peak('system.memory.usage'),
@@ -481,6 +548,17 @@ class Session {
       }
       this.current?.stats.add(m);
       this.series.add(at, m);
+      // Thermal throttling starting and ending are events, with the temperatures at that moment
+      const thermal = THERMAL_REASONS.filter((r) => m[`hw.throttle.${r}`] > 0);
+      if (thermal.length && !this.thermal) {
+        this.event('throttle.thermal.start', {
+          reasons: thermal, 'hw.temperature.gpu': m['hw.temperature.gpu'], 'hw.temperature.cpu': m['hw.temperature.cpu'],
+          'hw.gpu.frequency.sclk': m['hw.gpu.frequency.sclk'], 'hw.gpu.frequency.sclk.limit': m['hw.gpu.frequency.sclk.limit'],
+        });
+      } else if (!thermal.length && this.thermal) {
+        this.event('throttle.thermal.end', { 'hw.temperature.gpu': m['hw.temperature.gpu'], 'hw.temperature.cpu': m['hw.temperature.cpu'] });
+      }
+      this.thermal = thermal.length > 0;
     } catch {} finally {
       this.sampling = false;
     }
@@ -523,7 +601,7 @@ class Session {
       schema: SCHEMA,
       complete,
       writtenAt: Date.now(),
-      summary: summarize(this.job, phases, this.steps, this.startedAt, this.series.out()),
+      summary: summarize(this.job, phases, this.steps, this.startedAt, this.series.out(), this.state.throttle),
       resource: this.resource || null,
       job: {
         ...job,

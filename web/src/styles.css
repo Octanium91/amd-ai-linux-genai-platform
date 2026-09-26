@@ -62,6 +62,11 @@ h3 { font-size: 15px; margin: 0; font-weight: 650; }
 .sys-temp.warn { color: var(--warn); }
 .sys-temp.bad { color: var(--bad); font-weight: 650; }
 .sys-row .sys-temp { margin-left: 0; }
+.sys-badge { font-size: 11px; padding: 0 7px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; flex: none; }
+.sys-badge.bad { color: var(--bad); border-color: var(--bad); font-weight: 650; }
+.sys-block.throttled { border-color: var(--bad); }
+.sys-sub + .sys-badge { margin-left: auto; }
+.sys-badge + .sys-temp { margin-left: 0; }
 .sys-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .sys-row .meter { flex: none; }
 .sys-label { color: var(--muted); flex: none; min-width: 34px; }

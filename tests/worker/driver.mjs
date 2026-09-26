@@ -170,6 +170,21 @@ check('image batch: a sampling phase per image, one decoding, no empty phases',
 check('image batch: steps carry the image index', images.has(1) && images.has(2) && idoc.steps.rows.length === 12 && idoc.summary.secondsPerImage > 0,
   `images ${[...images]}, rows ${idoc.steps.rows.length}, s/image ${idoc.summary.secondsPerImage}`);
 
+// gpu_metrics v3.0 as a Ryzen AI 9 HX 370 reported it at idle (Linux 6.12)
+const gm = await import('/src/worker/gpumetrics.js');
+const bytes = Buffer.from(
+  '0801030056115012f210f8116211f811ba11f811ad11f811ad119a10ad11811011128811c611a0110000000000000000000000000000000000000000000005000000'
+  + '080000000100000002000000050002000700040004000300040002009802900000000000ffff890bf57b2c2900004d1000000000ffff4d1000005800000000000000'
+  + 'a702000076000000750000007d0000007a0000000500690064005e00cd0264004d00670030f8ffffffff66025b0220030c00a7022003d1040600ed0d0000ed0d0000'
+  + 'ed0d0000ed0d000029092909290929092909290929092909f10d540bffff0000000000000000aa710e00020000002fbd000013293b000000000040420f00ffffffff', 'hex');
+const m = gm.parseGpuMetrics(bytes);
+const d = gm.throttleDelta(m, { ...m, throttle: { ...m.throttle, thm_gfx: m.throttle.thm_gfx + 5 } });
+check('gpu_metrics v3.0: temperatures, clocks, limits and throttle counters',
+  bytes.length === 264 && m?.tempGfx === 44.38 && m.gfxclkMhz === 614 && m.gfxMaxMhz === 2900 && m.uclkMhz === 1233
+  && m.socketPowerMw === 4173 && m.stapmLimitMw === null && m.throttle.prochot === 0 && m.throttle.thm_gfx === 3877139
+  && gm.activeReasons(d, gm.THERMAL_REASONS).join() === 'thm_gfx' && gm.parseGpuMetrics(Buffer.from('08010200', 'hex')) === null,
+  JSON.stringify(m && { t: m.tempGfx, clk: m.gfxclkMhz, lim: m.gfxMaxMhz, uclk: m.uclkMhz, thm: m.throttle.thm_gfx }));
+
 worker.kill();
 console.log(failed ? `${failed} FAILED` : 'ALL PASSED');
 process.exit(failed ? 1 : 0);

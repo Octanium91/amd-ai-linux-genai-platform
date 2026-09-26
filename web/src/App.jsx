@@ -62,20 +62,41 @@ function SystemBar({ system, online }) {
       <span className="sys-val">{children}</span>
     </div>
   );
-  const Block = ({ name, sub, temp, tempTitle, title, children }) => (
-    <div className="sys-block" title={title}>
+  const Block = ({ name, sub, temp, tempTitle, title, badge, children }) => (
+    <div className={`sys-block ${badge?.hot ? 'throttled' : ''}`} title={title}>
       <div className="sys-head">
         <span className="sys-name">{name}</span>
         {sub && <span className="sys-sub">{sub}</span>}
+        {badge && <span className={`sys-badge ${badge.hot ? 'bad' : ''}`} title={badge.title}>{badge.text}</span>}
         <Temp value={temp} title={tempTitle} />
       </div>
       {children}
     </div>
   );
   const join = (...parts) => parts.filter(Boolean).join(' · ');
-  // Vulkan calls every Ryzen AI iGPU "Radeon Graphics"; the CPU model names the real one (890M etc.)
-  const gpuName = system.gpuPower?.name || system.gpu?.replace(/\s*\(RADV.*\)/, '').replace(/^AMD\s+/, '');
+  // Both names come from the hardware: the GPU's from the driver (libdrm or Vulkan) with the CU count
+  // from the KFD topology, the CPU's from its brand string in /proc/cpuinfo
+  const gpuName = join((system.gpuName || system.gpu?.replace(/\s*\(RADV.*\)/, ''))?.replace(/^AMD\s+/, ''),
+    system.gpuCu && t('{n} CU', { n: system.gpuCu }));
   const cpuName = system.cpu?.replace(/^AMD\s+/, '').replace(/\s+w\/\s+Radeon.*$/i, '').replace(/\s+\S+-Core Processor$/i, '');
+  // Throttling as the SMU firmware reports it (the last 30 s). Thermal reasons are overheating;
+  // a power limit is the normal ceiling of a small machine and is shown quietly.
+  const thermal = system.throttle?.thermal || [];
+  const power = system.throttle?.power || [];
+  const REASON = {
+    prochot: t('PROCHOT (the platform asked the chip to slow down)'), thm_core: t('CPU cores too hot'), thm_gfx: t('GPU too hot'),
+    thm_soc: t('SoC too hot'), spl: t('sustained power limit'), fppt: t('fast power limit'), sppt: t('slow power limit'),
+  };
+  const badgeFor = (hot) => {
+    if (hot.length) return { hot: true, text: t('Throttling'), title: [t('Overheating: the firmware lowered the clocks.'), ...hot.map((r) => REASON[r])].join('\n') };
+    return null;
+  };
+  const cpuBadge = badgeFor(thermal.filter((r) => ['prochot', 'thm_core', 'thm_soc'].includes(r)));
+  const gpuBadge = badgeFor(thermal.filter((r) => ['prochot', 'thm_gfx', 'thm_soc'].includes(r)))
+    || (power.length ? { text: t('Power limit'), title: [t('The clocks are capped by a power limit: normal for a small machine, not overheating.'), ...power.map((r) => REASON[r])].join('\n') } : null);
+  // A GPU clock limit the firmware enforces below the maximum. Not shown for the CPU: on hybrid
+  // Zen 5 / Zen 5c chips the core limit sits below the boost clock even at idle.
+  const capped = (limit, max) => limit && max && limit < max * 0.97;
   const diskRow = (d, label, results) => d && (
     <Row
       label={label}
@@ -94,24 +115,34 @@ function SystemBar({ system, online }) {
       <Block
         name="CPU"
         sub={cpuName || system.family}
+        badge={cpuBadge}
         temp={system.cpuTemp}
         tempTitle={t('CPU temperature (Tctl)')}
         title={join(system.cpu, system.family, system.threads && t('{n} threads', { n: system.threads }))}
       >
         <Row
           meter={system.cpuBusy ?? 0}
-          title={join(t('CPU load'), system.cpuMaxMhz && t('average core clock; up to {max}', { max: ghz(system.cpuMaxMhz) }))}
+          title={join(t('CPU load'), system.cpuMaxMhz && t('average core clock; up to {max}', { max: ghz(system.cpuMaxMhz) }),
+            system.cpuLimitMhz && t('clock limit set by the firmware now: {limit}', { limit: ghz(system.cpuLimitMhz) }))}
         >
-          {join(`${system.cpuBusy ?? '—'}%`, ghz(system.cpuMhz))}
-        </Row>
+          {join(`${system.cpuBusy ?? '—'}%`, ghz(system.cpuMhz))}        </Row>
       </Block>
-      <Block name="GPU" sub={gpuName} temp={system.gpuTemp} tempTitle={t('GPU temperature (edge)')} title={join(system.gpu, system.driver)}>
+      <Block
+        name="GPU"
+        sub={gpuName}
+        badge={gpuBadge}
+        temp={system.gpuTemp}
+        tempTitle={join(t('GPU temperature (edge)'), system.socTemp != null && t('SoC {v} °C', { v: Math.round(system.socTemp) }))}
+        title={join(system.gpu, system.gpuArch, system.driver)}
+      >
         <Row
           meter={system.gpuBusy ?? 0}
           title={join(t('iGPU load'), system.gpuMaxMhz && t('shader clock; up to {max}', { max: ghz(system.gpuMaxMhz) }),
-            system.powerW != null && t('power of the whole APU package'))}
+            system.powerW != null && t('power of the whole APU package'),
+            system.gpuLimitMhz && t('clock limit set by the firmware now: {limit}', { limit: ghz(system.gpuLimitMhz) }))}
         >
           {join(`${system.gpuBusy ?? '—'}%`, ghz(system.gpuMhz), system.powerW != null && `${system.powerW} W`)}
+          {capped(system.gpuLimitMhz, system.gpuMaxMhz) && <span className="warn"> · {t('limit {v}', { v: ghz(system.gpuLimitMhz) })}</span>}
         </Row>
         {system.gttTotal > 0 && (
           <Row
