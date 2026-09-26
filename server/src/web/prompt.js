@@ -116,6 +116,62 @@ function systemPrompt(preset, style, ctx) {
   return lines.join('\n');
 }
 
+export function clipTags(prompt, maxWords) {
+  const words = (s) => s.split(/\s+/).filter(Boolean).length;
+  if (words(prompt) <= maxWords) return prompt;
+  const out = [];
+  for (const part of prompt.split(/,\s*/)) {
+    if (out.length && words([...out, part].join(', ')) > maxWords) break;
+    out.push(part);
+  }
+  const text = out.join(', ');
+  return words(text) <= maxWords ? text : text.split(/\s+/).slice(0, maxWords).join(' ');
+}
+
+// Asks the model for a prompt. `s` is the assistant's settings, `input` {idea, width, height,
+// duration, hasImage}. Throws on network errors and timeouts.
+export async function enhancePrompt(s, preset, input) {
+  const catalog = loadCatalog();
+  const modelNames = Object.values(preset.models || {}).map((id) => catalog.find((m) => m.id === id)?.name || id);
+  const width = Number(input.width) || null;
+  const height = Number(input.height) || null;
+  const duration = Number(input.duration) > 0 ? Math.round(Number(input.duration) * 10) / 10 : null;
+  const style = promptStyle(preset);
+  // What the language model is told about the job (not UI text)
+  const orientation = width > height ? 'landscape' : width < height ? 'portrait' : 'square';
+  const context = [
+    ['Mode', `${preset.name}. ${preset.description || ''}`.trim()],
+    ['Models', modelNames.join(', ')],
+    ['Size', width && height ? `${width}x${height}, ${orientation}` : ''],
+    ['Idea', input.idea],
+  ].filter(([, v]) => v).map(([k, v]) => k + ': ' + v).join('\n');
+  const started = Date.now();
+  const body = {
+    model: s.model,
+    stream: false,
+    // Loaded only briefly: the GPU memory belongs to the generations
+    keep_alive: '1m',
+    format: { type: 'object', properties: { prompt: { type: 'string' } }, required: ['prompt'] },
+    options: { temperature: 0.6, num_predict: 400 },
+    messages: [
+      { role: 'system', content: systemPrompt(preset, style, { duration, hasImage: !!input.hasImage }) },
+      { role: 'user', content: context },
+    ],
+  };
+  if (await supportsThinking(s.url, s.model)) body.think = false;
+  const out = await ollama(s.url, '/api/chat', body, 180000);
+  let prompt = '';
+  try {
+    prompt = String(JSON.parse(out?.message?.content || '{}').prompt || '');
+  } catch {
+    prompt = String(out?.message?.content || '');
+  }
+  prompt = prompt.replace(/\s+/g, ' ').replace(/^["'\s]+|["'\s]+$/g, '').trim();
+  // CLIP ignores everything after 75 tokens: a too long answer is cut at a comma near 60 words
+  if (style === 'tags') prompt = clipTags(prompt, 60);
+  return { prompt, style, model: s.model, seconds: Math.round((Date.now() - started) / 100) / 10 };
+}
+
 export function promptRoutes(api) {
   api.get('/prompt/status', async (req, res) => res.json(await assistantStatus()));
 
@@ -128,45 +184,10 @@ export function promptRoutes(api) {
     const preset = loadPresets().find((p) => p.id === req.body?.presetId);
     if (!preset) return res.status(400).json({ error: 'Unknown mode' });
 
-    const catalog = loadCatalog();
-    const modelNames = Object.values(preset.models || {}).map((id) => catalog.find((m) => m.id === id)?.name || id);
-    const width = Number(req.body.width) || null;
-    const height = Number(req.body.height) || null;
-    const duration = Number(req.body.duration) > 0 ? Math.round(Number(req.body.duration) * 10) / 10 : null;
-    const style = promptStyle(preset);
-    // What the language model is told about the job (not UI text)
-    const orientation = width > height ? 'landscape' : width < height ? 'portrait' : 'square';
-    const context = [
-      ['Mode', `${preset.name}. ${preset.description || ''}`.trim()],
-      ['Models', modelNames.join(', ')],
-      ['Size', width && height ? `${width}x${height}, ${orientation}` : ''],
-      ['Idea', idea],
-    ].filter(([, v]) => v).map(([k, v]) => k + ': ' + v).join('\n');
     try {
-      const started = Date.now();
-      const body = {
-        model: s.model,
-        stream: false,
-        // Loaded only briefly: the GPU memory belongs to the generations
-        keep_alive: '1m',
-        format: { type: 'object', properties: { prompt: { type: 'string' } }, required: ['prompt'] },
-        options: { temperature: 0.6, num_predict: 400 },
-        messages: [
-          { role: 'system', content: systemPrompt(preset, style, { duration, hasImage: !!req.body.hasImage }) },
-          { role: 'user', content: context },
-        ],
-      };
-      if (await supportsThinking(s.url, s.model)) body.think = false;
-      const out = await ollama(s.url, '/api/chat', body, 180000);
-      let prompt = '';
-      try {
-        prompt = String(JSON.parse(out?.message?.content || '{}').prompt || '');
-      } catch {
-        prompt = String(out?.message?.content || '');
-      }
-      prompt = prompt.replace(/\s+/g, ' ').replace(/^["'\s]+|["'\s]+$/g, '').trim();
-      if (!prompt) return res.status(502).json({ error: 'The model returned an empty prompt, try again' });
-      res.json({ prompt, style, model: s.model, seconds: Math.round((Date.now() - started) / 100) / 10 });
+      const r = await enhancePrompt(s, preset, { idea, width: req.body.width, height: req.body.height, duration: req.body.duration, hasImage: !!req.body.hasImage });
+      if (!r.prompt) return res.status(502).json({ error: 'The model returned an empty prompt, try again' });
+      res.json(r);
     } catch (e) {
       console.warn(`[prompt] ${s.model} @ ${s.url}: ${e.cause?.code || e.message}`);
       if (e.name === 'TimeoutError' || e.name === 'AbortError') return res.status(502).json({ error: 'The Ollama model did not answer in time' });
