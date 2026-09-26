@@ -398,4 +398,6 @@ export default {
   "slow power limit": "повільний ліміт потужності",
   "sustained power limit": "тривалий ліміт потужності",
   "{n} CU": "{n} CU",
+  "Load": "Навантаження",
+  "Used": "Зайнято",
 };

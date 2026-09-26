@@ -56,9 +56,10 @@ function SystemBar({ system, online }) {
     <span className={`sys-temp ${value >= 90 ? 'bad' : value >= 80 ? 'warn' : ''}`} title={title}>{Math.round(value)} °C</span>
   ));
   const Row = ({ label, meter, children, title }) => (
+    // Three grid cells per row, so the labels, meters and values line up within a block
     <div className="sys-row" title={title}>
-      {label && <span className="sys-label">{label}</span>}
-      {meter != null && <Meter value={meter} />}
+      <span className="sys-label">{label}</span>
+      {meter != null ? <Meter value={meter} /> : <span />}
       <span className="sys-val">{children}</span>
     </div>
   );
@@ -70,7 +71,7 @@ function SystemBar({ system, online }) {
         {badge && <span className={`sys-badge ${badge.hot ? 'bad' : ''}`} title={badge.title}>{badge.text}</span>}
         <Temp value={temp} title={tempTitle} />
       </div>
-      {children}
+      <div className="sys-rows">{children}</div>
     </div>
   );
   const join = (...parts) => parts.filter(Boolean).join(' · ');
@@ -99,7 +100,7 @@ function SystemBar({ system, online }) {
   const capped = (limit, max) => limit && max && limit < max * 0.97;
   const diskRow = (d, label, results) => d && (
     <Row
-      label={label}
+      label={label || t('Used')}
       meter={pct(d.total - d.free, d.total)}
       title={t(results ? 'Results disk: {free} free of {total}; results take {used}' : 'Models disk: {free} free of {total}; models take {used}', {
         free: fmtBytes(d.free), total: fmtBytes(d.total), used: fmtBytes(d.used),
@@ -121,11 +122,13 @@ function SystemBar({ system, online }) {
         title={join(system.cpu, system.family, system.threads && t('{n} threads', { n: system.threads }))}
       >
         <Row
+          label={t('Load')}
           meter={system.cpuBusy ?? 0}
           title={join(t('CPU load'), system.cpuMaxMhz && t('average core clock; up to {max}', { max: ghz(system.cpuMaxMhz) }),
             system.cpuLimitMhz && t('clock limit set by the firmware now: {limit}', { limit: ghz(system.cpuLimitMhz) }))}
         >
-          {join(`${system.cpuBusy ?? '—'}%`, ghz(system.cpuMhz))}        </Row>
+          {join(`${system.cpuBusy ?? '—'}%`, ghz(system.cpuMhz))}
+        </Row>
       </Block>
       <Block
         name="GPU"
@@ -136,6 +139,7 @@ function SystemBar({ system, online }) {
         title={join(system.gpu, system.gpuArch, system.driver)}
       >
         <Row
+          label={t('Load')}
           meter={system.gpuBusy ?? 0}
           title={join(t('iGPU load'), system.gpuMaxMhz && t('shader clock; up to {max}', { max: ghz(system.gpuMaxMhz) }),
             system.powerW != null && t('power of the whole APU package'),
@@ -144,24 +148,24 @@ function SystemBar({ system, online }) {
           {join(`${system.gpuBusy ?? '—'}%`, ghz(system.gpuMhz), system.powerW != null && `${system.powerW} W`)}
           {capped(system.gpuLimitMhz, system.gpuMaxMhz) && <span className="warn"> · {t('limit {v}', { v: ghz(system.gpuLimitMhz) })}</span>}
         </Row>
+        {system.vramTotal > 0 && (
+          <Row label="VRAM" meter={pct(system.vramUsed, system.vramTotal)} title={t('Dedicated GPU memory (VRAM): the UMA carve-out reserved in the BIOS')}>
+            {fmtBytes(system.vramUsed)} / {fmtBytes(system.vramTotal)}
+          </Row>
+        )}
         {system.gttTotal > 0 && (
           <Row
             label="GTT"
             meter={pct(system.gttUsed, system.gttTotal)}
-            title={join(t('GPU memory (GTT), allocated from the shared system RAM'),
-              system.vramTotal > 0 && `VRAM ${fmtBytes(system.vramUsed)} / ${fmtBytes(system.vramTotal)}: ${t('Dedicated GPU memory (VRAM): the UMA carve-out reserved in the BIOS')}`)}
+            title={t('GPU memory (GTT), allocated from the shared system RAM')}
           >
             {fmtBytes(system.gttUsed)} / {fmtBytes(system.gttTotal)}
-          </Row>
-        )}
-        {!(system.gttTotal > 0) && system.vramTotal > 0 && (
-          <Row label="VRAM" meter={pct(system.vramUsed, system.vramTotal)} title={t('Dedicated GPU memory (VRAM): the UMA carve-out reserved in the BIOS')}>
-            {fmtBytes(system.vramUsed)} / {fmtBytes(system.vramTotal)}
           </Row>
         )}
       </Block>
       <Block name="RAM" temp={system.memTemp} tempTitle={t('Memory module temperature (the hottest one)')}>
         <Row
+          label={t('Used')}
           meter={pct(system.memTotal - system.memAvailable, system.memTotal)}
           title={join(t('RAM: {used} used of {total}', { used: fmtBytes(system.memTotal - system.memAvailable), total: fmtBytes(system.memTotal) }),
             system.memMhz && t('memory clock {mclk} MHz, fabric clock {fclk} MHz (as reported by the GPU driver)', { mclk: system.memMhz, fclk: system.fabricMhz ?? '—' }))}
