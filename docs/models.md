@@ -55,6 +55,19 @@ The defaults follow the models' training so that the result matches the prompt; 
 - **Frames per model pass** (Advanced): empty means the trained length. Up to `maxFrames` is possible, but beyond the training length the motion module loses the subject. Measured on the reference machine: AnimateDiff v3 with 32-frame passes at 768×512 produced only a sand-and-water texture for "a young woman on a windy beach", while 16 frames at 512×512 gave exactly that scene.
 - **Resolution:** sizes the mode was tested at are marked ✓ (`recommendedResolutions`); other sizes show a warning that the result may not follow the prompt. AnimateDiff v3 was verified at 512×512 and 768×512 with 16-frame passes; an 8 s clip from four 2 s passes kept the same person and scene, with the contrast growing slightly from pass to pass.
 
+## Prompt assistant
+
+The "To prompt" button next to the prompt sends the text to a language model on an [Ollama](https://ollama.com) server and replaces it with a prompt written for the selected mode; "Restore my text" brings the original back. The web container calls Ollama (`POST /api/chat` with a JSON schema, `keep_alive: 1m` so the model leaves GPU memory soon after), the worker is not involved.
+
+Set it up in **Settings → Prompt assistant**: the server address (`http://host.docker.internal:11434` is the Docker host, where Ollama usually runs; `docker-compose.yml` maps that name for the web container) and the model. Recommended: `dolphin-phi` (2.7B, small and fast) or `dolphin-llama3` (8B, better wording); install one with `ollama pull dolphin-phi`. The button is disabled while the assistant is off, the server is unreachable or the model is not installed.
+
+The model is told the mode, its models, the size, the clip length and whether a start image is used, and how the mode reads prompts:
+
+- **tags** (Stable Diffusion 1.5 with CLIP: Realistic Vision, AnimateLCM, AnimateDiff): comma-separated phrases, the most important first, at most 60 words, since CLIP reads only the first 75 tokens;
+- **natural** (Wan with a T5 encoder): 2–4 sentences about the subject, the motion over time, the setting, the light and the camera, one continuous shot.
+
+The style follows from the text encoder (`t5xxl` among the mode's models means natural); a mode can set it explicitly with `"promptStyle": "tags"` or `"natural"` in `catalog/presets.json` or `data/state/presets.local.json`. The mode's `promptSuffix` (LoRA tags) is still appended by the worker.
+
 ## Start templates
 
 [catalog/templates.json](../catalog/templates.json) holds 10 image and 10 video templates. When a section opens, the form is filled with a random template, preferring modes whose models are already downloaded. Templates cannot be picked in the UI: they are start examples that show how to write prompts and which settings give the best result.

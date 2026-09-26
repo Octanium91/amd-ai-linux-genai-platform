@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, fmtBytes, fmtDate } from './util.js';
 import { t } from './i18n.js';
 
-// Platform settings (administrators). For now: generation telemetry — a JSON document per job
-// written by the worker to data/telemetry; see docs/telemetry.md for the format.
+// Platform settings (administrators): the prompt assistant (an Ollama server) and generation
+// telemetry — a JSON document per job written by the worker to data/telemetry; see docs/telemetry.md.
 export default function Settings() {
   const [info, setInfo] = useState(null);
   const [form, setForm] = useState(null);
@@ -56,6 +56,7 @@ export default function Settings() {
 
   return (
     <main className="page">
+      <PromptAssistantSettings />
       <form className="card form" onSubmit={save}>
         <h3>{t('Generation telemetry')}</h3>
         <p className="muted">
@@ -115,5 +116,107 @@ export default function Settings() {
         {info.count > info.documents.length && <div className="muted small">{t('The latest {n} are shown; "Download all" includes every document.', { n: info.documents.length })}</div>}
       </div>
     </main>
+  );
+}
+
+// The "To prompt" assistant: an Ollama server and model that rewrite descriptions into prompts
+const RECOMMENDED_MODELS = ['dolphin-phi', 'dolphin-llama3'];
+
+function PromptAssistantSettings() {
+  const [form, setForm] = useState(null);
+  const [models, setModels] = useState(null);
+  const [checking, setChecking] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    api('/api/settings').then((s) => setForm(s.promptAssistant)).catch((e) => setError(e.message));
+  }, []);
+
+  const check = async (url = form?.url) => {
+    setChecking(true);
+    setError('');
+    try {
+      setModels(await api(`/api/settings/ollama?url=${encodeURIComponent(url)}`));
+    } catch (err) {
+      setModels(null);
+      setError(err.message);
+    } finally {
+      setChecking(false);
+    }
+  };
+  useEffect(() => {
+    if (form?.enabled) check(form.url);
+  }, [form === null]);
+
+  const save = async (e) => {
+    e.preventDefault();
+    setMsg('');
+    setError('');
+    try {
+      const s = await api('/api/settings', { method: 'PUT', json: { promptAssistant: form } });
+      setForm(s.promptAssistant);
+      setMsg(t('Saved.'));
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  if (!form) return <div className="card muted">{error || t('Loading…')}</div>;
+  const installed = models?.models?.map((m) => m.name) || [];
+  const has = (name) => installed.some((n) => n === name || n === `${name}:latest`);
+  const missing = models && !has(form.model);
+
+  return (
+    <form className="card form" onSubmit={save}>
+      <h3>{t('Prompt assistant')}</h3>
+      <p className="muted">
+        {t('Adds a "To prompt" button to the generation form: a language model on an Ollama server turns a short description in any language into a detailed English prompt written for the selected mode (tags for Stable Diffusion 1.5, sentences with motion and camera for Wan).')}
+      </p>
+      <p className="muted">
+        {t('Recommended models: dolphin-phi (small and fast) or dolphin-llama3 (better wording). Install one on the Ollama server with:')}{' '}
+        <code>ollama pull dolphin-phi</code>
+      </p>
+      <p className="muted small">{t('If Ollama uses the same GPU, it takes GPU memory while it answers; the platform asks it to unload the model a minute after each request.')}</p>
+      <label className="check">
+        <input type="checkbox" checked={form.enabled} onChange={(e) => setForm({ ...form, enabled: e.target.checked })} />
+        <span>{t('Enable the prompt assistant')}</span>
+      </label>
+      <label className="field">
+        <span className="field-label">{t('Ollama server address')}</span>
+        <div className="model-pick">
+          <input value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="http://host.docker.internal:11434" />
+          <button type="button" className="btn" disabled={checking} onClick={() => check()}>{checking ? t('Checking…') : t('Check')}</button>
+        </div>
+        <span className="field-hint">{t('host.docker.internal is the machine the platform runs on (Ollama on its default port 11434).')}</span>
+      </label>
+      {models && (
+        <div className="muted small">
+          {t('Ollama {version}: {n} models installed.', { version: models.version || '?', n: installed.length })}
+        </div>
+      )}
+      <label className="field">
+        <span className="field-label">{t('Model')}</span>
+        <div className="model-pick">
+          <input list="ollama-models" value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} />
+          <datalist id="ollama-models">
+            {[...new Set([...RECOMMENDED_MODELS, ...installed])].map((n) => <option key={n} value={n} />)}
+          </datalist>
+        </div>
+        <span className="field-hint">
+          {RECOMMENDED_MODELS.map((n) => (
+            <button key={n} type="button" className="chip-inline" onClick={() => setForm({ ...form, model: n })}>
+              {n}{models ? (has(n) ? ' ✓' : ` · ${t('not installed')}`) : ''}
+            </button>
+          ))}
+        </span>
+        {missing && <span className="field-hint warn">{t('This model is not installed on the Ollama server: run "ollama pull {model}" there.', { model: form.model })}</span>}
+      </label>
+      {error && <div className="error">{error}</div>}
+      {msg && <div className="muted small">{msg}</div>}
+      <div className="modal-actions">
+        <button className="btn primary">{t('Save')}</button>
+      </div>
+    </form>
   );
 }

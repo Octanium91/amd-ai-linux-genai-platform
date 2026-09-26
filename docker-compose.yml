@@ -59,6 +59,9 @@ services:
     container_name: genai-web
     ports:
       - "${BIND_ADDR:-0.0.0.0}:${PORT:-7860}:7860"
+    # The Docker host, for an Ollama server running there (the prompt assistant, see Settings)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       TZ: ${TZ:-UTC}
       HF_TOKEN: ${HF_TOKEN:-}

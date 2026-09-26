@@ -405,3 +405,13 @@ input[type="range"].extra { accent-color: var(--bad); }
 .meter-wide { width: 240px; }
 .btn.disabled { pointer-events: none; opacity: 0.5; }
 .check-sm { font-weight: 450; font-size: 13.5px; margin-bottom: 6px; }
+
+/* "To prompt" assistant */
+.btn-small { padding: 3px 10px; font-size: 12.5px; border-radius: 8px; }
+.prompt-ai { display: inline-flex; align-items: center; gap: 6px; color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.prompt-ai:disabled { color: var(--muted); border-color: var(--line); opacity: 0.6; cursor: not-allowed; }
+.field-label-row .field-label { margin: 0; }
+.model-pick { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.model-pick input, .model-pick select { flex: 1 1 220px; min-width: 0; }
+.chip-inline { background: var(--panel-2); border: 1px solid var(--line); border-radius: 99px; padding: 1px 9px; margin-right: 6px; font-size: 12px; color: var(--text); cursor: pointer; }
+.chip-inline:hover { border-color: var(--muted); }

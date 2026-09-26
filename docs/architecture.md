@@ -109,7 +109,10 @@ Every route except sign-in requires a session. Mutating requests require the `X-
 | GET | `/api/models` | user | catalog, statuses, download progress, disk space |
 | POST | `/api/models/download` `{ids}` · `/api/models/:id/cancel` | admin | download / cancel |
 | DELETE | `/api/models/:id` | admin | delete (refused while the model is in use) |
-| GET/PUT | `/api/settings` | admin | platform settings (telemetry on/off and size limit) |
+| GET/PUT | `/api/settings` | admin | platform settings (telemetry on/off and size limit; the prompt assistant's Ollama address, model, on/off) |
+| GET | `/api/settings/ollama?url=` | admin | the Ollama server's version and installed models, for choosing one in Settings |
+| GET | `/api/prompt/status` | user | whether the "To prompt" button can work (enabled, server reachable, model installed; checked at most every 30 s) |
+| POST | `/api/prompt/enhance` | user | `{presetId, prompt, width, height, duration, hasImage}` → `{prompt}`: the idea rewritten by the Ollama model for the mode |
 | GET/DELETE | `/api/telemetry` · `/api/telemetry/export` · `/api/telemetry/:name` | admin | list, download all as one JSON array, download one, delete all |
 | GET | `/files/{output,thumbs,previews,uploads}/…` | user | files (with Range support for video) |
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, estimate, fmtBytes, fmtDuration } from './util.js';
-import { loc, t } from './i18n.js';
+import { loc, t, tError } from './i18n.js';
 
 const FALLBACK_RES = [[512, 512], [768, 512], [512, 768]];
 const OUT_FPS = [24, 30, 50, 60, 120];
@@ -122,6 +122,83 @@ function MissingModels({ preset, user, goModels, reloadPresets }) {
         <div className="muted small">{t('Ask an administrator to download the models.')}</div>
       )}
       {msg && <div className="muted small">{msg}</div>}
+    </div>
+  );
+}
+
+// The prompt field with the "To prompt" assistant: an Ollama model (connected by an administrator
+// in Settings) rewrites the description into a detailed English prompt for the selected mode.
+// The previous text can be restored with one click.
+function PromptField({ form, set, preset, isVideo, hasImage, duration }) {
+  const [status, setStatus] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [undo, setUndo] = useState(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let alive = true;
+    const load = () => api('/api/prompt/status').then((s) => alive && setStatus(s)).catch(() => {});
+    load();
+    const timer = setInterval(load, 60000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, []);
+
+  const ready = !!status?.ready && !!preset;
+  const title = ready
+    ? t('Turn the description into a detailed prompt for this mode ({model})', { model: status.model })
+    : status?.enabled
+      ? `${tError(status.error) || t('The prompt assistant is not available')}. ${t('An administrator can check it in Settings.')}`
+      : t('Connect an Ollama model in Settings to turn a short description into a detailed prompt.');
+
+  const run = async () => {
+    setError('');
+    setBusy(true);
+    try {
+      const r = await api('/api/prompt/enhance', {
+        method: 'POST',
+        json: { presetId: preset.id, prompt: form.prompt, width: form.width, height: form.height, duration: isVideo ? duration : null, hasImage },
+      });
+      setUndo(form.prompt);
+      set('prompt')(r.prompt);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="field">
+      <div className="field-label-row">
+        <label className="field-label" htmlFor="prompt-text">{t('What to generate')}</label>
+        <span title={title}>
+          <button type="button" className="btn ghost btn-small prompt-ai" disabled={!ready || busy || !form.prompt.trim()} onClick={run}>
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+              <path fill="currentColor" d="M10 3l1.9 5.1L17 10l-5.1 1.9L10 17l-1.9-5.1L3 10l5.1-1.9L10 3zm8 10l.9 2.1L21 16l-2.1.9L18 19l-.9-2.1L15 16l2.1-.9L18 13z" />
+            </svg>
+            {busy ? t('Writing…') : t('To prompt')}
+          </button>
+        </span>
+      </div>
+      <textarea id="prompt-text" rows={5} value={form.prompt} required disabled={busy}
+        placeholder={isVideo ? 'a red fox running through fresh snow, cinematic lighting, slow motion' : 'portrait photo of an old fisherman, golden hour, 85mm, detailed skin'}
+        onChange={(e) => {
+          set('prompt')(e.target.value);
+          setUndo(null);
+        }}
+        onKeyDown={(e) => (e.ctrlKey || e.metaKey) && e.key === 'Enter' && !e.repeat && e.currentTarget.form.requestSubmit()} />
+      {undo != null && (
+        <span className="field-hint">
+          {t('The assistant rewrote the description.')}{' '}
+          <button type="button" className="link" onClick={() => { set('prompt')(undo); setUndo(null); }}>{t('Restore my text')}</button>
+        </span>
+      )}
+      {error && <span className="field-hint warn">{error}</span>}
+      <span className="field-hint">
+        {ready ? t('Describe the idea in any language and press "To prompt". English prompts work best. Ctrl+Enter submits.') : t('English prompts work best. Ctrl+Enter submits.')}
+      </span>
     </div>
   );
 }
@@ -259,14 +336,7 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
         <MissingModels preset={preset} user={user} goModels={goModels} reloadPresets={reloadPresets} />
       )}
 
-      <label className="field">
-        <span className="field-label">{t('What to generate')}</span>
-        <textarea rows={5} value={form.prompt} required
-          placeholder={isVideo ? 'a red fox running through fresh snow, cinematic lighting, slow motion' : 'portrait photo of an old fisherman, golden hour, 85mm, detailed skin'}
-          onChange={(e) => set('prompt')(e.target.value)}
-          onKeyDown={(e) => (e.ctrlKey || e.metaKey) && e.key === 'Enter' && !e.repeat && e.currentTarget.form.requestSubmit()} />
-        <span className="field-hint">{t('English prompts work best. Ctrl+Enter submits.')}</span>
-      </label>
+      <PromptField form={form} set={set} preset={preset} isVideo={isVideo} hasImage={!!(acceptsImage && (image || imageRef))} duration={plan.duration} />
 
       {acceptsImage && (
         <div className="field">

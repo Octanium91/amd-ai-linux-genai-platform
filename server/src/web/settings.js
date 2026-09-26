@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config } from '../common/config.js';
 import { readSettings, writeSettings } from '../common/settings.js';
+import { ollamaUrl } from './prompt.js';
 
 const DIR = config.dirs.telemetry;
 const NAME = /^[\w.-]+\.json$/;
@@ -56,13 +57,25 @@ export function anonymize(doc, salt) {
 export function settingsRoutes(api, requireAdmin) {
   api.get('/settings', requireAdmin, (req, res) => res.json(readSettings()));
 
+  // Every section is optional: a request changes only the sections it carries
   api.put('/settings', requireAdmin, (req, res) => {
-    const t = req.body?.telemetry || {};
-    const maxMb = Math.round(Number(t.maxMb));
-    if (!Number.isFinite(maxMb) || maxMb < 10 || maxMb > 100000) {
-      return res.status(400).json({ error: 'The telemetry limit must be between 10 and 100000 MB' });
+    const settings = readSettings();
+    if (req.body?.telemetry) {
+      const t = req.body.telemetry;
+      const maxMb = Math.round(Number(t.maxMb));
+      if (!Number.isFinite(maxMb) || maxMb < 10 || maxMb > 100000) {
+        return res.status(400).json({ error: 'The telemetry limit must be between 10 and 100000 MB' });
+      }
+      settings.telemetry = { enabled: t.enabled === true, maxMb };
     }
-    const settings = { ...readSettings(), telemetry: { enabled: t.enabled === true, maxMb } };
+    if (req.body?.promptAssistant) {
+      const p = req.body.promptAssistant;
+      const url = ollamaUrl(p.url);
+      if (!url) return res.status(400).json({ error: 'The Ollama address must be an http:// or https:// URL' });
+      const model = String(p.model || '').trim();
+      if (!/^[\w.:/-]{1,200}$/.test(model)) return res.status(400).json({ error: 'Enter the name of an Ollama model' });
+      settings.promptAssistant = { enabled: p.enabled === true, url, model };
+    }
     writeSettings(settings);
     res.json(settings);
   });
