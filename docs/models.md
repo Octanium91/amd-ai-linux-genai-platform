@@ -10,6 +10,12 @@ Only administrators can download and delete models. On first start, while no mod
 |---|---|---|---|---|
 | `realistic-vision-v6` | [Realistic Vision 6.0 B1](https://huggingface.co/SG161222/Realistic_Vision_V6.0_B1_noVAE) (SD 1.5, fp16) | images, AnimateLCM, AnimateDiff | 2.0 GB | CreativeML OpenRAIL-M |
 | `sd-vae-ft-mse` | [SD VAE ft-MSE 840000](https://huggingface.co/stabilityai/sd-vae-ft-mse-original) | VAE for SD 1.5 | 0.3 GB | MIT |
+| `realvisxl-v5` | [RealVisXL V5.0](https://huggingface.co/SG161222/RealVisXL_V5.0) (SDXL, fp16) | SDXL images | 6.5 GB | CreativeML OpenRAIL++-M |
+| `realvisxl-v5-lightning` | [RealVisXL V5.0 Lightning](https://huggingface.co/SG161222/RealVisXL_V5.0_Lightning) (SDXL, fp16) | fast SDXL images (5–8 steps) | 6.5 GB | CreativeML OpenRAIL++-M |
+| `sdxl-vae-fp16-fix` | [SDXL VAE fp16 fix](https://huggingface.co/madebyollin/sdxl-vae-fp16-fix) | VAE for SDXL | 0.3 GB | MIT |
+| `z-image-turbo-q8` | [Z-Image Turbo](https://huggingface.co/leejet/Z-Image-Turbo-GGUF), GGUF Q8_0 | Z-Image images | 6.1 GB | Apache-2.0 |
+| `qwen3-4b-instruct-q8` | [Qwen3 4B Instruct 2507](https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF), GGUF Q8_0 | Z-Image text encoder | 4.0 GB | Apache-2.0 |
+| `flux-ae` | FLUX autoencoder (from [Comfy-Org/z_image_turbo](https://huggingface.co/Comfy-Org/z_image_turbo); the FLUX.1-schnell repository requires signing in) | VAE for Z-Image | 0.3 GB | Apache-2.0 |
 | `animatelcm-mm` | [AnimateLCM](https://huggingface.co/wangfuyun/AnimateLCM) — motion module | fast video | 0.9 GB | not stated on the model card |
 | `animatelcm-lora` | AnimateLCM — LoRA | fast video | 0.1 GB | not stated on the model card |
 | `animatediff-v3-mm` | [AnimateDiff v3](https://huggingface.co/guoyww/animatediff) — motion module (repack by [conrevo](https://huggingface.co/conrevo/AnimateDiff-A1111)) | detailed video | 0.8 GB | Apache-2.0 |
@@ -29,12 +35,24 @@ A mode is a ready-made combination of models and parameters, described in [catal
 | Mode | Kind | Models | Defaults | Time on a Radeon 890M |
 |---|---|---|---|---|
 | Realistic Vision 6 · photo | image | RV6 + VAE | 512×768, 25 steps, dpm++2m karras, CFG 5.5 | ~40 s per image |
+| RealVisXL V5 · SDXL photo | image | RealVisXL V5 + SDXL VAE | 1024×1024, 30 steps, dpm++2m karras, CFG 5 | not measured yet |
+| RealVisXL V5 Lightning · fast SDXL | image | RealVisXL V5 Lightning + SDXL VAE | 1024×1024, 6 steps, dpm++2m karras, CFG 1.5 | not measured yet |
+| Z-Image Turbo · photo | image | Z-Image Turbo + FLUX VAE + Qwen3 4B | 1024×1024, 8 steps, euler, CFG 1 | not measured yet |
 | AnimateLCM · Realistic Vision | video | RV6 + VAE + AnimateLCM + LoRA | 512×512, 16 frames (2 s at 8 fps → 24 fps), 6 steps, lcm, CFG 1 | **~2.5 min** |
 | AnimateDiff v3 · Realistic Vision | video | RV6 + VAE + AnimateDiff v3 + adapter | 512×512, 16 frames, 20 steps, euler, CFG 8 | ~16 min |
 | Wan 2.2 TI2V 5B | video | Wan 2.2 5B + VAE + UMT5 | 832×480, 49 frames at 24 fps, 25 steps | hours (meant for Strix Halo) |
 | Wan 2.1 T2V 1.3B | video | Wan 2.1 1.3B + VAE + UMT5 | 832×480, 16 fps | not measured (experimental) |
 
 The Draft / Standard / High quality levels set the number of steps, which each mode defines itself (see `defaults.quality`).
+
+### Tasks
+
+The form starts with the task, and the mode list shows only the modes that fit it:
+
+- images: **Create** (text → image) and **Rework a photo** (image → image, the photo is required);
+- video: **Create** (text → video) and **Animate a photo** (the photo is the first frame, required).
+
+A mode fits a task by its `image` field: `none` means text only, `optional` fits both tasks, `required` only the photo task.
 
 ### Extra
 

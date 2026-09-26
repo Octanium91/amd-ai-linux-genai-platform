@@ -23,6 +23,53 @@
     }
   },
   {
+    "id": "image-realvisxl",
+    "name": "Images · RealVisXL V5 (SDXL)",
+    "description": "Photorealistic SDXL at 1024 px, in two variants: the full model (best detail) and Lightning (5–8 steps, several times faster). ~14 GB.",
+    "models": [
+      "realvisxl-v5",
+      "realvisxl-v5-lightning",
+      "sdxl-vae-fp16-fix"
+    ],
+    "presets": [
+      "img-realvisxl",
+      "img-realvisxl-lightning"
+    ],
+    "i18n": {
+      "uk": {
+        "name": "Зображення · RealVisXL V5 (SDXL)",
+        "description": "Фотореалістичний SDXL у 1024 px у двох варіантах: повна модель (найбільше деталей) і Lightning (5–8 кроків, у кілька разів швидше). ~14 ГБ."
+      },
+      "ru": {
+        "name": "Изображения · RealVisXL V5 (SDXL)",
+        "description": "Фотореалистичный SDXL в 1024 px в двух вариантах: полная модель (больше всего деталей) и Lightning (5–8 шагов, в несколько раз быстрее). ~14 ГБ."
+      }
+    }
+  },
+  {
+    "id": "image-z-image",
+    "name": "Images · Z-Image Turbo",
+    "description": "A modern 6B image model in 8 steps with a Qwen3 text encoder: understands natural-language descriptions and renders text. ~11 GB.",
+    "models": [
+      "z-image-turbo-q8",
+      "qwen3-4b-instruct-q8",
+      "flux-ae"
+    ],
+    "presets": [
+      "img-z-image-turbo"
+    ],
+    "i18n": {
+      "uk": {
+        "name": "Зображення · Z-Image Turbo",
+        "description": "Сучасна модель зображень на 6B за 8 кроків із текстовим енкодером Qwen3: розуміє описи природною мовою і пише текст. ~11 ГБ."
+      },
+      "ru": {
+        "name": "Изображения · Z-Image Turbo",
+        "description": "Современная модель изображений на 6B за 8 шагов с текстовым энкодером Qwen3: понимает описания на естественном языке и пишет текст. ~11 ГБ."
+      }
+    }
+  },
+  {
     "id": "video-animatelcm",
     "name": "Video · AnimateLCM — fast",
     "description": "The recommended video mode, the fastest one. The motion module is converted automatically.",

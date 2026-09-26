@@ -225,6 +225,8 @@ const ROLE_FLAGS = {
   t5xxl: '--t5xxl',
   clip_vision: '--clip_vision',
   motion_module: '--motion-module',
+  // A language model as the text encoder (Z-Image: Qwen3)
+  llm: '--llm',
 };
 
 function buildArgs(job, preset, outBase, initImage) {

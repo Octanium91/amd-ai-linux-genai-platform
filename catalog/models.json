@@ -190,5 +190,119 @@
     "size": 253815318,
     "license": "Apache-2.0",
     "homepage": "https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B"
+  },
+  {
+    "id": "realvisxl-v5",
+    "name": "RealVisXL V5.0 (SDXL, fp16)",
+    "category": "checkpoint",
+    "description": "Photorealistic SDXL model: 1024 px, more detail and better composition than SD 1.5.",
+    "file": "checkpoints/RealVisXL_V5.0_fp16.safetensors",
+    "url": "https://huggingface.co/SG161222/RealVisXL_V5.0/resolve/main/RealVisXL_V5.0_fp16.safetensors",
+    "size": 6938065488,
+    "license": "CreativeML OpenRAIL++-M",
+    "homepage": "https://huggingface.co/SG161222/RealVisXL_V5.0",
+    "i18n": {
+      "uk": {
+        "description": "Фотореалістична модель SDXL: 1024 px, більше деталей і краща композиція, ніж у SD 1.5."
+      },
+      "ru": {
+        "description": "Фотореалистичная модель SDXL: 1024 px, больше деталей и лучше композиция, чем у SD 1.5."
+      }
+    }
+  },
+  {
+    "id": "realvisxl-v5-lightning",
+    "name": "RealVisXL V5.0 Lightning (SDXL, fp16)",
+    "category": "checkpoint",
+    "description": "RealVisXL distilled for 5–8 steps: several times faster, slightly less detail.",
+    "file": "checkpoints/RealVisXL_V5.0_Lightning_fp16.safetensors",
+    "url": "https://huggingface.co/SG161222/RealVisXL_V5.0_Lightning/resolve/main/RealVisXL_V5.0_Lightning_fp16.safetensors",
+    "size": 6938065512,
+    "license": "CreativeML OpenRAIL++-M",
+    "homepage": "https://huggingface.co/SG161222/RealVisXL_V5.0_Lightning",
+    "i18n": {
+      "uk": {
+        "description": "RealVisXL, дистильована під 5–8 кроків: у кілька разів швидше, трохи менше деталей."
+      },
+      "ru": {
+        "description": "RealVisXL, дистиллированная под 5–8 шагов: в несколько раз быстрее, чуть меньше деталей."
+      }
+    }
+  },
+  {
+    "id": "sdxl-vae-fp16-fix",
+    "name": "SDXL VAE (fp16 fix)",
+    "category": "vae",
+    "description": "The SDXL VAE fixed to run in half precision without black or noisy images.",
+    "file": "vae/sdxl_vae_fp16_fix.safetensors",
+    "url": "https://huggingface.co/madebyollin/sdxl-vae-fp16-fix/resolve/main/sdxl_vae.safetensors",
+    "size": 334641162,
+    "license": "MIT",
+    "homepage": "https://huggingface.co/madebyollin/sdxl-vae-fp16-fix",
+    "i18n": {
+      "uk": {
+        "description": "VAE для SDXL, виправлений для роботи в половинній точності без чорних чи шумних зображень."
+      },
+      "ru": {
+        "description": "VAE для SDXL, исправленный для работы в половинной точности без чёрных или шумных изображений."
+      }
+    }
+  },
+  {
+    "id": "z-image-turbo-q8",
+    "name": "Z-Image Turbo (GGUF Q8_0)",
+    "category": "diffusion",
+    "description": "A 6B image model distilled for 8 steps: strong photorealism, follows long natural-language prompts, can render text.",
+    "file": "diffusion_models/z_image_turbo-Q8_0.gguf",
+    "url": "https://huggingface.co/leejet/Z-Image-Turbo-GGUF/resolve/main/z_image_turbo-Q8_0.gguf",
+    "size": 6577440704,
+    "license": "Apache-2.0",
+    "homepage": "https://huggingface.co/leejet/Z-Image-Turbo-GGUF",
+    "i18n": {
+      "uk": {
+        "description": "Модель зображень на 6B, дистильована під 8 кроків: сильний фотореалізм, розуміє довгі промпти природною мовою, вміє писати текст."
+      },
+      "ru": {
+        "description": "Модель изображений на 6B, дистиллированная под 8 шагов: сильный фотореализм, понимает длинные промпты на естественном языке, умеет писать текст."
+      }
+    }
+  },
+  {
+    "id": "qwen3-4b-instruct-q8",
+    "name": "Qwen3 4B Instruct 2507 (GGUF Q8_0)",
+    "category": "text_encoder",
+    "description": "Text encoder for Z-Image: a small language model that reads the prompt.",
+    "file": "text_encoders/Qwen3-4B-Instruct-2507-Q8_0.gguf",
+    "url": "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Instruct-2507-Q8_0.gguf",
+    "size": 4280405600,
+    "license": "Apache-2.0",
+    "homepage": "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF",
+    "i18n": {
+      "uk": {
+        "description": "Текстовий енкодер для Z-Image: невелика мовна модель, що читає промпт."
+      },
+      "ru": {
+        "description": "Текстовый энкодер для Z-Image: небольшая языковая модель, которая читает промпт."
+      }
+    }
+  },
+  {
+    "id": "flux-ae",
+    "name": "FLUX VAE (ae)",
+    "category": "vae",
+    "description": "The FLUX autoencoder, used by Z-Image.",
+    "file": "vae/flux_ae.safetensors",
+    "url": "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/vae/ae.safetensors",
+    "size": 335304388,
+    "license": "Apache-2.0",
+    "homepage": "https://huggingface.co/Comfy-Org/z_image_turbo",
+    "i18n": {
+      "uk": {
+        "description": "Автоенкодер FLUX, його використовує Z-Image."
+      },
+      "ru": {
+        "description": "Автоэнкодер FLUX, его использует Z-Image."
+      }
+    }
   }
 ]

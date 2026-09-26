@@ -77,10 +77,10 @@ async function supportsThinking(base, model) {
 }
 
 // How the mode reads a prompt. A mode may say so in catalog/presets.json (`promptStyle`); otherwise
-// a T5-family text encoder (Wan) means natural language and anything else CLIP (SD 1.5): tags
+// a T5 or language-model text encoder (Wan, Z-Image) means natural language and CLIP (SD 1.5, SDXL) tags
 function promptStyle(preset) {
   if (preset.promptStyle) return preset.promptStyle;
-  return preset.models?.t5xxl ? 'natural' : 'tags';
+  return preset.models?.t5xxl || preset.models?.llm ? 'natural' : 'tags';
 }
 
 // For CLIP modes the model fills these fields and the server assembles them in this order, then
@@ -88,7 +88,7 @@ function promptStyle(preset) {
 // structure far better than they follow rules about a free text.
 const TAG_FIELDS = ['subject', 'action', 'setting', 'lighting', 'camera'];
 
-// One worked example per kind: the idea in another language on purpose
+// One worked example per style and kind: the idea in another language on purpose
 const EXAMPLES = {
   tags: {
     image: {
@@ -101,6 +101,10 @@ const EXAMPLES = {
     },
   },
   natural: {
+    image: {
+      idea: 'старик-рыбак в порту',
+      answer: { idea_en: 'an old fisherman in a harbor', prompt: 'A weathered old fisherman with a thick grey beard and a knitted navy sweater stands on a wooden pier, holding a coil of rope and looking calmly past the camera. Fishing boats with peeling paint are moored behind him and gulls sit on the posts. Soft overcast daylight brings out every wrinkle and the texture of the wool. Half-body portrait, 85mm lens, shallow depth of field.' },
+    },
     video: {
       idea: 'лиса бежит по снегу на рассвете',
       answer: { idea_en: 'a fox runs through the snow at dawn', prompt: 'A red fox with thick, frosted fur runs across a snowy meadow at dawn, its paws kicking up small bursts of powder with every stride. Pale golden light rises behind distant pine trees and long blue shadows stretch across the snow. The camera tracks the fox from the side at a low angle, keeping it sharp while the background drifts past softly. Realistic, calm and crisp winter morning.' },
@@ -109,8 +113,8 @@ const EXAMPLES = {
 };
 
 const RULES = {
-  tags: [
-    'You are an expert prompt engineer for Stable Diffusion 1.5 photorealistic models (Realistic Vision).',
+  tags: () => [
+    'You are an expert prompt engineer for photorealistic Stable Diffusion models (SD 1.5, SDXL) with a CLIP text encoder.',
     'You turn a short idea into the parts of a prompt. First write idea_en: an exact English translation of the idea, nothing added.',
     'Then fill every other field with short comma-separated phrases in English, not sentences, strictly about idea_en:',
     '- subject: who or what, with the key visual details (age, clothing, colors, materials, textures)',
@@ -121,17 +125,21 @@ const RULES = {
     'Each field at most 12 words. Only things that can be seen: no sounds, smells, feelings or story.',
     'Do not write quality words like 8k, masterpiece or high quality: they are added automatically.',
   ],
-  natural: [
-    'You are an expert prompt engineer for Wan, a text-to-video model with a T5 text encoder that understands natural language well.',
+  natural: (video) => [
+    `You are an expert prompt engineer for a modern ${video ? 'text-to-video' : 'text-to-image'} model whose text encoder understands natural language well.`,
     'First write idea_en: an exact English translation of the idea, nothing added. Then write the prompt strictly about idea_en.',
-    'The prompt is 2 to 4 flowing English sentences, 50 to 110 words: the subject and its appearance, what happens and how it moves over time, the environment, the lighting and atmosphere, and the camera (shot size and camera movement).',
-    'Describe one continuous shot without cuts or scene changes. Only things that can be seen: no sounds, smells or inner thoughts.',
+    video
+      ? 'The prompt is 2 to 4 flowing English sentences, 50 to 110 words: the subject and its appearance, what happens and how it moves over time, the environment, the lighting and atmosphere, and the camera (shot size and camera movement).'
+      : 'The prompt is 2 to 4 flowing English sentences, 50 to 110 words: the subject and its appearance, the pose and expression, the environment, the lighting and atmosphere, and the camera (shot size, angle, lens).',
+    video
+      ? 'Describe one continuous shot without cuts or scene changes. Only things that can be seen: no sounds, smells or inner thoughts.'
+      : 'Only things that can be seen: no sounds, smells or inner thoughts. Text that should appear on the image goes in double quotes.',
   ],
 };
 
 function systemPrompt(preset, style, ctx) {
   const lines = [
-    ...RULES[style],
+    ...RULES[style](preset.kind === 'video'),
     'The idea may be in any language; always answer in English.',
     'Keep everything the user asked for and do not add subjects they did not mention; make it specific and visual.',
     'The first exchange is only an example of the format: never reuse its objects, places, weather or wording.',

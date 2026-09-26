@@ -1,8 +1,5 @@
 // Russian UI translations. Keys are the English source strings (see web/src/i18n.js).
 export default {
-  "(optional: image → image)": "(необязательно: картинка → картинка)",
-  "(optional: image → video)": "(необязательно: картинка → видео)",
-  "(required)": "(обязательно)",
   "2–32 characters: Latin letters, digits, . _ -": "2–32 символа: латиница, цифры, . _ -",
   "A time estimate appears after the first generation": "Оценка времени появится после первой генерации",
   "Add": "Добавить",
@@ -280,7 +277,6 @@ export default {
   "Sign out": "Выйти",
   "Sign-in required": "Требуется вход",
   "Signing in…": "Вход…",
-  "Source image": "Исходная картинка",
   "source ↗": "источник ↗",
   "Standard": "Стандарт",
   "Start frame": "Стартовый кадр",
@@ -432,4 +428,14 @@ export default {
   "Turn the description into a detailed prompt for this mode ({model})": "Превратить описание в подробный промпт для этого режима ({model})",
   "Writing…": "Пишу…",
   "Recommended: dolphin-llama3 (8B, 4.7 GB, the most accurate, 5–15 s per prompt) or huihui_ai/qwen2.5-abliterate:3b (1.9 GB, fast, 3–7 s, understands other languages, simpler wording). dolphin-phi often loses the meaning of non-English descriptions. Install on the Ollama server with:": "Рекомендуется: dolphin-llama3 (8B, 4,7 ГБ, самая точная, 5–15 с на промпт) или huihui_ai/qwen2.5-abliterate:3b (1,9 ГБ, быстрая, 3–7 с, понимает другие языки, формулировки проще). dolphin-phi часто теряет смысл неанглийских описаний. Установите на сервере Ollama:",
+  "Add a photo for this task.": "Добавьте фото для этой задачи.",
+  "Animate a photo": "Оживить фото",
+  "Create": "Создать",
+  "Photo to rework": "Фото для переделки",
+  "Rework a photo": "Переделать фото",
+  "Task": "Задача",
+  "An image from a description": "Изображение по описанию",
+  "Your photo changed by the description": "Ваше фото, изменённое по описанию",
+  "A video from a description": "Видео по описанию",
+  "Your photo becomes the first frame and comes alive": "Ваше фото становится первым кадром и оживает",
 };

@@ -11,6 +11,20 @@ const QUALITY = [
   { key: 'high', label: 'High' },
   { key: 'extra', label: 'Extra', extra: true },
 ];
+// What the user wants to do. A task decides which modes fit and whether a photo is needed; more
+// tasks (editing a part of an image, upscaling, putting a person into a video) slot in here.
+const TASKS = {
+  image: [
+    { key: 'create', label: 'Create', title: 'An image from a description' },
+    { key: 'rework', label: 'Rework a photo', title: 'Your photo changed by the description', image: true },
+  ],
+  video: [
+    { key: 'create', label: 'Create', title: 'A video from a description' },
+    { key: 'animate', label: 'Animate a photo', title: 'Your photo becomes the first frame and comes alive', image: true },
+  ],
+};
+const fitsTask = (p, task) => (task.image ? p.image !== 'none' : p.image !== 'required');
+
 const SAMPLERS = ['euler', 'euler_a', 'dpm++2m', 'dpm++2m_sde', 'res_multistep', 'lcm', 'ddim_trailing', 'tcd'];
 
 // "Extra" is twice the steps of "High" (same rule as the server)
@@ -212,8 +226,11 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [drag, setDrag] = useState(false);
+  const [taskKey, setTaskKey] = useState('create');
   const fileInput = useRef(null);
   const isVideo = kind === 'video';
+  const tasks = TASKS[kind] || TASKS.image;
+  const task = tasks.find((x) => x.key === taskKey) || tasks[0];
 
   const preset = presets.find((p) => p.id === form?.presetId);
 
@@ -236,6 +253,7 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
     setForm((f) => ({ ...(f || {}), ...params }));
     setImage(null);
     setImageRef(img || null);
+    setTaskKey(img ? (kind === 'video' ? 'animate' : 'rework') : 'create');
     // Applied once: coming back to the tab later must not overwrite what the user typed since
     onReuseApplied?.();
   }, [reuse, kind]);
@@ -259,10 +277,25 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
       setImageRef(null);
     }
   };
+  const modes = presets.filter((p) => fitsTask(p, task));
+  const pickTask = (key) => {
+    const next = tasks.find((x) => x.key === key);
+    setTaskKey(key);
+    if (!next.image) {
+      setImage(null);
+      setImageRef(null);
+    }
+    // Keep the mode when it fits the task, otherwise the first fitting one that is ready
+    if (preset && !fitsTask(preset, next)) {
+      const fit = presets.filter((p) => fitsTask(p, next));
+      const p = fit.find((x) => x.available) || fit[0];
+      if (p) pickPreset(p.id);
+    }
+  };
 
   const d = preset?.defaults || {};
   const resolutions = preset?.resolutions || FALLBACK_RES;
-  const acceptsImage = preset && preset.image !== 'none';
+  const acceptsImage = !!task.image && preset && preset.image !== 'none';
   const plan = videoPlan(preset, form.duration, form.segmentFrames);
   // Sizes the mode was tested at; others work but follow the prompt less reliably
   const recommended = preset?.recommendedResolutions;
@@ -283,6 +316,7 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
     e.preventDefault();
     // Ctrl+Enter bypasses the disabled button, and a held key repeats: one job per submit
     if (submitting.current) return;
+    if (task.image && !image && !imageRef) return setError(t('Add a photo for this task.'));
     submitting.current = true;
     setError('');
     setBusy(true);
@@ -312,10 +346,20 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
     <form className="card form" onSubmit={submit}>
       <h2>{isVideo ? t('New video') : t('New image')}</h2>
 
+      <div className="task-tabs" role="tablist" aria-label={t('Task')}>
+        {tasks.map((x) => (
+          <button key={x.key} type="button" role="tab" aria-selected={x.key === task.key}
+            className={`task-tab ${x.key === task.key ? 'on' : ''}`} onClick={() => pickTask(x.key)}>
+            <span className="task-name">{t(x.label)}</span>
+            <span className="task-hint">{t(x.title)}</span>
+          </button>
+        ))}
+      </div>
+
       <label className="field">
         <span className="field-label">{t('Mode')}</span>
         <select value={form.presetId} onChange={(e) => pickPreset(e.target.value)}>
-          {presets.map((p) => (
+          {modes.map((p) => (
             <option key={p.id} value={p.id}>
               {loc(p, 'name')}{p.available ? '' : ` — ${t('models need to be downloaded')}`}
             </option>
@@ -341,10 +385,7 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
       {acceptsImage && (
         <div className="field">
           <span className="field-label">
-            {isVideo ? t('Start frame') : t('Source image')}{' '}
-            <span className="muted">
-              {preset.image === 'required' ? t('(required)') : isVideo ? t('(optional: image → video)') : t('(optional: image → image)')}
-            </span>
+            {isVideo ? t('Start frame') : t('Photo to rework')}
           </span>
           <div
             className={`drop ${drag ? 'drag' : ''} ${previewUrl ? 'has' : ''}`}

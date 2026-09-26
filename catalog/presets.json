@@ -4,8 +4,20 @@
     "kind": "image",
     "name": "Realistic Vision 6 · photo",
     "description": "Photorealistic images on SD 1.5. 768×1024 (the model author's recommendation) is slower than 512×768 but more detailed.",
-    "promptQuality": {"prefix": "RAW photo", "suffix": "8k uhd, dslr, soft lighting, high quality, film grain, Fujifilm XT3"},
-    "reference": { "width": 512, "height": 768, "frames": 2, "steps": 25, "cfg": 5.5, "samplingSec": 43, "decodeSec": 8, "otherSec": 34 },
+    "promptQuality": {
+      "prefix": "RAW photo",
+      "suffix": "8k uhd, dslr, soft lighting, high quality, film grain, Fujifilm XT3"
+    },
+    "reference": {
+      "width": 512,
+      "height": 768,
+      "frames": 2,
+      "steps": 25,
+      "cfg": 5.5,
+      "samplingSec": 43,
+      "decodeSec": 8,
+      "otherSec": 34
+    },
     "image": "optional",
     "models": {
       "model": "realistic-vision-v6",
@@ -71,12 +83,340 @@
     }
   },
   {
+    "id": "img-realvisxl",
+    "kind": "image",
+    "name": "RealVisXL V5 · SDXL photo",
+    "description": "Photorealistic SDXL at 1024 px: more detail and better composition than SD 1.5, but several times slower.",
+    "promptQuality": {
+      "prefix": "RAW photo",
+      "suffix": "photorealistic, 8k uhd, dslr, soft lighting, high quality, film grain"
+    },
+    "image": "optional",
+    "models": {
+      "model": "realvisxl-v5",
+      "vae": "sdxl-vae-fp16-fix"
+    },
+    "defaults": {
+      "width": 1024,
+      "height": 1024,
+      "cfg": 5,
+      "sampler": "dpm++2m",
+      "negative": "(octane render, render, drawing, anime, bad photo, bad photography:1.3), (worst quality, low quality, blurry:1.2), (bad teeth, deformed teeth, deformed lips), (bad anatomy, bad proportions:1.1), (deformed iris, deformed pupils), (deformed eyes, bad eyes), (deformed face, ugly face, bad face), (deformed hands, bad hands, fused fingers), morbid, mutilated, mutation, disfigured",
+      "quality": {
+        "draft": 20,
+        "normal": 30,
+        "high": 45
+      }
+    },
+    "resolutions": [
+      [
+        1024,
+        1024
+      ],
+      [
+        896,
+        1152
+      ],
+      [
+        1152,
+        896
+      ],
+      [
+        832,
+        1216
+      ],
+      [
+        1216,
+        832
+      ],
+      [
+        768,
+        1344
+      ],
+      [
+        1344,
+        768
+      ]
+    ],
+    "recommendedResolutions": [
+      [
+        1024,
+        1024
+      ],
+      [
+        896,
+        1152
+      ],
+      [
+        1152,
+        896
+      ],
+      [
+        832,
+        1216
+      ],
+      [
+        1216,
+        832
+      ],
+      [
+        768,
+        1344
+      ],
+      [
+        1344,
+        768
+      ]
+    ],
+    "preview": "proj",
+    "imageArgs": [
+      "--strength",
+      "0.55"
+    ],
+    "extraArgs": [
+      "--scheduler",
+      "karras",
+      "--diffusion-fa",
+      "--vae-tiling"
+    ],
+    "i18n": {
+      "uk": {
+        "name": "RealVisXL V5 · фото SDXL",
+        "description": "Фотореалістичний SDXL у 1024 px: більше деталей і краща композиція, ніж у SD 1.5, але в кілька разів повільніше."
+      },
+      "ru": {
+        "name": "RealVisXL V5 · фото SDXL",
+        "description": "Фотореалистичный SDXL в 1024 px: больше деталей и лучше композиция, чем у SD 1.5, но в несколько раз медленнее."
+      }
+    }
+  },
+  {
+    "id": "img-realvisxl-lightning",
+    "kind": "image",
+    "name": "RealVisXL V5 Lightning · fast SDXL",
+    "description": "The same RealVisXL distilled for 5–8 steps: SDXL quality in a fraction of the time. The negative prompt is not used at CFG 1.",
+    "promptQuality": {
+      "prefix": "RAW photo",
+      "suffix": "photorealistic, 8k uhd, dslr, soft lighting, high quality, film grain"
+    },
+    "image": "optional",
+    "models": {
+      "model": "realvisxl-v5-lightning",
+      "vae": "sdxl-vae-fp16-fix"
+    },
+    "defaults": {
+      "width": 1024,
+      "height": 1024,
+      "cfg": 1.5,
+      "sampler": "dpm++2m",
+      "negative": "(octane render, render, drawing, anime, bad photo, bad photography:1.3), (worst quality, low quality, blurry:1.2), (bad teeth, deformed teeth, deformed lips), (bad anatomy, bad proportions:1.1), (deformed iris, deformed pupils), (deformed eyes, bad eyes), (deformed face, ugly face, bad face), (deformed hands, bad hands, fused fingers), morbid, mutilated, mutation, disfigured",
+      "quality": {
+        "draft": 5,
+        "normal": 6,
+        "high": 8,
+        "extra": 10
+      }
+    },
+    "resolutions": [
+      [
+        1024,
+        1024
+      ],
+      [
+        896,
+        1152
+      ],
+      [
+        1152,
+        896
+      ],
+      [
+        832,
+        1216
+      ],
+      [
+        1216,
+        832
+      ],
+      [
+        768,
+        1344
+      ],
+      [
+        1344,
+        768
+      ]
+    ],
+    "recommendedResolutions": [
+      [
+        1024,
+        1024
+      ],
+      [
+        896,
+        1152
+      ],
+      [
+        1152,
+        896
+      ],
+      [
+        832,
+        1216
+      ],
+      [
+        1216,
+        832
+      ],
+      [
+        768,
+        1344
+      ],
+      [
+        1344,
+        768
+      ]
+    ],
+    "preview": "proj",
+    "imageArgs": [
+      "--strength",
+      "0.55"
+    ],
+    "extraArgs": [
+      "--scheduler",
+      "karras",
+      "--diffusion-fa",
+      "--vae-tiling"
+    ],
+    "i18n": {
+      "uk": {
+        "name": "RealVisXL V5 Lightning · швидкий SDXL",
+        "description": "Той самий RealVisXL, дистильований під 5–8 кроків: якість SDXL за частку часу."
+      },
+      "ru": {
+        "name": "RealVisXL V5 Lightning · быстрый SDXL",
+        "description": "Тот же RealVisXL, дистиллированный под 5–8 шагов: качество SDXL за долю времени."
+      }
+    }
+  },
+  {
+    "id": "img-z-image-turbo",
+    "kind": "image",
+    "name": "Z-Image Turbo · photo",
+    "description": "A modern 6B model in 8 steps: strong photorealism, understands long descriptions in natural language, can render text on the image.",
+    "promptStyle": "natural",
+    "promptQuality": {
+      "suffix": "Photorealistic, natural light, rich detail, sharp focus."
+    },
+    "image": "optional",
+    "models": {
+      "diffusion": "z-image-turbo-q8",
+      "vae": "flux-ae",
+      "llm": "qwen3-4b-instruct-q8"
+    },
+    "defaults": {
+      "width": 1024,
+      "height": 1024,
+      "cfg": 1,
+      "sampler": "euler",
+      "negative": "",
+      "quality": {
+        "draft": 6,
+        "normal": 8,
+        "high": 10,
+        "extra": 14
+      }
+    },
+    "resolutions": [
+      [
+        1024,
+        1024
+      ],
+      [
+        832,
+        1216
+      ],
+      [
+        1216,
+        832
+      ],
+      [
+        768,
+        1344
+      ],
+      [
+        1344,
+        768
+      ],
+      [
+        1024,
+        512
+      ],
+      [
+        512,
+        1024
+      ]
+    ],
+    "recommendedResolutions": [
+      [
+        1024,
+        1024
+      ],
+      [
+        832,
+        1216
+      ],
+      [
+        1216,
+        832
+      ],
+      [
+        768,
+        1344
+      ],
+      [
+        1344,
+        768
+      ]
+    ],
+    "preview": "proj",
+    "imageArgs": [
+      "--strength",
+      "0.6"
+    ],
+    "extraArgs": [
+      "--diffusion-fa",
+      "--vae-tiling"
+    ],
+    "i18n": {
+      "uk": {
+        "name": "Z-Image Turbo · фото",
+        "description": "Сучасна модель на 6B за 8 кроків: сильний фотореалізм, розуміє довгі описи природною мовою, вміє писати текст на зображенні."
+      },
+      "ru": {
+        "name": "Z-Image Turbo · фото",
+        "description": "Современная модель на 6B за 8 шагов: сильный фотореализм, понимает длинные описания на естественном языке, умеет писать текст на изображении."
+      }
+    }
+  },
+  {
     "id": "vid-animatelcm",
     "kind": "video",
     "name": "AnimateLCM · Realistic Vision (fast)",
     "description": "The fastest video mode. CFG 1 is faster and softer; CFG 1.5 gives more contrast and motion at about twice the time.",
-    "promptQuality": {"suffix": "cinematic, 8k uhd, dslr, soft lighting, high quality, film grain"},
-    "reference": { "width": 512, "height": 512, "frames": 16, "steps": 6, "cfg": 1, "samplingSec": 101, "decodeSec": 46, "otherSec": 3 },
+    "promptQuality": {
+      "suffix": "cinematic, 8k uhd, dslr, soft lighting, high quality, film grain"
+    },
+    "reference": {
+      "width": 512,
+      "height": 512,
+      "frames": 16,
+      "steps": 6,
+      "cfg": 1,
+      "samplingSec": 101,
+      "decodeSec": 46,
+      "otherSec": 3
+    },
     "image": "optional",
     "models": {
       "model": "realistic-vision-v6",
@@ -120,7 +460,12 @@
         768
       ]
     ],
-    "recommendedResolutions": [[512, 512]],
+    "recommendedResolutions": [
+      [
+        512,
+        512
+      ]
+    ],
     "preview": "proj",
     "imageArgs": [
       "--strength",
@@ -152,8 +497,19 @@
     "kind": "video",
     "name": "AnimateDiff v3 · Realistic Vision (detailed)",
     "description": "Classic AnimateDiff v3 with the Domain Adapter: more detailed than AnimateLCM, but about 6× slower.",
-    "promptQuality": {"suffix": "cinematic, 8k uhd, dslr, soft lighting, high quality, film grain"},
-    "reference": { "width": 512, "height": 512, "frames": 16, "steps": 20, "cfg": 8, "samplingSec": 899, "decodeSec": 57, "otherSec": 1 },
+    "promptQuality": {
+      "suffix": "cinematic, 8k uhd, dslr, soft lighting, high quality, film grain"
+    },
+    "reference": {
+      "width": 512,
+      "height": 512,
+      "frames": 16,
+      "steps": 20,
+      "cfg": 8,
+      "samplingSec": 899,
+      "decodeSec": 57,
+      "otherSec": 1
+    },
     "image": "optional",
     "models": {
       "model": "realistic-vision-v6",
@@ -197,7 +553,16 @@
         768
       ]
     ],
-    "recommendedResolutions": [[512, 512], [768, 512]],
+    "recommendedResolutions": [
+      [
+        512,
+        512
+      ],
+      [
+        768,
+        512
+      ]
+    ],
     "preview": "proj",
     "imageArgs": [
       "--strength",
@@ -229,8 +594,19 @@
     "kind": "video",
     "name": "Wan 2.2 TI2V 5B (real motion, slow)",
     "description": "A full video model: coherent motion, text and image to video. Much slower than AnimateDiff; best on Strix Halo.",
-    "promptQuality": {"suffix": "Photorealistic, cinematic lighting, rich detail, smooth natural motion."},
-    "reference": { "width": 832, "height": 480, "frames": 17, "steps": 10, "cfg": 5, "samplingSec": 676, "decodeSec": 2027, "otherSec": 0 },
+    "promptQuality": {
+      "suffix": "Photorealistic, cinematic lighting, rich detail, smooth natural motion."
+    },
+    "reference": {
+      "width": 832,
+      "height": 480,
+      "frames": 17,
+      "steps": 10,
+      "cfg": 5,
+      "samplingSec": 676,
+      "decodeSec": 2027,
+      "otherSec": 0
+    },
     "image": "optional",
     "minGtt": 22,
     "models": {
@@ -278,7 +654,24 @@
         1280
       ]
     ],
-    "recommendedResolutions": [[832, 480], [480, 832], [1280, 704], [704, 1280]],
+    "recommendedResolutions": [
+      [
+        832,
+        480
+      ],
+      [
+        480,
+        832
+      ],
+      [
+        1280,
+        704
+      ],
+      [
+        704,
+        1280
+      ]
+    ],
     "preview": "proj",
     "extraArgs": [
       "--diffusion-fa",
@@ -301,7 +694,9 @@
     "kind": "video",
     "name": "Wan 2.1 T2V 1.3B (experimental)",
     "description": "Lightweight Wan 2.1, text to video only. Not yet tested on this platform.",
-    "promptQuality": {"suffix": "Photorealistic, cinematic lighting, rich detail, smooth natural motion."},
+    "promptQuality": {
+      "suffix": "Photorealistic, cinematic lighting, rich detail, smooth natural motion."
+    },
     "experimental": true,
     "image": "none",
     "models": {
@@ -341,7 +736,16 @@
         640
       ]
     ],
-    "recommendedResolutions": [[832, 480], [480, 832]],
+    "recommendedResolutions": [
+      [
+        832,
+        480
+      ],
+      [
+        480,
+        832
+      ]
+    ],
     "preview": "proj",
     "extraArgs": [
       "--diffusion-fa",

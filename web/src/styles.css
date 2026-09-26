@@ -415,3 +415,11 @@ input[type="range"].extra { accent-color: var(--bad); }
 .model-pick input, .model-pick select { flex: 1 1 220px; min-width: 0; }
 .chip-inline { background: var(--panel-2); border: 1px solid var(--line); border-radius: 99px; padding: 1px 9px; margin-right: 6px; font-size: 12px; color: var(--text); cursor: pointer; }
 .chip-inline:hover { border-color: var(--muted); }
+
+/* task choice at the top of the generation form */
+.task-tabs { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 6px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 4px; }
+.task-tab { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; background: none; border: 0; border-radius: 9px; padding: 7px 10px; cursor: pointer; color: var(--muted); }
+.task-tab:hover { color: var(--text); }
+.task-tab.on { background: var(--panel); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25); }
+.task-name { font-weight: 600; font-size: 13.5px; }
+.task-hint { font-size: 11.5px; color: var(--muted); line-height: 1.3; }

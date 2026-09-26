@@ -1,8 +1,5 @@
 // Ukrainian UI translations. Keys are the English source strings (see web/src/i18n.js).
 export default {
-  "(optional: image → image)": "(необов'язково: картинка → картинка)",
-  "(optional: image → video)": "(необов'язково: картинка → відео)",
-  "(required)": "(обов'язково)",
   "2–32 characters: Latin letters, digits, . _ -": "2–32 символи: латиниця, цифри, . _ -",
   "A time estimate appears after the first generation": "Оцінка часу з'явиться після першої генерації",
   "Add": "Додати",
@@ -280,7 +277,6 @@ export default {
   "Sign out": "Вийти",
   "Sign-in required": "Потрібен вхід",
   "Signing in…": "Вхід…",
-  "Source image": "Вихідна картинка",
   "source ↗": "джерело ↗",
   "Standard": "Стандарт",
   "Start frame": "Стартовий кадр",
@@ -432,4 +428,14 @@ export default {
   "Turn the description into a detailed prompt for this mode ({model})": "Перетворити опис на докладний промпт для цього режиму ({model})",
   "Writing…": "Пишу…",
   "Recommended: dolphin-llama3 (8B, 4.7 GB, the most accurate, 5–15 s per prompt) or huihui_ai/qwen2.5-abliterate:3b (1.9 GB, fast, 3–7 s, understands other languages, simpler wording). dolphin-phi often loses the meaning of non-English descriptions. Install on the Ollama server with:": "Рекомендовано: dolphin-llama3 (8B, 4,7 ГБ, найточніша, 5–15 с на промпт) або huihui_ai/qwen2.5-abliterate:3b (1,9 ГБ, швидка, 3–7 с, розуміє інші мови, простіші формулювання). dolphin-phi часто втрачає зміст неанглійських описів. Встановіть на сервері Ollama:",
+  "Add a photo for this task.": "Додайте фото для цього завдання.",
+  "Animate a photo": "Оживити фото",
+  "Create": "Створити",
+  "Photo to rework": "Фото для переробки",
+  "Rework a photo": "Переробити фото",
+  "Task": "Завдання",
+  "An image from a description": "Зображення за описом",
+  "Your photo changed by the description": "Ваше фото, змінене за описом",
+  "A video from a description": "Відео за описом",
+  "Your photo becomes the first frame and comes alive": "Ваше фото стає першим кадром і оживає",
 };
