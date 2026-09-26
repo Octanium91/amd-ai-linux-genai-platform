@@ -19,7 +19,7 @@ import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
 import { config, WORKER_API } from '../common/config.js';
 import { readSettings } from '../common/settings.js';
-import { gpuDevDir, systemInfo } from './system.js';
+import { findSensors, gpuDevDir, systemInfo } from './system.js';
 
 const fsp = fs.promises;
 const { dirs } = config;
@@ -67,25 +67,6 @@ const kv = (text, sep = '=') => Object.fromEntries(String(text || '').split('\n'
   .filter((p) => p.length > 1)
   .map(([k, ...v]) => [k.trim(), v.join(sep).trim().replace(/^"|"$/g, '')]));
 const mhzLevels = (text) => (text ? [...text.matchAll(/(\d+):\s*(\d+)Mhz\s*(\*)?/gi)].map((m) => ({ hz: Number(m[2]) * 1e6, current: !!m[3] })) : null);
-
-// ---------- hwmon sensors, found once ----------
-
-let sensors = null;
-async function findSensors() {
-  if (sensors) return sensors;
-  sensors = { gpu: null, cpu: null, memory: [], storage: [] };
-  try {
-    for (const h of await fsp.readdir('/sys/class/hwmon')) {
-      const dir = `/sys/class/hwmon/${h}`;
-      const name = await read(`${dir}/name`);
-      if (name === 'amdgpu') sensors.gpu = dir;
-      else if (name === 'k10temp') sensors.cpu = dir;
-      else if (name === 'spd5118' || name === 'jc42') sensors.memory.push(dir);
-      else if (name === 'nvme') sensors.storage.push(dir);
-    }
-  } catch {}
-  return sensors;
-}
 
 // ---------- the resource snapshot ----------
 
@@ -293,7 +274,7 @@ async function sampleMetrics(state, pid) {
   };
   const memT = await maxTemp(s.memory);
   if (memT != null) m['hw.temperature.memory'] = memT;
-  const stT = await maxTemp(s.storage);
+  const stT = await maxTemp(s.storage.map((x) => x.dir));
   if (stT != null) m['hw.temperature.storage'] = stT;
   // The engine process (sd-cli or ffmpeg) and the worker itself
   if (pid) {

@@ -52,10 +52,23 @@ h3 { font-size: 15px; margin: 0; font-weight: 650; }
 .brand { display: flex; align-items: center; gap: 10px; color: var(--accent); }
 .brand-name { color: var(--text); font-weight: 700; font-size: 16px; letter-spacing: -0.01em; }
 .brand-sub { color: var(--muted); font-size: 12px; }
-.sys { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 12.5px; }
-.sys-item { display: flex; align-items: center; gap: 8px; }
-.sys-label { color: var(--muted); }
-.sys-val { font-variant-numeric: tabular-nums; }
+/* hardware bar: one block per CPU / GPU / RAM / storage */
+.sysbar { order: 10; flex-basis: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; font-size: 12px; }
+.sys-block { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.sys-head { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.sys-name { font-weight: 650; letter-spacing: 0.02em; }
+.sys-sub { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.sys-temp { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--ok); white-space: nowrap; }
+.sys-temp.warn { color: var(--warn); }
+.sys-temp.bad { color: var(--bad); font-weight: 650; }
+.sys-row .sys-temp { margin-left: 0; }
+.sys-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.sys-row .meter { flex: none; }
+.sys-label { color: var(--muted); flex: none; min-width: 34px; }
+.sys-val { font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sys-offline { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; }
+@media (max-width: 1100px) { .sysbar { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .sysbar { grid-template-columns: 1fr; } }
 .meter { width: 64px; height: 6px; background: var(--panel-2); border-radius: 99px; overflow: hidden; border: 1px solid var(--line); }
 .meter > div { height: 100%; background: var(--accent); transition: width 0.6s; }
 .meter > div.hot { background: var(--warn); }
@@ -236,7 +249,6 @@ input[type="range"] { padding: 0; border: 0; background: none; accent-color: var
 .nav-tab { background: none; border: 0; padding: 6px 14px; border-radius: 9px; cursor: pointer; color: var(--muted); font-weight: 550; }
 .nav-tab:hover { color: var(--text); }
 .nav-tab.on { background: var(--panel); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25); }
-.sys-hw { color: var(--muted); font-size: 12px; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .usermenu { position: relative; }
 .menu {
   position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; min-width: 180px; background: var(--panel);
@@ -244,7 +256,6 @@ input[type="range"] { padding: 0; border: 0; background: none; accent-color: var
 }
 .menu button { background: none; border: 0; text-align: left; padding: 8px 10px; border-radius: 7px; cursor: pointer; }
 .menu button:hover { background: var(--panel-2); }
-@media (max-width: 1100px) { .sys-hw { display: none; } }
 @media (max-width: 760px) { .nav { order: 3; width: 100%; overflow-x: auto; } .top-right { margin-left: 0; } }
 
 .login-wrap { min-height: 100vh; display: grid; place-items: center; padding: 20px; }

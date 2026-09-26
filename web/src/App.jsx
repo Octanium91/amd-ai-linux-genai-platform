@@ -44,60 +44,108 @@ function readTab() {
 }
 
 function SystemBar({ system, online }) {
-  if (!online) return <div className="sys"><span className="dot bad" /> {t('no connection to the server')}</div>;
+  if (!online) return <div className="sysbar"><div className="sys-offline"><span className="dot bad" /> {t('no connection to the server')}</div></div>;
   if (!system) return null;
   const pct = (a, b) => (b ? (a / b) * 100 : 0);
-  const gttPct = pct(system.gttUsed, system.gttTotal);
-  const ramPct = pct(system.memTotal - system.memAvailable, system.memTotal);
+  const ghz = (mhz) => (mhz ? t('{n} GHz', { n: (mhz / 1000).toFixed(2) }) : null);
   const st = system.storage || {};
-  const disk = st.models || st.data;
-  const diskPct = disk ? pct(disk.total - disk.free, disk.total) : 0;
-  const diskTitle = [
-    st.models && t('Models disk: {free} free of {total}; models take {used}', {
-      free: fmtBytes(st.models.free), total: fmtBytes(st.models.total), used: fmtBytes(st.models.used),
-    }),
-    st.data && (st.data.sameDisk
-      ? t('Results on the same disk: {used}', { used: fmtBytes(st.data.used) })
-      : t('Results disk: {free} free of {total}; results take {used}', {
-        free: fmtBytes(st.data.free), total: fmtBytes(st.data.total), used: fmtBytes(st.data.used),
-      })),
-  ].filter(Boolean).join('\n');
-  const hw = [system.family, system.gpu?.replace(/\s*\(RADV.*\)/, '')].filter(Boolean).join(' · ');
   const Meter = ({ value }) => (
-    <div className="meter"><div style={{ width: value + '%' }} className={value > 90 ? 'hot' : ''} /></div>
+    <div className="meter"><div style={{ width: Math.min(100, value) + '%' }} className={value > 90 ? 'hot' : ''} /></div>
   );
+  const Temp = ({ value, title }) => (value == null ? null : (
+    <span className={`sys-temp ${value >= 90 ? 'bad' : value >= 80 ? 'warn' : ''}`} title={title}>{Math.round(value)} °C</span>
+  ));
+  const Row = ({ label, meter, children, title }) => (
+    <div className="sys-row" title={title}>
+      {label && <span className="sys-label">{label}</span>}
+      {meter != null && <Meter value={meter} />}
+      <span className="sys-val">{children}</span>
+    </div>
+  );
+  const Block = ({ name, sub, temp, tempTitle, title, children }) => (
+    <div className="sys-block" title={title}>
+      <div className="sys-head">
+        <span className="sys-name">{name}</span>
+        {sub && <span className="sys-sub">{sub}</span>}
+        <Temp value={temp} title={tempTitle} />
+      </div>
+      {children}
+    </div>
+  );
+  const join = (...parts) => parts.filter(Boolean).join(' · ');
+  const gpuName = system.gpu?.replace(/\s*\(RADV.*\)/, '').replace(/^AMD\s+/, '');
+  const diskRow = (d, label, results) => d && (
+    <Row
+      label={label}
+      meter={pct(d.total - d.free, d.total)}
+      title={t(results ? 'Results disk: {free} free of {total}; results take {used}' : 'Models disk: {free} free of {total}; models take {used}', {
+        free: fmtBytes(d.free), total: fmtBytes(d.total), used: fmtBytes(d.used),
+      })}
+    >
+      {t('{size} free', { size: fmtBytes(d.free) })}
+      {d.temp != null && st.data && !st.data.sameDisk && <> · <Temp value={d.temp} title={t('Disk temperature')} /></>}
+    </Row>
+  );
+  const splitDisks = st.models && st.data && !st.data.sameDisk;
   return (
-    <div className="sys">
-      {hw && <div className="sys-item sys-hw" title={`${system.cpu || ''}\n${system.driver || ''}`}>{hw}</div>}
-      <div className="sys-item" title={[t('CPU load'), system.cpu, system.threads && t('{n} threads', { n: system.threads })].filter(Boolean).join('\n')}>
-        <span className="sys-label">CPU</span><span className="sys-val">{system.cpuBusy ?? '—'}%</span>
-      </div>
-      <div className="sys-item" title={t('iGPU load')}><span className="sys-label">GPU</span><span className="sys-val">{system.gpuBusy ?? '—'}%</span></div>
-      {system.vramTotal > 0 && (
-        <div className="sys-item" title={t('Dedicated GPU memory (VRAM): the UMA carve-out reserved in the BIOS')}>
-          <span className="sys-label">VRAM</span>
-          <Meter value={pct(system.vramUsed, system.vramTotal)} />
-          <span className="sys-val">{fmtBytes(system.vramUsed)} / {fmtBytes(system.vramTotal)}</span>
-        </div>
-      )}
-      {system.gttTotal > 0 && (
-        <div className="sys-item" title={t('GPU memory (GTT), allocated from the shared system RAM')}>
-          <span className="sys-label">GTT</span>
-          <Meter value={gttPct} />
-          <span className="sys-val">{fmtBytes(system.gttUsed)} / {fmtBytes(system.gttTotal)}</span>
-        </div>
-      )}
-      <div className="sys-item" title={t('RAM: {used} used of {total}', { used: fmtBytes(system.memTotal - system.memAvailable), total: fmtBytes(system.memTotal) })}>
-        <span className="sys-label">RAM</span>
-        <Meter value={ramPct} />
-        <span className="sys-val">{t('{size} free', { size: fmtBytes(system.memAvailable) })}</span>
-      </div>
-      {disk && (
-        <div className="sys-item" title={diskTitle}>
-          <span className="sys-label">{t('Disk')}</span>
-          <Meter value={diskPct} />
-          <span className="sys-val">{t('{size} free', { size: fmtBytes(disk.free) })}</span>
-        </div>
+    <div className="sysbar">
+      <Block
+        name="CPU"
+        sub={system.family}
+        temp={system.cpuTemp}
+        tempTitle={t('CPU temperature (Tctl)')}
+        title={join(system.cpu, system.threads && t('{n} threads', { n: system.threads }))}
+      >
+        <Row
+          meter={system.cpuBusy ?? 0}
+          title={join(t('CPU load'), system.cpuMaxMhz && t('average core clock; up to {max}', { max: ghz(system.cpuMaxMhz) }))}
+        >
+          {join(`${system.cpuBusy ?? '—'}%`, ghz(system.cpuMhz))}
+        </Row>
+      </Block>
+      <Block name="GPU" sub={gpuName} temp={system.gpuTemp} tempTitle={t('GPU temperature (edge)')} title={join(system.gpu, system.driver)}>
+        <Row
+          meter={system.gpuBusy ?? 0}
+          title={join(t('iGPU load'), system.gpuMaxMhz && t('shader clock; up to {max}', { max: ghz(system.gpuMaxMhz) }),
+            system.powerW != null && t('power of the whole APU package'))}
+        >
+          {join(`${system.gpuBusy ?? '—'}%`, ghz(system.gpuMhz), system.powerW != null && `${system.powerW} W`)}
+        </Row>
+        {system.gttTotal > 0 && (
+          <Row
+            label="GTT"
+            meter={pct(system.gttUsed, system.gttTotal)}
+            title={join(t('GPU memory (GTT), allocated from the shared system RAM'),
+              system.vramTotal > 0 && `VRAM ${fmtBytes(system.vramUsed)} / ${fmtBytes(system.vramTotal)}: ${t('Dedicated GPU memory (VRAM): the UMA carve-out reserved in the BIOS')}`)}
+          >
+            {fmtBytes(system.gttUsed)} / {fmtBytes(system.gttTotal)}
+          </Row>
+        )}
+        {!(system.gttTotal > 0) && system.vramTotal > 0 && (
+          <Row label="VRAM" meter={pct(system.vramUsed, system.vramTotal)} title={t('Dedicated GPU memory (VRAM): the UMA carve-out reserved in the BIOS')}>
+            {fmtBytes(system.vramUsed)} / {fmtBytes(system.vramTotal)}
+          </Row>
+        )}
+      </Block>
+      <Block name="RAM" temp={system.memTemp} tempTitle={t('Memory module temperature (the hottest one)')}>
+        <Row
+          meter={pct(system.memTotal - system.memAvailable, system.memTotal)}
+          title={join(t('RAM: {used} used of {total}', { used: fmtBytes(system.memTotal - system.memAvailable), total: fmtBytes(system.memTotal) }),
+            system.memMhz && t('memory clock {mclk} MHz, fabric clock {fclk} MHz (as reported by the GPU driver)', { mclk: system.memMhz, fclk: system.fabricMhz ?? '—' }))}
+        >
+          {join(t('{size} free', { size: fmtBytes(system.memAvailable) }), system.memMhz && `${system.memMhz} MHz`)}
+        </Row>
+      </Block>
+      {(st.models || st.data) && (
+        <Block
+          name={t('Storage')}
+          temp={splitDisks ? null : (st.models || st.data).temp}
+          tempTitle={t('Disk temperature')}
+        >
+          {diskRow(st.models, splitDisks ? t('Models') : null, false)}
+          {splitDisks && diskRow(st.data, t('Results'), true)}
+          {!st.models && diskRow(st.data, null, true)}
+        </Block>
       )}
     </div>
   );
@@ -265,9 +313,9 @@ export default function App() {
           ))}
         </nav>
         <div className="top-right">
-          <SystemBar system={system} online={online} />
           <UserMenu user={user} onLogout={logout} />
         </div>
+        <SystemBar system={system} online={online} />
       </header>
 
       {online && worker && !worker.online && (

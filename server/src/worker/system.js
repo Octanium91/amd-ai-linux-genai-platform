@@ -153,6 +153,113 @@ const threads = (() => {
   }
 })();
 
+// hwmon sensors, found once: amdgpu (GPU temperature, shader clock, power), k10temp (CPU),
+// spd5118/jc42 (memory modules), nvme/drivetemp (disks)
+let sensors = null;
+export async function findSensors() {
+  if (sensors) return sensors;
+  const found = { gpu: null, cpu: null, memory: [], storage: [] };
+  try {
+    for (const h of await fsp.readdir('/sys/class/hwmon')) {
+      const dir = `/sys/class/hwmon/${h}`;
+      const name = (await fsp.readFile(`${dir}/name`, 'utf8').catch(() => '')).trim();
+      if (name === 'amdgpu') found.gpu = dir;
+      else if (name === 'k10temp') found.cpu = dir;
+      else if (name === 'spd5118' || name === 'jc42') found.memory.push(dir);
+      else if (name === 'nvme' || name === 'drivetemp') {
+        found.storage.push({ dir, device: await fsp.realpath(`${dir}/device`).catch(() => null) });
+      }
+    }
+  } catch {}
+  sensors = found;
+  return sensors;
+}
+
+// The temperature sensor of the disk holding a directory: the block device (a partition, or the
+// disks under an LVM/RAID volume) lives below the sysfs path of the NVMe controller or SATA device
+const diskSensors = new Map();
+async function diskSensor(dev) {
+  if (diskSensors.has(dev)) return diskSensors.get(dev);
+  const { storage } = await findSensors();
+  const major = Math.floor(dev / 256) & 0xfff;
+  const minor = (dev & 0xff) | ((dev >>> 12) & 0xfff00);
+  const paths = [];
+  const collect = async (p, depth = 0) => {
+    const real = await fsp.realpath(p).catch(() => null);
+    if (!real) return;
+    const slaves = await fsp.readdir(`${real}/slaves`).catch(() => []);
+    if (slaves.length && depth < 4) for (const sl of slaves) await collect(`/sys/class/block/${sl}`, depth + 1);
+    else paths.push(real);
+  };
+  await collect(`/sys/dev/block/${major}:${minor}`);
+  const dirs = storage.filter((x) => x.device && paths.some((p) => p.startsWith(x.device + '/'))).map((x) => x.dir);
+  diskSensors.set(dev, dirs);
+  return dirs;
+}
+
+const cpuCount = (() => {
+  try {
+    return fs.readdirSync('/sys/devices/system/cpu').filter((d) => /^cpu\d+$/.test(d)).length;
+  } catch {
+    return 0;
+  }
+})();
+
+const celsius = (v) => (v == null ? null : Math.round(v / 100) / 10);
+const currentMhz = async (f) => {
+  try {
+    return Number((await fsp.readFile(f, 'utf8')).match(/(\d+)Mhz\s*\*/i)?.[1]) || null;
+  } catch {
+    return null;
+  }
+};
+const maxTemp = async (dirs) => {
+  let max = null;
+  for (const d of dirs) {
+    const t = await readNumAsync(`${d}/temp1_input`);
+    if (t != null) max = Math.max(max ?? -Infinity, t);
+  }
+  return celsius(max);
+};
+
+// Temperatures and clocks. A value the hardware does not report stays null and the UI hides it.
+async function sensorSample(s) {
+  const hw = await findSensors();
+  // CPU: the average current frequency of all cores and the highest one they can reach
+  let sum = 0;
+  let n = 0;
+  let top = 0;
+  for (let i = 0; i < cpuCount; i++) {
+    const f = await readNumAsync(`/sys/devices/system/cpu/cpu${i}/cpufreq/scaling_cur_freq`);
+    if (f) {
+      sum += f;
+      n++;
+    }
+    if (!cpuMaxMhz) top = Math.max(top, (await readNumAsync(`/sys/devices/system/cpu/cpu${i}/cpufreq/cpuinfo_max_freq`)) || 0);
+  }
+  if (!cpuMaxMhz && top) cpuMaxMhz = Math.round(top / 1000);
+  s.cpuMhz = n ? Math.round(sum / n / 1000) : null;
+  s.cpuMaxMhz = cpuMaxMhz;
+  s.cpuTemp = hw.cpu ? celsius(await readNumAsync(`${hw.cpu}/temp1_input`)) : null;
+  // GPU: temperature, the current shader clock and the power of the whole APU package
+  if (hw.gpu) {
+    s.gpuTemp = celsius(await readNumAsync(`${hw.gpu}/temp1_input`));
+    const sclk = await readNumAsync(`${hw.gpu}/freq1_input`);
+    s.gpuMhz = sclk ? Math.round(sclk / 1e6) : null;
+    const p = (await readNumAsync(`${hw.gpu}/power1_average`)) ?? (await readNumAsync(`${hw.gpu}/power1_input`));
+    s.powerW = p == null ? null : Math.round(p / 1e5) / 10;
+  }
+  if (gpuDir) {
+    if (!s.gpuMhz) s.gpuMhz = await currentMhz(`${gpuDir}/pp_dpm_sclk`);
+    s.gpuMaxMhz = maxShaderClock();
+    // Memory clock and fabric clock as the GPU driver sees them (the APU shares the memory controller)
+    s.memMhz = await currentMhz(`${gpuDir}/pp_dpm_mclk`);
+    s.fabricMhz = await currentMhz(`${gpuDir}/pp_dpm_fclk`);
+  }
+  s.memTemp = await maxTemp(hw.memory);
+}
+let cpuMaxMhz = null;
+
 let snapshot = {};
 let sizes = { models: 0, output: 0, at: 0 };
 
@@ -176,10 +283,12 @@ async function sample() {
     sizes = { models: await dirSize(config.dirs.models), output: await dirSize(config.dirs.output), at: Date.now() };
   }
   const [models, data] = await Promise.all([disk(config.dirs.models), disk(config.dirs.output)]);
+  const temp = async (d) => (d ? maxTemp(await diskSensor(d.dev)) : null);
   s.storage = {
-    models: models && { free: models.free, total: models.total, used: sizes.models },
-    data: data && { free: data.free, total: data.total, used: sizes.output, sameDisk: models?.dev === data.dev },
+    models: models && { free: models.free, total: models.total, used: sizes.models, temp: await temp(models) },
+    data: data && { free: data.free, total: data.total, used: sizes.output, sameDisk: models?.dev === data.dev, temp: await temp(data) },
   };
+  await sensorSample(s).catch(() => {});
   s.sampledAt = Date.now();
   snapshot = s;
 }
