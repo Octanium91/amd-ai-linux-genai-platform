@@ -120,7 +120,7 @@ export default function Settings() {
 }
 
 // The "To prompt" assistant: an Ollama server and model that rewrite descriptions into prompts
-const RECOMMENDED_MODELS = ['dolphin-phi', 'dolphin-llama3'];
+const RECOMMENDED_MODELS = ['dolphin-llama3', 'dolphin-phi'];
 
 function PromptAssistantSettings() {
   const [form, setForm] = useState(null);
@@ -174,8 +174,8 @@ function PromptAssistantSettings() {
         {t('Adds a "To prompt" button to the generation form: a language model on an Ollama server turns a short description in any language into a detailed English prompt written for the selected mode (tags for Stable Diffusion 1.5, sentences with motion and camera for Wan).')}
       </p>
       <p className="muted">
-        {t('Recommended models: dolphin-phi (small and fast) or dolphin-llama3 (better wording). Install one on the Ollama server with:')}{' '}
-        <code>ollama pull dolphin-phi</code>
+        {t('Recommended: dolphin-llama3 (8B, understands descriptions in any language, 5–8 s per prompt). dolphin-phi (2.7B) is faster but often loses the meaning of non-English descriptions. Install on the Ollama server with:')}{' '}
+        <code>ollama pull dolphin-llama3</code>
       </p>
       <p className="muted small">{t('If Ollama uses the same GPU, it takes GPU memory while it answers; the platform asks it to unload the model a minute after each request.')}</p>
       <label className="check">

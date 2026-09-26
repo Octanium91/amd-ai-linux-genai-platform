@@ -4,6 +4,7 @@
     "kind": "image",
     "name": "Realistic Vision 6 · photo",
     "description": "Photorealistic images on SD 1.5. 768×1024 (the model author's recommendation) is slower than 512×768 but more detailed.",
+    "promptQuality": {"prefix": "RAW photo", "suffix": "8k uhd, dslr, soft lighting, high quality, film grain, Fujifilm XT3"},
     "reference": { "width": 512, "height": 768, "frames": 2, "steps": 25, "cfg": 5.5, "samplingSec": 43, "decodeSec": 8, "otherSec": 34 },
     "image": "optional",
     "models": {
@@ -74,6 +75,7 @@
     "kind": "video",
     "name": "AnimateLCM · Realistic Vision (fast)",
     "description": "The fastest video mode. CFG 1 is faster and softer; CFG 1.5 gives more contrast and motion at about twice the time.",
+    "promptQuality": {"suffix": "cinematic, 8k uhd, dslr, soft lighting, high quality, film grain"},
     "reference": { "width": 512, "height": 512, "frames": 16, "steps": 6, "cfg": 1, "samplingSec": 101, "decodeSec": 46, "otherSec": 3 },
     "image": "optional",
     "models": {
@@ -150,6 +152,7 @@
     "kind": "video",
     "name": "AnimateDiff v3 · Realistic Vision (detailed)",
     "description": "Classic AnimateDiff v3 with the Domain Adapter: more detailed than AnimateLCM, but about 6× slower.",
+    "promptQuality": {"suffix": "cinematic, 8k uhd, dslr, soft lighting, high quality, film grain"},
     "reference": { "width": 512, "height": 512, "frames": 16, "steps": 20, "cfg": 8, "samplingSec": 899, "decodeSec": 57, "otherSec": 1 },
     "image": "optional",
     "models": {
@@ -226,6 +229,7 @@
     "kind": "video",
     "name": "Wan 2.2 TI2V 5B (real motion, slow)",
     "description": "A full video model: coherent motion, text and image to video. Much slower than AnimateDiff; best on Strix Halo.",
+    "promptQuality": {"suffix": "Photorealistic, cinematic lighting, rich detail, smooth natural motion."},
     "reference": { "width": 832, "height": 480, "frames": 17, "steps": 10, "cfg": 5, "samplingSec": 676, "decodeSec": 2027, "otherSec": 0 },
     "image": "optional",
     "minGtt": 22,
@@ -297,6 +301,7 @@
     "kind": "video",
     "name": "Wan 2.1 T2V 1.3B (experimental)",
     "description": "Lightweight Wan 2.1, text to video only. Not yet tested on this platform.",
+    "promptQuality": {"suffix": "Photorealistic, cinematic lighting, rich detail, smooth natural motion."},
     "experimental": true,
     "image": "none",
     "models": {

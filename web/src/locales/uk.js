@@ -415,7 +415,6 @@ export default {
   "Ollama {version}: {n} models installed.": "Ollama {version}: встановлено моделей — {n}.",
   "Ollama server address": "Адреса сервера Ollama",
   "Prompt assistant": "Помічник промптів",
-  "Recommended models: dolphin-phi (small and fast) or dolphin-llama3 (better wording). Install one on the Ollama server with:": "Рекомендовані моделі: dolphin-phi (маленька й швидка) або dolphin-llama3 (краще формулює). Встановіть одну на сервері Ollama:",
   "Restore my text": "Повернути мій текст",
   "Saved.": "Збережено.",
   "The assistant rewrote the description.": "Помічник переписав опис.",
@@ -432,4 +431,5 @@ export default {
   "To prompt": "У промпт",
   "Turn the description into a detailed prompt for this mode ({model})": "Перетворити опис на докладний промпт для цього режиму ({model})",
   "Writing…": "Пишу…",
+  "Recommended: dolphin-llama3 (8B, understands descriptions in any language, 5–8 s per prompt). dolphin-phi (2.7B) is faster but often loses the meaning of non-English descriptions. Install on the Ollama server with:": "Рекомендовано: dolphin-llama3 (8B, розуміє опис будь-якою мовою, 5–8 с на промпт). dolphin-phi (2.7B) швидша, але часто втрачає зміст неанглійських описів. Встановіть на сервері Ollama:",
 };

@@ -59,12 +59,14 @@ The defaults follow the models' training so that the result matches the prompt; 
 
 The "To prompt" button next to the prompt sends the text to a language model on an [Ollama](https://ollama.com) server and replaces it with a prompt written for the selected mode; "Restore my text" brings the original back. The web container calls Ollama (`POST /api/chat` with a JSON schema, `keep_alive: 1m` so the model leaves GPU memory soon after), the worker is not involved.
 
-Set it up in **Settings → Prompt assistant**: the server address (`http://host.docker.internal:11434` is the Docker host, where Ollama usually runs; `docker-compose.yml` maps that name for the web container) and the model. Recommended: `dolphin-phi` (2.7B, small and fast) or `dolphin-llama3` (8B, better wording); install one with `ollama pull dolphin-phi`. The button is disabled while the assistant is off, the server is unreachable or the model is not installed.
+Set it up in **Settings → Prompt assistant**: the server address (`http://host.docker.internal:11434` is the Docker host, where Ollama usually runs; `docker-compose.yml` maps that name for the web container) and the model. Recommended: `dolphin-llama3` (8B), installed with `ollama pull dolphin-llama3`. On the reference machine it answers in 5–8 s and kept the meaning of every Russian test description (a lighthouse on a cliff at sunset, a cat on a windowsill in the rain, a girl in a red dress in an autumn alley). `dolphin-phi` (2.7B) answers in 2–4 s but turned the same descriptions into other scenes (no lighthouse, no rain, snow in autumn); it is usable with English descriptions. The button is disabled while the assistant is off, the server is unreachable or the model is not installed.
 
-The model is told the mode, its models, the size, the clip length and whether a start image is used, and how the mode reads prompts:
+The model acts as a prompt engineer for the mode. It is told the mode, its models, the size, the clip length and whether a start image is used, gets one worked example, and first writes `idea_en`, an exact English translation of the idea, which keeps a small model on topic. The rest depends on how the mode reads prompts:
 
-- **tags** (Stable Diffusion 1.5 with CLIP: Realistic Vision, AnimateLCM, AnimateDiff): comma-separated phrases, the most important first, at most 60 words, since CLIP reads only the first 75 tokens;
-- **natural** (Wan with a T5 encoder): 2–4 sentences about the subject, the motion over time, the setting, the light and the camera, one continuous shot.
+- **tags** (Stable Diffusion 1.5 with CLIP: Realistic Vision, AnimateLCM, AnimateDiff): the model fills short phrases for `subject`, `action`, `setting`, `lighting`, `camera`. The server assembles them in this order, drops duplicates, quality words and anything not visual (sounds, smells), keeps about 45 words, since CLIP reads only the first 75 tokens, and adds the mode's quality tags;
+- **natural** (Wan with a T5 encoder): 2–4 sentences about the subject, the motion over time, the setting, the light and the camera, one continuous shot, followed by the mode's quality sentence.
+
+The quality tags are `promptQuality` in `catalog/presets.json`: `{"prefix": "RAW photo", "suffix": "8k uhd, dslr, soft lighting, high quality, film grain, Fujifilm XT3"}` for Realistic Vision (the model author's recipe), a cinematic suffix for the AnimateDiff modes and a sentence for Wan. Your own modes can set their own.
 
 The style follows from the text encoder (`t5xxl` among the mode's models means natural); a mode can set it explicitly with `"promptStyle": "tags"` or `"natural"` in `catalog/presets.json` or `data/state/presets.local.json`. The mode's `promptSuffix` (LoRA tags) is still appended by the worker.
 
