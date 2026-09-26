@@ -73,7 +73,9 @@ function SystemBar({ system, online }) {
     </div>
   );
   const join = (...parts) => parts.filter(Boolean).join(' · ');
-  const gpuName = system.gpu?.replace(/\s*\(RADV.*\)/, '').replace(/^AMD\s+/, '');
+  // Vulkan calls every Ryzen AI iGPU "Radeon Graphics"; the CPU model names the real one (890M etc.)
+  const gpuName = system.gpuPower?.name || system.gpu?.replace(/\s*\(RADV.*\)/, '').replace(/^AMD\s+/, '');
+  const cpuName = system.cpu?.replace(/^AMD\s+/, '').replace(/\s+w\/\s+Radeon.*$/i, '').replace(/\s+\S+-Core Processor$/i, '');
   const diskRow = (d, label, results) => d && (
     <Row
       label={label}
@@ -91,10 +93,10 @@ function SystemBar({ system, online }) {
     <div className="sysbar">
       <Block
         name="CPU"
-        sub={system.family}
+        sub={cpuName || system.family}
         temp={system.cpuTemp}
         tempTitle={t('CPU temperature (Tctl)')}
-        title={join(system.cpu, system.threads && t('{n} threads', { n: system.threads }))}
+        title={join(system.cpu, system.family, system.threads && t('{n} threads', { n: system.threads }))}
       >
         <Row
           meter={system.cpuBusy ?? 0}
