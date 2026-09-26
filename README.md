@@ -6,7 +6,7 @@ The UI is available in English (default), Ukrainian and Russian.
 
 ## Features
 
-- **Video:** text-to-video and image-to-video. AnimateLCM (the fastest), AnimateDiff v3 (more detailed), Wan 2.2 5B (coherent motion, for Strix Halo). Output FPS of 24/30/50/60/120 via motion interpolation. **Extra duration** (up to 2× the model limit) is built from two chained segments; **Extra quality** uses twice the steps of High.
+- **Video:** text-to-video and image-to-video. AnimateLCM (the fastest), AnimateDiff v3 (more detailed), Wan 2.2 5B (coherent motion, for Strix Halo). Output FPS of 24/30/50/60/120 via motion interpolation. Every model pass stays within what the model was trained on (AnimateDiff 16 frames, Wan 121); **longer videos** are built from several chained passes (AnimateDiff up to 8 s, Wan 2.2 up to 10 s). Going beyond the trained length or the tested sizes is possible, with a warning. **Extra quality** uses twice the steps of High.
 - **Images:** photorealistic images with Realistic Vision 6 (SD 1.5), several variants at once, image-to-image.
 - **Queue and progress:** jobs run strictly one at a time (there is one GPU). Stages, steps, speed, time left, a latent preview and a live log are shown.
 - **Gallery:** everything generated, videos and images together, with filters by kind, status and author and a search by prompt. A failed or cancelled job can be **restarted** as it was (same parameters and seed); "repeat" fills the form with a job's settings.

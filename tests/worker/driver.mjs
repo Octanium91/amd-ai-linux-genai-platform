@@ -56,6 +56,17 @@ check('damaged jobs.json is kept aside', fs.readdirSync(`${DATA}/state`).some((f
 let a = (await api('/v1/jobs', 'POST', video(2))).body;
 a = await waitFor(a.id, (j) => ['done', 'failed'].includes(j.status));
 check('two-segment video finishes', a.status === 'done' && a.files?.[0]?.endsWith('.mp4'), `${a.status} ${a.files} ${a.error || ''}`);
+// The clip lasts exactly its frames: 2 segments x 9 frames at 8 fps, minus the repeated seam frame
+const { execFileSync } = await import('node:child_process');
+const dur = Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', `${DATA}/output/${a.files[0]}`]).toString().trim());
+check('the clip has the exact duration', Math.abs(dur - 17 / 8) < 0.05, `${dur} s, expected ${17 / 8} s`);
+// The same with interpolation to 24 fps (a 1-segment clip of 9 frames at 8 fps = 1.125 s)
+process.env.FAKE_STEPS = '2';
+let ic = (await api('/v1/jobs', 'POST', { ...video(1), params: { ...video(1).params, outFps: 24 } })).body;
+ic = await waitFor(ic.id, (j) => ['done', 'failed'].includes(j.status));
+const idur = Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', `${DATA}/output/${ic.files[0]}`]).toString().trim());
+check('the interpolated clip has the exact duration', Math.abs(idur - 9 / 8) < 0.05, `${idur} s, expected ${9 / 8} s`);
+process.env.FAKE_STEPS = '6';
 
 // 2. Cancel while the last frame of segment 1 is being extracted: segment 2 must not start
 fs.rmSync(`${DATA}/extracting`, { force: true });

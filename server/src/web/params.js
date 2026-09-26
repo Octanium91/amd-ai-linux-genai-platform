@@ -11,12 +11,34 @@ const clamp = (v, lo, hi, def) => {
   return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : def;
 };
 
-// Wan needs 4n+1 frames; AnimateDiff takes exactly duration × fps (16 works best)
-function planFrames(d, duration) {
-  const nativeFps = d.nativeFps ?? 24;
-  const raw = duration * nativeFps;
-  const frames = d.frameRule === 'exact' ? Math.round(raw) : Math.round(raw / 4) * 4 + 1;
-  return Math.min(d.maxFrames ?? 121, Math.max(d.minFrames ?? 5, frames));
+// How a video is generated: frames per model pass and the number of passes (segments).
+// segmentFrames is the length the model was trained on and the default pass; longer passes, up to
+// maxFrames, are possible but the result stops following the prompt. A longer video is built from
+// up to maxSegments passes, each continuing from the last frame of the previous one.
+// Wan needs 4n+1 frames, AnimateDiff exactly duration × fps. The UI has the same function (GenerateForm.jsx).
+export function videoPlan(preset, duration, segmentFrames) {
+  const d = preset.defaults || {};
+  const fps = d.nativeFps ?? 24;
+  const exact = d.frameRule === 'exact';
+  const hardMax = d.maxFrames ?? 121;
+  const minFrames = d.minFrames ?? 5;
+  const trained = Math.min(hardMax, d.segmentFrames ?? hardMax);
+  const toFrames = (sec) => (exact ? Math.round(sec * fps) : Math.round((sec * fps) / 4) * 4 + 1);
+  const seconds = (f) => (exact ? f : f - 1) / fps;
+  let seg = Number(segmentFrames) > 0 ? Math.round(Number(segmentFrames)) : trained;
+  if (!exact) seg = Math.round((seg - 1) / 4) * 4 + 1;
+  seg = Math.min(hardMax, Math.max(minFrames, seg));
+  const extendable = preset.kind === 'video' && preset.image !== 'none';
+  const maxSegments = extendable ? Math.max(1, d.maxSegments ?? 2) : 1;
+  const segSeconds = seconds(seg);
+  const maxDuration = segSeconds * maxSegments;
+  const wanted = Math.min(maxDuration, Math.max(0.5, Number(duration) || d.duration || 2));
+  const segments = Math.min(maxSegments, Math.max(1, Math.ceil(wanted / segSeconds - 1e-6)));
+  const frames = Math.min(seg, Math.max(minFrames, toFrames(wanted / segments)));
+  return {
+    frames, segments, fps, segmentFrames: seg, trainedFrames: trained, segSeconds, maxDuration, maxSegments, extendable,
+    duration: seconds(frames) * segments, beyondTraining: frames > trained,
+  };
 }
 
 // "Extra" is twice the steps of "High" unless the preset defines its own value
@@ -24,16 +46,6 @@ export function qualitySteps(d, quality) {
   const q = d.quality || {};
   if (quality === 'extra') return q.extra ?? (q.high ? q.high * 2 : null);
   return q[quality] ?? null;
-}
-
-// Single-pass model limit and the extra limit (two segments chained via image-to-video)
-export function durationLimits(preset) {
-  const d = preset.defaults || {};
-  const nativeFps = d.nativeFps ?? 24;
-  const maxFrames = d.maxFrames ?? 121;
-  const base = (d.frameRule === 'exact' ? maxFrames : maxFrames - 1) / nativeFps;
-  const extendable = preset.kind === 'video' && preset.image !== 'none';
-  return { base, max: extendable ? base * 2 : base, extendable };
 }
 
 export function jobParams(preset, body, image) {
@@ -62,20 +74,14 @@ export function jobParams(preset, body, image) {
   if (preset.kind === 'image') {
     params.count = Math.round(clamp(body.count, 1, 8, 1));
   } else {
-    const nativeFps = d.nativeFps ?? 24;
-    const exact = d.frameRule === 'exact';
-    const lim = durationLimits(preset);
-    const duration = clamp(body.duration, 0.5, lim.max, d.duration ?? 2);
-    // Longer than the model limit: two segments, the second continues from the last frame of the first
-    const segments = duration > lim.base + 1e-6 ? 2 : 1;
-    const frames = planFrames(d, duration / segments);
-    const segSeconds = (exact ? frames : frames - 1) / nativeFps;
+    const plan = videoPlan(preset, body.duration, body.segmentFrames);
     Object.assign(params, {
-      frames,
-      segments,
-      fps: nativeFps,
-      duration: segSeconds * segments,
-      outFps: OUT_FPS.includes(Number(body.outFps)) ? Number(body.outFps) : d.outFps ?? nativeFps,
+      frames: plan.frames,
+      segments: plan.segments,
+      segmentFrames: plan.segmentFrames,
+      fps: plan.fps,
+      duration: plan.duration,
+      outFps: OUT_FPS.includes(Number(body.outFps)) ? Number(body.outFps) : d.outFps ?? plan.fps,
     });
   }
   return params;

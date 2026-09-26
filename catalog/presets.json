@@ -95,6 +95,8 @@
       "frameRule": "exact",
       "minFrames": 8,
       "maxFrames": 32,
+      "segmentFrames": 16,
+      "maxSegments": 4,
       "duration": 2,
       "quality": {
         "draft": 4,
@@ -116,6 +118,7 @@
         768
       ]
     ],
+    "recommendedResolutions": [[512, 512]],
     "preview": "proj",
     "imageArgs": [
       "--strength",
@@ -168,6 +171,8 @@
       "frameRule": "exact",
       "minFrames": 8,
       "maxFrames": 32,
+      "segmentFrames": 16,
+      "maxSegments": 4,
       "duration": 2,
       "quality": {
         "draft": 12,
@@ -189,6 +194,7 @@
         768
       ]
     ],
+    "recommendedResolutions": [[512, 512]],
     "preview": "proj",
     "imageArgs": [
       "--strength",
@@ -237,6 +243,8 @@
       "negative": "blurry, low quality, distorted, deformed, static, overexposed, watermark, text, subtitles",
       "nativeFps": 24,
       "maxFrames": 121,
+      "segmentFrames": 121,
+      "maxSegments": 2,
       "duration": 2,
       "quality": {
         "draft": 12,
@@ -266,6 +274,7 @@
         1280
       ]
     ],
+    "recommendedResolutions": [[832, 480], [480, 832], [1280, 704], [704, 1280]],
     "preview": "proj",
     "extraArgs": [
       "--diffusion-fa",
@@ -304,6 +313,8 @@
       "negative": "blurry, low quality, distorted, deformed, static, overexposed, watermark, text, subtitles",
       "nativeFps": 16,
       "maxFrames": 81,
+      "segmentFrames": 81,
+      "maxSegments": 1,
       "duration": 2,
       "quality": {
         "draft": 12,
@@ -325,6 +336,7 @@
         640
       ]
     ],
+    "recommendedResolutions": [[832, 480], [480, 832]],
     "preview": "proj",
     "extraArgs": [
       "--diffusion-fa",

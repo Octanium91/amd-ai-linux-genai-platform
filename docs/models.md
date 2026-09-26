@@ -41,12 +41,19 @@ The Draft / Standard / High quality levels set the number of steps, which each m
 Both extra settings are red in the UI: they work, with caveats.
 
 - **Extra quality:** twice the steps of High (or `defaults.quality.extra` if the mode defines it). Time doubles while the quality gain is already small.
-- **Extra duration:** the right half of the duration slider, from the model limit to twice that (AnimateDiff/AnimateLCM 4 → 8 s, Wan 2.2 5 → 10 s). Models cannot generate longer in a single pass, so the video is built from **two segments**:
-  1. the first segment is generated;
-  2. its last frame becomes the init image of the second one (as in image-to-video), with a lower strength (`continueArgs`) so the second segment stays close to it;
-  3. ffmpeg joins the segments, dropping the duplicated frame at the seam, and interpolates the FPS.
+- **Long videos (red part of the duration slider):** a model pass is only as long as the model was trained on — AnimateDiff/AnimateLCM 16 frames (2 s at 8 fps), Wan 2.2 5B 121 frames (5 s at 24 fps), Wan 2.1 1.3B 81 frames (5 s at 16 fps). A longer video is built from up to `maxSegments` passes of that length (AnimateDiff/AnimateLCM 4 → 8 s, Wan 2.2 2 → 10 s):
+  1. the first pass is generated;
+  2. its last frame becomes the init image of the next one (as in image-to-video), with a lower strength (`continueArgs`) so the next pass stays close to it;
+  3. ffmpeg joins the passes, dropping the duplicated frame at each seam, and interpolates the FPS; the clip lasts exactly its frames.
 
-  Time doubles and a motion jump or a change of details at the seam is possible. Only modes with image-to-video support it (Wan 2.1 1.3B does not).
+  Time grows with the number of passes, and details may drift at the seams. Only modes with image-to-video support it (Wan 2.1 1.3B does not).
+
+### Staying within what the models were trained on
+
+The defaults follow the models' training so that the result matches the prompt; going beyond is allowed, with a warning in the form:
+
+- **Frames per model pass** (Advanced): empty means the trained length. Up to `maxFrames` is possible, but beyond the training length the motion module loses the subject. Measured on the reference machine: AnimateDiff v3 with 32-frame passes at 768×512 produced only a sand-and-water texture for "a young woman on a windy beach", while 16 frames at 512×512 gave exactly that scene.
+- **Resolution:** sizes the mode was tested at are marked ✓ (`recommendedResolutions`); other sizes show a warning that the result may not follow the prompt.
 
 ## Start templates
 
@@ -115,7 +122,7 @@ You can add your own entries without touching the image. They are merged with th
 ]
 ```
 
-Roles that become `sd-cli` flags: `model` (`--model`), `diffusion` (`--diffusion-model`), `high_noise`, `vae`, `t5xxl`, `clip_vision`, `motion_module`. Other role names (for example `lora`) are only used to check that files are present; the LoRA itself is applied through a `promptSuffix` like `<lora:name:weight>` together with `loraDir`. Video mode fields: `nativeFps`, `frameRule` (`exact` or the Wan 4n+1 rule), `minFrames`/`maxFrames`, `outFps`, `flowShift`, `continueArgs`.
+Roles that become `sd-cli` flags: `model` (`--model`), `diffusion` (`--diffusion-model`), `high_noise`, `vae`, `t5xxl`, `clip_vision`, `motion_module`. Other role names (for example `lora`) are only used to check that files are present; the LoRA itself is applied through a `promptSuffix` like `<lora:name:weight>` together with `loraDir`. Video mode fields: `nativeFps`, `frameRule` (`exact` or the Wan 4n+1 rule), `minFrames`/`maxFrames` (the technical range of one pass), `segmentFrames` (the length the model was trained on: the default pass), `maxSegments` (how many passes a long video may use), `outFps`, `flowShift`, `continueArgs`, and `recommendedResolutions` next to `resolutions`.
 
 `reference` is a real measurement of the mode on the reference machine (Radeon 890M, 16 CU, 2900 MHz; see [benchmarks.md](benchmarks.md)): `width`, `height`, `frames` (the image count for images), `steps`, `cfg`, and the `samplingSec`, `decodeSec`, `otherSec` stage times. Descriptions never state times, because they depend on the GPU. Before the first generation of a mode, the form estimates its time from `reference`. Sampling scales with steps × pixels × frames × CFG passes, and decoding with pixels × frames. Both are divided by the relative power of the local GPU, which is compute units × the maximum shader clock (`pp_dpm_sclk`) compared with the reference; the CU count comes from the iGPU name in the CPU model. After the first generation, the estimate uses this machine's own measurement instead. A mode without `reference` gets an estimate only after its first run.
 

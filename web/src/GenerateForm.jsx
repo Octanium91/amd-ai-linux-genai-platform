@@ -32,22 +32,37 @@ function fromPreset(p) {
     flowShift: d.flowShift ?? null,
     sampler: d.sampler ?? 'euler',
     seed: -1,
+    // Frames per model pass; empty means the length the model was trained on
+    segmentFrames: null,
   };
 }
 
-// Same formula as the server: Wan takes 4n+1 frames, AnimateDiff exactly duration × fps.
-// Longer than the model limit (extra): two segments, the second continues from the last frame of the first.
-function planFrames(preset, duration) {
+// Same function as on the server (server/src/web/params.js): frames per model pass and the number
+// of passes. segmentFrames is what the model was trained on; longer passes follow the prompt worse.
+// Longer videos are built from up to maxSegments passes, each continuing from the last frame.
+function videoPlan(preset, duration, segmentFrames) {
   const d = preset?.defaults || {};
-  const nativeFps = d.nativeFps ?? 24;
-  const maxFrames = d.maxFrames ?? 121;
+  const fps = d.nativeFps ?? 24;
   const exact = d.frameRule === 'exact';
-  const base = (exact ? maxFrames : maxFrames - 1) / nativeFps;
+  const hardMax = d.maxFrames ?? 121;
+  const minFrames = d.minFrames ?? 5;
+  const trained = Math.min(hardMax, d.segmentFrames ?? hardMax);
+  const toFrames = (sec) => (exact ? Math.round(sec * fps) : Math.round((sec * fps) / 4) * 4 + 1);
+  const seconds = (f) => (exact ? f : f - 1) / fps;
+  let seg = Number(segmentFrames) > 0 ? Math.round(Number(segmentFrames)) : trained;
+  if (!exact) seg = Math.round((seg - 1) / 4) * 4 + 1;
+  seg = Math.min(hardMax, Math.max(minFrames, seg));
   const extendable = preset?.kind === 'video' && preset?.image !== 'none';
-  const segments = extendable && duration > base + 1e-6 ? 2 : 1;
-  const raw = (duration / segments) * nativeFps;
-  const frames = Math.min(maxFrames, Math.max(d.minFrames ?? 5, exact ? Math.round(raw) : Math.round(raw / 4) * 4 + 1));
-  return { frames, segments, nativeFps, baseDuration: base, maxDuration: extendable ? base * 2 : base, extendable };
+  const maxSegments = extendable ? Math.max(1, d.maxSegments ?? 2) : 1;
+  const segSeconds = seconds(seg);
+  const maxDuration = segSeconds * maxSegments;
+  const wanted = Math.min(maxDuration, Math.max(0.5, Number(duration) || d.duration || 2));
+  const segments = Math.min(maxSegments, Math.max(1, Math.ceil(wanted / segSeconds - 1e-6)));
+  const frames = Math.min(seg, Math.max(minFrames, toFrames(wanted / segments)));
+  return {
+    frames, segments, fps, segmentFrames: seg, trainedFrames: trained, segSeconds, maxDuration, maxSegments, extendable,
+    hardMax, minFrames, duration: seconds(frames) * segments, beyondTraining: frames > trained,
+  };
 }
 
 function Num({ label, value, onChange, step = 1, min, max, hint }) {
@@ -170,11 +185,14 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
   const d = preset?.defaults || {};
   const resolutions = preset?.resolutions || FALLBACK_RES;
   const acceptsImage = preset && preset.image !== 'none';
-  const plan = planFrames(preset, form.duration);
+  const plan = videoPlan(preset, form.duration, form.segmentFrames);
+  // Sizes the mode was tested at; others work but follow the prompt less reliably
+  const recommended = preset?.recommendedResolutions;
+  const offSize = !!recommended && !recommended.some(([w, h]) => w === Number(form.width) && h === Number(form.height));
   const steps = qualitySteps(d, form.quality) ?? 20;
   const extraDuration = isVideo && plan.segments > 1;
   const eta = estimate(jobs, isVideo ? { ...form, frames: plan.frames * plan.segments, steps } : { ...form, frames: form.count, steps }, preset, system?.gpuPower);
-  const interpolated = form.outFps !== plan.nativeFps;
+  const interpolated = form.outFps !== plan.fps;
 
   const onFile = (f) => {
     if (f && f.type.startsWith('image/')) {
@@ -207,8 +225,8 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
 
   const summary = isVideo
     ? (plan.segments > 1
-      ? t('2 segments × {frames} frames at {fps} fps', { frames: plan.frames, fps: plan.nativeFps })
-      : t('{frames} frames at {fps} fps', { frames: plan.frames, fps: plan.nativeFps }))
+      ? t('{n} segments × {frames} frames at {fps} fps', { n: plan.segments, frames: plan.frames, fps: plan.fps })
+      : t('{frames} frames at {fps} fps', { frames: plan.frames, fps: plan.fps }))
       + (interpolated ? ` → ${form.outFps} fps` : '') + ` · ${form.width}×${form.height}`
     : `${form.count} × ${form.width}×${form.height}`;
 
@@ -292,8 +310,15 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
           items={resolutions.map(([w, h]) => ({ key: `${w}x${h}`, w, h }))}
           value={`${form.width}x${form.height}`}
           onChange={(k) => { const [w, h] = k.split('x').map(Number); setForm((f) => ({ ...f, width: w, height: h })); }}
-          render={(x) => `${x.w}×${x.h}`}
+          render={(x) => `${x.w}×${x.h}${recommended?.some(([w, h]) => w === x.w && h === x.h) ? ' ✓' : ''}`}
         />
+        {recommended && (
+          <span className={`field-hint ${offSize ? 'extra-text' : ''}`}>
+            {offSize
+              ? t('{w}×{h} is not a size this mode was tested at (✓). The result may not match the prompt.', { w: form.width, h: form.height })
+              : t('✓ — sizes this mode was tested at and follows the prompt best.')}
+          </span>
+        )}
       </div>
 
       {isVideo ? (
@@ -303,25 +328,30 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
               <span>{t('Duration')} {extraDuration && <span className="extra-badge">{t('extra')}</span>}</span>
               <b className={extraDuration ? 'extra-text' : ''}>{t('{s} s', { s: Number(form.duration).toFixed(1) })}</b>
             </span>
-            <div className="range-wrap" style={{ '--base': `${((plan.baseDuration - 0.5) / (plan.maxDuration - 0.5 || 1)) * 100}%` }}>
-              <input type="range" className={`${extraDuration ? 'extra' : ''} ${plan.extendable ? 'has-extra' : ''}`}
-                min={Math.max(0.5, Math.ceil(((d.minFrames ?? 5) / plan.nativeFps) * 2) / 2)} max={plan.maxDuration} step={0.5}
+            <div className="range-wrap" style={{ '--base': `${((plan.segSeconds - 0.5) / (plan.maxDuration - 0.5 || 1)) * 100}%` }}>
+              <input type="range" className={`${extraDuration ? 'extra' : ''} ${plan.extendable && plan.maxSegments > 1 ? 'has-extra' : ''}`}
+                min={Math.max(0.5, Math.ceil((plan.minFrames / plan.fps) * 2) / 2)} max={plan.maxDuration} step={0.5}
                 value={Math.min(form.duration, plan.maxDuration)} onChange={(e) => set('duration')(Number(e.target.value))} />
             </div>
             <span className={`field-hint ${extraDuration ? 'extra-text' : ''}`}>
               {extraDuration
-                ? t('Extra: longer than the model limit ({base} s). The video is built from 2 segments, the second continues from the last frame of the first. Time ×2; a motion jump at the seam is possible.', { base: plan.baseDuration })
-                : plan.extendable
-                  ? t('Up to {base} s in a single model pass. Beyond that, up to {max} s, is the extra zone (red).', { base: plan.baseDuration, max: plan.maxDuration })
-                  : t('Up to {max} s per generation — the model limit.', { max: plan.maxDuration })}
+                ? t('Built from {n} passes of {s} s: each continues from the last frame of the previous one, so details may drift at the seams. Time ×{n}.', { n: plan.segments, s: Number(plan.segSeconds.toFixed(2)) })
+                : plan.extendable && plan.maxSegments > 1
+                  ? t('Up to {base} s in one model pass (the length the model was trained on). Longer videos, up to {max} s, are built from several passes (red zone).', { base: Number(plan.segSeconds.toFixed(2)), max: Number(plan.maxDuration.toFixed(2)) })
+                  : t('Up to {max} s per generation — the model limit.', { max: Number(plan.maxDuration.toFixed(2)) })}
             </span>
+            {plan.beyondTraining && (
+              <span className="field-hint extra-text">
+                {t('Passes of {frames} frames are longer than the model was trained on ({trained}): the video may lose the subject and turn into a texture. The prompt will suffer.', { frames: plan.frames, trained: plan.trainedFrames })}
+              </span>
+            )}
           </label>
           <div className="field">
             <span className="field-label">{t('Frames per second (FPS)')}</span>
             <Chips items={OUT_FPS} value={form.outFps} onChange={set('outFps')} />
             <span className="field-hint">
               {interpolated
-                ? t('The model renders {native} fps; up to {out} fps the frames are interpolated: smoother motion, no extra detail. Barely affects the time.', { native: plan.nativeFps, out: form.outFps })
+                ? t('The model renders {native} fps; up to {out} fps the frames are interpolated: smoother motion, no extra detail. Barely affects the time.', { native: plan.fps, out: form.outFps })
                 : t('The native frame rate of the model, no interpolation.')}
             </span>
           </div>
@@ -366,6 +396,19 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
             <Num label={t('Width')} value={form.width} onChange={set('width')} step={16} min={128} max={2048} />
             <Num label={t('Height')} value={form.height} onChange={set('height')} step={16} min={128} max={2048} />
           </div>
+          {isVideo && (
+            <label className="field">
+              <span className="field-label">{t('Frames per model pass')}</span>
+              <input type="number" min={plan.minFrames} max={plan.hardMax} step={d.frameRule === 'exact' ? 1 : 4}
+                placeholder={String(plan.trainedFrames)} value={form.segmentFrames ?? ''}
+                onChange={(e) => set('segmentFrames')(e.target.value === '' ? null : Number(e.target.value))} />
+              <span className={`field-hint ${plan.segmentFrames > plan.trainedFrames ? 'extra-text' : ''}`}>
+                {plan.segmentFrames > plan.trainedFrames
+                  ? t('Above {trained}, the length the model was trained on: the result stops following the prompt. Up to {max} is possible.', { trained: plan.trainedFrames, max: plan.hardMax })
+                  : t('Empty: {trained}, the length the model was trained on. Longer videos are split into passes of this length.', { trained: plan.trainedFrames })}
+              </span>
+            </label>
+          )}
           {d.flowShift != null && (
             <Num label="Flow shift" value={form.flowShift} onChange={set('flowShift')} step={0.5} min={0} max={30}
               hint={t('Fine-tunes the Wan noise schedule. Usually 3; 5 for 720p.')} />

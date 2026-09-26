@@ -157,6 +157,9 @@ async function finalizeVideo(job, segments) {
   const base = baseName(job);
   const mp4 = path.join(dirs.output, base + '.mp4');
   const { fps, outFps } = job.params;
+  // Every segment after the first drops its first frame (it repeats the previous segment's last one)
+  const totalFrames = segments.length * job.params.frames - (segments.length - 1);
+  const seconds = totalFrames / fps;
   const interp = outFps && outFps !== fps
     ? `minterpolate=fps=${outFps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1` : null;
   const encode = (withInterp) => {
@@ -167,8 +170,13 @@ async function finalizeVideo(job, segments) {
     const chain = segments.length > 1
       ? `${parts.join(';')};${segments.map((f, i) => `[s${i}]`).join('')}concat=n=${segments.length}:v=1:a=0[c]`
       : '[0:v]null[c]';
-    const graph = `${chain};[c]${withInterp && interp ? interp : 'null'}[out]`;
-    return runCmd('ffmpeg', ['-loglevel', 'error', '-y', ...inputs, '-filter_complex', graph, '-map', '[out]',
+    // Exact length: setpts drops the frame rate, so the last frame lost its duration (2 s became
+    // 1.79 s); fps= restores it. minterpolate needs frames beyond the end to reach it, so the last
+    // frame is repeated (tpad) and the output is cut to the exact number of frames.
+    const useInterp = withInterp && interp;
+    const graph = `${chain};[c]fps=${fps}${useInterp ? `,tpad=stop_mode=clone:stop=3,${interp}` : ''}[out]`;
+    const outFrames = useInterp ? Math.round(seconds * outFps) : totalFrames;
+    return runCmd('ffmpeg', ['-loglevel', 'error', '-y', ...inputs, '-filter_complex', graph, '-map', '[out]', '-frames:v', String(outFrames),
       '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', '-movflags', '+faststart', mp4], withInterp && interp ? 'ffmpeg.encode+interpolate' : 'ffmpeg.encode');
   };
   let conv = await encode(true);
