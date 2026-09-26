@@ -49,7 +49,7 @@ export function qualitySteps(d, quality) {
   return q[quality] ?? null;
 }
 
-export function jobParams(preset, body, image) {
+export function jobParams(preset, body, image, inputs = {}) {
   const d = preset.defaults || {};
   const round16 = (v) => Math.round(v / 16) * 16;
   const quality = qualitySteps(d, body.quality) != null ? body.quality : 'normal';
@@ -71,7 +71,18 @@ export function jobParams(preset, body, image) {
     sampler: /^[a-z0-9_+]+$/.test(body.sampler || '') ? body.sampler : d.sampler || 'euler',
     seed,
     image,
+    task: inputs.task || null,
   };
+  if (inputs.mask) params.mask = inputs.mask;
+  if (inputs.video) {
+    params.video = inputs.video;
+    // What the control video keeps: contours (motion and shapes) or grayscale (more of the original)
+    params.control = body.control === 'gray' ? 'gray' : 'edges';
+  }
+  // How far the result may move from the photo (rework, inpaint): the mode's own value when unset
+  if (image && ['rework', 'inpaint'].includes(inputs.task) && body.strength != null && body.strength !== '') {
+    params.strength = clamp(body.strength, 0.05, 1, null);
+  }
   if (preset.kind === 'image') {
     params.count = Math.round(clamp(body.count, 1, 8, 1));
   } else {

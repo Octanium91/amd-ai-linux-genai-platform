@@ -54,6 +54,8 @@ const EXTRA = [
   'Internal error',
   'Not found',
   'Could not build the mp4:',
+  'Only PNG, JPEG and WebP images are accepted',
+  'Only MP4, MOV and WebM videos are accepted',
 ];
 for (const k of EXTRA) keys.add(k);
 // Never translated: language names, hardware family names, identifiers

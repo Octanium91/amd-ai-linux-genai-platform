@@ -9,6 +9,7 @@ const CATEGORY = {
   lora: 'LoRA',
   vae: 'VAE',
   text_encoder: 'Text encoders',
+  upscaler: 'Upscalers',
 };
 const STATUS = {
   installed: 'Installed',

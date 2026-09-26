@@ -60,6 +60,10 @@ export const STAGES = {
     { key: 'sampling', label: 'Sampling' },
     { key: 'decoding', label: 'Decoding' },
     { key: 'saving', label: 'Saving' },
+  ],  // Upscaling has no sampling: the whole run is one stage
+  upscale: [
+    { key: 'prepare', label: 'Upscaling' },
+    { key: 'saving', label: 'Saving' },
   ],
 };
 

@@ -169,5 +169,50 @@
         "description": "Лёгкая Wan 2.1, только текст → видео. На платформе ещё не проверялась."
       }
     }
+  },
+  {
+    "id": "image-upscale",
+    "name": "Images · Real-ESRGAN upscaler",
+    "description": "Makes photos 4× larger with restored detail. Small (64 MB).",
+    "recommended": true,
+    "models": [
+      "realesrgan-x4plus"
+    ],
+    "presets": [
+      "img-upscale-esrgan"
+    ],
+    "i18n": {
+      "uk": {
+        "name": "Зображення · апскейлер Real-ESRGAN",
+        "description": "Збільшує фото в 4 рази з відновленням деталей. Маленький (64 МБ)."
+      },
+      "ru": {
+        "name": "Изображения · апскейлер Real-ESRGAN",
+        "description": "Увеличивает фото в 4 раза с восстановлением деталей. Маленький (64 МБ)."
+      }
+    }
+  },
+  {
+    "id": "video-vace",
+    "name": "Video · Wan 2.1 VACE — put a person in, change a video",
+    "description": "A person or object from a photo in a new video, or the motion of your video with a new look. Experimental; uses the Wan 2.1 VAE and the UMT5 encoder.",
+    "models": [
+      "wan21-vace-1.3b-q8",
+      "wan21-vae",
+      "umt5-xxl-q8"
+    ],
+    "presets": [
+      "vid-wan21-vace"
+    ],
+    "i18n": {
+      "uk": {
+        "name": "Відео · Wan 2.1 VACE — вставити людину, змінити відео",
+        "description": "Людина чи предмет із фото в новому відео або рух вашого відео з новим виглядом. Експериментально; використовує VAE Wan 2.1 і енкодер UMT5."
+      },
+      "ru": {
+        "name": "Видео · Wan 2.1 VACE — вставить человека, изменить видео",
+        "description": "Человек или предмет с фото в новом видео либо движение вашего видео с новым видом. Экспериментально; использует VAE Wan 2.1 и энкодер UMT5."
+      }
+    }
   }
 ]

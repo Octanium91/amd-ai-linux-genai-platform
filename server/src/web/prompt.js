@@ -148,10 +148,13 @@ function systemPrompt(preset, style, ctx) {
     lines.push(ctx.duration
       ? `The result is a video clip of about ${ctx.duration} seconds: describe one clear, continuous motion that fits this length.`
       : 'The result is a short video clip: describe one clear, continuous motion.');
-    if (ctx.hasImage) lines.push('The clip starts from an image the user uploaded: describe how that scene moves and how the camera behaves, and keep the subject as it is.');
+    if (ctx.task === 'reference') lines.push('The person or object comes from a photo the user uploaded: name them briefly and describe what they do, the setting and the camera.');
+    else if (ctx.task === 'restyle') lines.push('The motion comes from a video the user uploaded: describe the new look of the scene and the subject (appearance, clothing, style, lighting) and keep the action as it is.');
+    else if (ctx.hasImage) lines.push('The clip starts from an image the user uploaded: describe how that scene moves and how the camera behaves, and keep the subject as it is.');
   } else {
     lines.push('The result is a still photograph: no motion words.');
-    if (ctx.hasImage) lines.push('The user uploaded a source image that will be reworked: describe the desired result.');
+    if (ctx.task === 'inpaint') lines.push('Only a painted part of a photo the user uploaded is repainted: describe only what should appear in that part, matching the light of the photo.');
+    else if (ctx.hasImage) lines.push('The user uploaded a source image that will be reworked: describe the desired result.');
   }
   lines.push(style === 'tags'
     ? `Answer with JSON with the fields idea_en, ${TAG_FIELDS.join(', ')}.`
@@ -226,7 +229,7 @@ export async function enhancePrompt(s, preset, input) {
     format,
     options: { temperature: 0.5, num_predict: 400 },
     messages: [
-      { role: 'system', content: systemPrompt(preset, style, { duration, hasImage: !!input.hasImage }) },
+      { role: 'system', content: systemPrompt(preset, style, { duration, hasImage: !!input.hasImage, task: input.task }) },
       { role: 'user', content: describe(example.idea) },
       { role: 'assistant', content: JSON.stringify(example.answer) },
       { role: 'user', content: describe(input.idea) },
@@ -265,7 +268,7 @@ export function promptRoutes(api) {
     if (!preset) return res.status(400).json({ error: 'Unknown mode' });
 
     try {
-      const r = await enhancePrompt(s, preset, { idea, width: req.body.width, height: req.body.height, duration: req.body.duration, hasImage: !!req.body.hasImage });
+      const r = await enhancePrompt(s, preset, { idea, width: req.body.width, height: req.body.height, duration: req.body.duration, hasImage: !!req.body.hasImage, task: String(req.body.task || '') });
       if (!r.prompt) return res.status(502).json({ error: 'The model returned an empty prompt, try again' });
       res.json(r);
     } catch (e) {

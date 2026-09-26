@@ -27,7 +27,12 @@ With continuation strength 0.55 the second segment of an extra-length clip keeps
 | Mode | Parameters | Total |
 |---|---|---|
 | Realistic Vision 6 | 512×768, 25 steps, dpm++2m karras, CFG 5.5, **2 variants** | **85 s** (sampling 43 s, decoding 8 s) — ~40 s per image |
+| **RealVisXL V5** (SDXL) | 1024×1024, 30 steps, dpm++2m karras, CFG 5, 1 image | **162 s** (sampling 143 s at 4.8 s/step, decoding 17 s); 7.3 GB of GTT, 1.6 Wh |
+| **RealVisXL V5 Lightning** | 1024×1024, 6 steps, dpm++2m karras, CFG 1.5 | **48 s** (sampling 29 s at 4.9 s/step, decoding 17 s); 7.3 GB of GTT, 0.4 Wh |
+| **Z-Image Turbo** Q8_0 | 1024×1024, 8 steps, euler, CFG 1, Qwen3 4B Q8_0 encoder | **168 s** (sampling 149 s at 18.6 s/step, decoding 17 s); 11.5 GB of GTT, 1.6 Wh |
 | Realistic Vision 6, **Extra** | 768×1024 or 1024×768, 80 steps, dpm++2m karras, CFG 5.5, 1 image | **5–6 min** (sampling 290–350 s at ~4.3 s/step, decoding 9–12 s); the first of eight took 3 min 53 s at 2.9 s/step |
+
+The three 1024×1024 runs used one prompt and seed (an old fisherman on a harbor pier), no thermal throttling, GPU up to 78 °C. RealVisXL and its Lightning variant both gave convincing skin and knit texture; Lightning is 3.4× faster with slightly less detail. Z-Image followed the long natural-language prompt most closely (the navy sweater, the wooden pier, the peeling paint of the boats). A Z-Image step costs ~4× an SDXL step, so its 8 steps take as long as 30 SDXL steps.
 
 ## What affects speed
 

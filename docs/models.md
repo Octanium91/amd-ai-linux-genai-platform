@@ -25,6 +25,8 @@ Only administrators can download and delete models. On first start, while no mod
 | `umt5-xxl-q8` | [UMT5-XXL encoder](https://huggingface.co/city96/umt5-xxl-encoder-gguf), GGUF Q8_0 | Wan text encoder | 5.6 GB | Apache-2.0 |
 | `wan21-t2v-1.3b` | [Wan 2.1 T2V 1.3B](https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B) | lightweight Wan (experimental) | 2.6 GB | Apache-2.0 |
 | `wan21-vae` | Wan 2.1 VAE | Wan 2.1 | 0.2 GB | Apache-2.0 |
+| `wan21-vace-1.3b-q8` | [Wan 2.1 VACE 1.3B](https://huggingface.co/calcuis/wan-1.3b-gguf), GGUF Q8_0 | putting a person into a video, video → video | 2.2 GB | Apache-2.0 |
+| `realesrgan-x4plus` | [Real-ESRGAN x4plus](https://github.com/xinntao/Real-ESRGAN) | upscaling ×4 | 64 MB | BSD-3-Clause |
 
 Licenses are taken from the Hugging Face model cards. Check them yourself before using results commercially.
 
@@ -35,13 +37,15 @@ A mode is a ready-made combination of models and parameters, described in [catal
 | Mode | Kind | Models | Defaults | Time on a Radeon 890M |
 |---|---|---|---|---|
 | Realistic Vision 6 · photo | image | RV6 + VAE | 512×768, 25 steps, dpm++2m karras, CFG 5.5 | ~40 s per image |
-| RealVisXL V5 · SDXL photo | image | RealVisXL V5 + SDXL VAE | 1024×1024, 30 steps, dpm++2m karras, CFG 5 | not measured yet |
-| RealVisXL V5 Lightning · fast SDXL | image | RealVisXL V5 Lightning + SDXL VAE | 1024×1024, 6 steps, dpm++2m karras, CFG 1.5 | not measured yet |
-| Z-Image Turbo · photo | image | Z-Image Turbo + FLUX VAE + Qwen3 4B | 1024×1024, 8 steps, euler, CFG 1 | not measured yet |
+| RealVisXL V5 · SDXL photo | image | RealVisXL V5 + SDXL VAE | 1024×1024, 30 steps, dpm++2m karras, CFG 5 | ~2 min 40 s |
+| RealVisXL V5 Lightning · fast SDXL | image | RealVisXL V5 Lightning + SDXL VAE | 1024×1024, 6 steps, dpm++2m karras, CFG 1.5 | **~48 s** |
+| Z-Image Turbo · photo | image | Z-Image Turbo + FLUX VAE + Qwen3 4B | 1024×1024, 8 steps, euler, CFG 1 | ~2 min 50 s |
 | AnimateLCM · Realistic Vision | video | RV6 + VAE + AnimateLCM + LoRA | 512×512, 16 frames (2 s at 8 fps → 24 fps), 6 steps, lcm, CFG 1 | **~2.5 min** |
 | AnimateDiff v3 · Realistic Vision | video | RV6 + VAE + AnimateDiff v3 + adapter | 512×512, 16 frames, 20 steps, euler, CFG 8 | ~16 min |
 | Wan 2.2 TI2V 5B | video | Wan 2.2 5B + VAE + UMT5 | 832×480, 49 frames at 24 fps, 25 steps | hours (meant for Strix Halo) |
 | Wan 2.1 T2V 1.3B | video | Wan 2.1 1.3B + VAE + UMT5 | 832×480, 16 fps | not measured (experimental) |
+| Real-ESRGAN · upscale ×4 | image | Real-ESRGAN x4plus | the photo's size ×4 | not measured yet |
+| Wan 2.1 VACE 1.3B | video | VACE 1.3B + Wan 2.1 VAE + UMT5 | 832×480, 16 fps, one pass up to 5 s | not measured yet (experimental) |
 
 The Draft / Standard / High quality levels set the number of steps, which each mode defines itself (see `defaults.quality`).
 
@@ -49,10 +53,17 @@ The Draft / Standard / High quality levels set the number of steps, which each m
 
 The form starts with the task, and the mode list shows only the modes that fit it:
 
-- images: **Create** (text → image) and **Rework a photo** (image → image, the photo is required);
-- video: **Create** (text → video) and **Animate a photo** (the photo is the first frame, required).
+| Task | Kind | Inputs | How it runs |
+|---|---|---|---|
+| **Create** | image, video | a description | text → image or video |
+| **Rework a photo** | image | a photo, "how much to change" | image → image (`-i`, `--strength`); the size follows the photo's aspect ratio |
+| **Change a part** | image | a photo, a part painted over it with the brush, "how much to change" | inpainting: `--mask` (white is repainted, black kept) |
+| **Upscale** | image | a photo | Real-ESRGAN x4plus in sd-cli's `upscale` mode: 4× the size, no prompt |
+| **Animate a photo** | video | a photo | the photo is the first frame (image → video) |
+| **Put a person in** | video | a photo of a person or object, a description | Wan 2.1 VACE: the photo is a reference (`-i`), the person appears in a new scene |
+| **Change a video** | video | a video, optionally a reference photo, a description | Wan 2.1 VACE video → video: ffmpeg turns the start of the video into control frames at the job's fps and size (`--control-video`), as contours (keeps the motion and shapes) or grayscale (keeps more of the original) |
 
-A mode fits a task by its `image` field: `none` means text only, `optional` fits both tasks, `required` only the photo task.
+A mode lists its tasks in `tasks`; without it they follow from `image`: `none` means Create only, `optional` adds the photo tasks (Rework and Change a part for images, Animate for video), `required` leaves only them. The prompt assistant knows the task: for Change a part it describes only the painted area, for Change a video the new look rather than a new motion.
 
 ### Extra
 

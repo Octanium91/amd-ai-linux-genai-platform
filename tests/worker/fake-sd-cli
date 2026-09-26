@@ -21,7 +21,11 @@ sample() {
   echo
   echo "sampling completed"
 }
-if [ "$mode" = vid_gen ]; then
+if [ "$mode" = upscale ]; then
+  # The real upscale mode prints no "save result image" line
+  echo "upscaling"
+  ffmpeg -loglevel error -y -f lavfi -i "testsrc=size=256x256:rate=1" -frames:v 1 "$out" || exit 3
+elif [ "$mode" = vid_gen ]; then
   echo "generate_video 64x64x$frames"
   sample
   echo "decode_first_stage completed"

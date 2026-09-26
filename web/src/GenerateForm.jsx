@@ -11,19 +11,41 @@ const QUALITY = [
   { key: 'high', label: 'High' },
   { key: 'extra', label: 'Extra', extra: true },
 ];
-// What the user wants to do. A task decides which modes fit and whether a photo is needed; more
-// tasks (editing a part of an image, upscaling, putting a person into a video) slot in here.
+// What the user wants to do. A task decides which modes fit (a mode lists its `tasks`, see
+// server/src/web/presets.js) and which inputs the form asks for: a photo, a mask painted over it,
+// a video. `strength` is the default of the "how much to change" slider.
 const TASKS = {
   image: [
     { key: 'create', label: 'Create', title: 'An image from a description' },
-    { key: 'rework', label: 'Rework a photo', title: 'Your photo changed by the description', image: true },
+    { key: 'rework', label: 'Rework a photo', title: 'Your photo changed by the description', image: true, strength: 0.6 },
+    { key: 'inpaint', label: 'Change a part', title: 'Paint a part of the photo and describe what goes there', image: true, mask: true, strength: 0.9 },
+    { key: 'upscale', label: 'Upscale', title: 'A photo 4× larger with restored detail', image: true, noPrompt: true },
   ],
   video: [
     { key: 'create', label: 'Create', title: 'A video from a description' },
     { key: 'animate', label: 'Animate a photo', title: 'Your photo becomes the first frame and comes alive', image: true },
+    { key: 'reference', label: 'Put a person in', title: 'A person or object from a photo in a new video', image: true },
+    { key: 'restyle', label: 'Change a video', title: 'The motion of your video with a new look', video: true, imageOptional: true },
   ],
 };
-const fitsTask = (p, task) => (task.image ? p.image !== 'none' : p.image !== 'required');
+const fitsTask = (p, task) => (p.tasks || ['create']).includes(task.key);
+const photoLabel = (task) => ({
+  rework: t('Photo to rework'),
+  inpaint: t('Photo'),
+  upscale: t('Photo to upscale'),
+  animate: t('Start frame'),
+  reference: t('Photo of the person or object'),
+  restyle: t('Reference photo (optional)'),
+})[task] || t('Photo');
+
+// The generation size for a photo: its aspect ratio at about the mode's default pixel count,
+// in multiples of 64, so the photo is not stretched
+function fitSize(w, h, d) {
+  const area = (d.width || 512) * (d.height || 512);
+  const k = Math.sqrt(area / (w * h));
+  const r = (v) => Math.max(256, Math.min(2048, Math.round((v * k) / 64) * 64));
+  return [r(w), r(h)];
+}
 
 const SAMPLERS = ['euler', 'euler_a', 'dpm++2m', 'dpm++2m_sde', 'res_multistep', 'lcm', 'ddim_trailing', 'tcd'];
 
@@ -140,10 +162,96 @@ function MissingModels({ preset, user, goModels, reloadPresets }) {
   );
 }
 
+// Painting the part of a photo to change (inpainting). The overlay shows the strokes in red; a
+// hidden canvas at the photo's own resolution holds the mask sd-cli gets: white is repainted,
+// black is kept. The mask is handed over as a PNG after every stroke.
+function MaskEditor({ src, onChange }) {
+  const view = useRef(null);
+  const mask = useRef(null);
+  const drawing = useRef(null);
+  const [brush, setBrush] = useState(6); // % of the photo width
+  const [painted, setPainted] = useState(false);
+
+  const setup = (img) => {
+    const w = img.naturalWidth;
+    const h = img.naturalHeight;
+    for (const c of [view.current, mask.current]) {
+      c.width = w;
+      c.height = h;
+    }
+    const m = mask.current.getContext('2d');
+    m.fillStyle = '#000';
+    m.fillRect(0, 0, w, h);
+    view.current.getContext('2d').clearRect(0, 0, w, h);
+    setPainted(false);
+    onChange(null);
+  };
+
+  const point = (e) => {
+    const r = view.current.getBoundingClientRect();
+    return [((e.clientX - r.left) / r.width) * view.current.width, ((e.clientY - r.top) / r.height) * view.current.height];
+  };
+  const stroke = (from, to) => {
+    const size = (brush / 100) * view.current.width;
+    for (const [c, color] of [[view.current, 'rgba(240, 106, 106, 0.55)'], [mask.current, '#fff']]) {
+      const g = c.getContext('2d');
+      g.strokeStyle = color;
+      g.lineWidth = size;
+      g.lineCap = 'round';
+      g.lineJoin = 'round';
+      g.beginPath();
+      g.moveTo(...from);
+      g.lineTo(...to);
+      g.stroke();
+    }
+  };
+  const down = (e) => {
+    e.preventDefault();
+    view.current.setPointerCapture(e.pointerId);
+    const p = point(e);
+    drawing.current = p;
+    stroke(p, p);
+  };
+  const move = (e) => {
+    if (!drawing.current) return;
+    const p = point(e);
+    stroke(drawing.current, p);
+    drawing.current = p;
+  };
+  const up = () => {
+    if (!drawing.current) return;
+    drawing.current = null;
+    setPainted(true);
+    mask.current.toBlob((b) => onChange(b), 'image/png');
+  };
+  const clear = () => {
+    const img = view.current.previousSibling;
+    if (img?.naturalWidth) setup(img);
+  };
+
+  return (
+    <div className="mask-editor">
+      <div className="mask-stage">
+        <img src={src} alt="" onLoad={(e) => setup(e.currentTarget)} draggable={false} />
+        <canvas ref={view} className="mask-view" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} />
+        <canvas ref={mask} hidden />
+      </div>
+      <div className="mask-tools">
+        <label className="mask-brush">
+          <span className="muted small">{t('Brush')}</span>
+          <input type="range" min={2} max={20} value={brush} onChange={(e) => setBrush(Number(e.target.value))} />
+        </label>
+        <button type="button" className="btn btn-small" disabled={!painted} onClick={clear}>{t('Clear')}</button>
+      </div>
+      <span className="field-hint">{painted ? t('Only the painted part changes; the rest of the photo stays as it is.') : t('Paint over the part of the photo to change.')}</span>
+    </div>
+  );
+}
+
 // The prompt field with the "To prompt" assistant: an Ollama model (connected by an administrator
 // in Settings) rewrites the description into a detailed English prompt for the selected mode.
 // The previous text can be restored with one click.
-function PromptField({ form, set, preset, isVideo, hasImage, duration }) {
+function PromptField({ form, set, preset, isVideo, hasImage, duration, task }) {
   const [status, setStatus] = useState(null);
   const [busy, setBusy] = useState(false);
   const [undo, setUndo] = useState(null);
@@ -172,7 +280,7 @@ function PromptField({ form, set, preset, isVideo, hasImage, duration }) {
     try {
       const r = await api('/api/prompt/enhance', {
         method: 'POST',
-        json: { presetId: preset.id, prompt: form.prompt, width: form.width, height: form.height, duration: isVideo ? duration : null, hasImage },
+        json: { presetId: preset.id, prompt: form.prompt, width: form.width, height: form.height, duration: isVideo ? duration : null, hasImage, task },
       });
       setUndo(form.prompt);
       set('prompt')(r.prompt);
@@ -227,7 +335,11 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
   const [error, setError] = useState('');
   const [drag, setDrag] = useState(false);
   const [taskKey, setTaskKey] = useState('create');
+  const [maskBlob, setMaskBlob] = useState(null);
+  const [video, setVideo] = useState(null); // File
+  const [videoRef, setVideoRef] = useState(null); // name of an already uploaded video
   const fileInput = useRef(null);
+  const videoInput = useRef(null);
   const isVideo = kind === 'video';
   const tasks = TASKS[kind] || TASKS.image;
   const task = tasks.find((x) => x.key === taskKey) || tasks[0];
@@ -248,12 +360,15 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
 
   useEffect(() => {
     if (!reuse || (reuse.kind || 'video') !== kind) return;
-    const { _t, image: img, presetName, frames, steps, fps, segments, kind: _k, ...params } = reuse;
+    const { _t, image: img, video: _v, mask: _m, task: _task, presetName, frames, steps, fps, segments, kind: _k, ...params } = reuse;
     params.quality ??= 'normal';
     setForm((f) => ({ ...(f || {}), ...params }));
     setImage(null);
     setImageRef(img || null);
-    setTaskKey(img ? (kind === 'video' ? 'animate' : 'rework') : 'create');
+    setVideo(null);
+    setVideoRef(reuse.video || null);
+    setMaskBlob(null);
+    setTaskKey(reuse.task || (img ? (kind === 'video' ? 'animate' : 'rework') : 'create'));
     // Applied once: coming back to the tab later must not overwrite what the user typed since
     onReuseApplied?.();
   }, [reuse, kind]);
@@ -264,6 +379,12 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
     return null;
   }, [image, imageRef]);
   useEffect(() => () => image && previewUrl && URL.revokeObjectURL(previewUrl), [image, previewUrl]);
+  const videoUrl = useMemo(() => {
+    if (video) return URL.createObjectURL(video);
+    if (videoRef) return `/files/uploads/${videoRef}`;
+    return null;
+  }, [video, videoRef]);
+  useEffect(() => () => video && videoUrl && URL.revokeObjectURL(videoUrl), [video, videoUrl]);
 
   if (!presets.length) return <div className="card"><div className="muted">{t('No modes of this type.')}</div></div>;
   if (!form) return <div className="card"><div className="muted">{t('Loading…')}</div></div>;
@@ -281,10 +402,16 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
   const pickTask = (key) => {
     const next = tasks.find((x) => x.key === key);
     setTaskKey(key);
-    if (!next.image) {
+    setMaskBlob(null);
+    if (!next.image && !next.imageOptional) {
       setImage(null);
       setImageRef(null);
     }
+    if (!next.video) {
+      setVideo(null);
+      setVideoRef(null);
+    }
+    setForm((f) => ({ ...f, strength: next.strength ?? null }));
     // Keep the mode when it fits the task, otherwise the first fitting one that is ready
     if (preset && !fitsTask(preset, next)) {
       const fit = presets.filter((p) => fitsTask(p, next));
@@ -295,7 +422,8 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
 
   const d = preset?.defaults || {};
   const resolutions = preset?.resolutions || FALLBACK_RES;
-  const acceptsImage = !!task.image && preset && preset.image !== 'none';
+  const acceptsImage = !!(task.image || task.imageOptional) && !!preset;
+  const upscale = !!task.noPrompt;
   const plan = videoPlan(preset, form.duration, form.segmentFrames);
   // Sizes the mode was tested at; others work but follow the prompt less reliably
   const recommended = preset?.recommendedResolutions;
@@ -309,7 +437,20 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
     if (f && f.type.startsWith('image/')) {
       setImage(f);
       setImageRef(null);
+      setMaskBlob(null);
     }
+  };
+  const onVideo = (f) => {
+    if (f && f.type.startsWith('video/')) {
+      setVideo(f);
+      setVideoRef(null);
+    }
+  };
+  // Rework and inpaint follow the photo's aspect ratio
+  const onPhotoLoad = (e) => {
+    if (!['rework', 'inpaint'].includes(task.key) || !preset) return;
+    const [w, h] = fitSize(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight, preset.defaults || {});
+    setForm((f) => (f.width === w && f.height === h ? f : { ...f, width: w, height: h }));
   };
 
   const submit = async (e) => {
@@ -317,14 +458,22 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
     // Ctrl+Enter bypasses the disabled button, and a held key repeats: one job per submit
     if (submitting.current) return;
     if (task.image && !image && !imageRef) return setError(t('Add a photo for this task.'));
+    if (task.mask && !maskBlob) return setError(t('Paint the part of the photo to change.'));
+    if (task.video && !video && !videoRef) return setError(t('Add a video for this task.'));
     submitting.current = true;
     setError('');
     setBusy(true);
     try {
       const fd = new FormData();
       for (const [k, v] of Object.entries(form)) if (v != null && v !== '') fd.append(k, v);
+      fd.set('task', task.key);
+      if (task.strength != null) fd.set('strength', String(form.strength ?? task.strength));
+      if (upscale && !form.prompt.trim()) fd.set('prompt', '');
       if (acceptsImage && image) fd.append('image', image);
       else if (acceptsImage && imageRef) fd.append('imageRef', imageRef);
+      if (task.mask && maskBlob) fd.append('mask', maskBlob, 'mask.png');
+      if (task.video && video) fd.append('video', video);
+      else if (task.video && videoRef) fd.append('videoRef', videoRef);
       await api('/api/jobs', { method: 'POST', body: fd });
       onCreated();
     } catch (err) {
@@ -335,7 +484,7 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
     }
   };
 
-  const summary = isVideo
+  const summary = upscale ? t('4× larger') : isVideo
     ? (plan.segments > 1
       ? t('{n} segments × {frames} frames at {fps} fps', { n: plan.segments, frames: plan.frames, fps: plan.fps })
       : t('{frames} frames at {fps} fps', { frames: plan.frames, fps: plan.fps }))
@@ -380,12 +529,14 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
         <MissingModels preset={preset} user={user} goModels={goModels} reloadPresets={reloadPresets} />
       )}
 
-      <PromptField form={form} set={set} preset={preset} isVideo={isVideo} hasImage={!!(acceptsImage && (image || imageRef))} duration={plan.duration} />
+      {!upscale && (
+        <PromptField form={form} set={set} preset={preset} isVideo={isVideo} hasImage={!!(acceptsImage && (image || imageRef))} duration={plan.duration} task={task.key} />
+      )}
 
       {acceptsImage && (
         <div className="field">
           <span className="field-label">
-            {isVideo ? t('Start frame') : t('Photo to rework')}
+            {photoLabel(task.key)}
           </span>
           <div
             className={`drop ${drag ? 'drag' : ''} ${previewUrl ? 'has' : ''}`}
@@ -402,9 +553,11 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
             onDragLeave={() => setDrag(false)}
             onDrop={(e) => { e.preventDefault(); setDrag(false); onFile(e.dataTransfer.files[0]); }}
           >
-            {previewUrl ? (
+            {previewUrl && task.mask ? (
+              <span className="muted small">{t('Click to choose another photo')}</span>
+            ) : previewUrl ? (
               <>
-                <img src={previewUrl} alt="" />
+                <img src={previewUrl} alt="" onLoad={onPhotoLoad} />
                 <button type="button" className="btn-icon drop-clear" title={t('Remove')}
                   onClick={(e) => { e.stopPropagation(); setImage(null); setImageRef(null); }}>×</button>
               </>
@@ -413,9 +566,56 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
             )}
           </div>
           <input ref={fileInput} type="file" accept="image/*" hidden onChange={(e) => onFile(e.target.files[0])} />
+          {previewUrl && task.mask && (
+            <>
+              <img src={previewUrl} alt="" hidden onLoad={onPhotoLoad} />
+              <MaskEditor key={previewUrl} src={previewUrl} onChange={setMaskBlob} />
+            </>
+          )}
         </div>
       )}
 
+      {task.video && (
+        <div className="field">
+          <span className="field-label">{t('Video')}</span>
+          {videoUrl ? (
+            <div className="video-pick">
+              <video src={videoUrl} controls muted playsInline preload="metadata" />
+              <button type="button" className="btn-icon drop-clear" title={t('Remove')} onClick={() => { setVideo(null); setVideoRef(null); }}>×</button>
+            </div>
+          ) : (
+            <div className="drop" role="button" tabIndex={0} onClick={() => videoInput.current?.click()}
+              onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), videoInput.current?.click())}
+              onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); onVideo(e.dataTransfer.files[0]); }}>
+              <span className="muted">{t('Drop a video here or click (MP4, MOV, WebM)')}</span>
+            </div>
+          )}
+          <input ref={videoInput} type="file" accept="video/mp4,video/quicktime,video/webm" hidden onChange={(e) => onVideo(e.target.files[0])} />
+          <span className="field-hint">{t('The video is taken from its start, as long as the duration below.')}</span>
+          <label className="field">
+            <span className="field-label">{t('What to keep from the video')}</span>
+            <select value={form.control || 'edges'} onChange={(e) => set('control')(e.target.value)}>
+              <option value="edges">{t('Contours: the motion and shapes, a new look from the prompt')}</option>
+              <option value="gray">{t('Grayscale: more of the original, new colors and details')}</option>
+            </select>
+          </label>
+        </div>
+      )}
+
+      {task.strength != null && (
+        <label className="field">
+          <span className="field-label field-label-row">
+            <span>{t('How much to change')}</span>
+            <b>{Math.round((form.strength ?? task.strength) * 100)}%</b>
+          </span>
+          <input type="range" min={0.1} max={1} step={0.05} value={form.strength ?? task.strength} onChange={(e) => set('strength')(Number(e.target.value))} />
+          <span className="field-hint">{t('Low keeps the photo almost as it is, high follows the description and changes it a lot.')}</span>
+        </label>
+      )}
+
+      {upscale && <div className="muted small">{t('The photo becomes 4 times larger. No other settings are needed.')}</div>}
+
+      {!upscale && (<>
       <div className="field">
         <span className="field-label">{t('Resolution')}</span>
         <Chips
@@ -533,11 +733,12 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
           </label>
         </div>
       )}
+      </>)}
 
       {error && <div className="error">{error}</div>}
 
       <div className="submit-row">
-        <button className="btn primary" disabled={busy || !preset?.available || !form.prompt.trim()}>
+        <button className="btn primary" disabled={busy || !preset?.available || (!upscale && !form.prompt.trim())}>
           {busy ? t('Submitting…') : queueSize ? t('Add to queue ({n} ahead of you)', { n: queueSize }) : t('Generate')}
         </button>
         <span className="muted small">

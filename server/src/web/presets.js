@@ -22,6 +22,29 @@ export function presetModels(preset, catalog = loadCatalog()) {
   }));
 }
 
+// What a mode can be used for. A mode may list its tasks in catalog/presets.json (`tasks`);
+// otherwise they follow from whether it takes an image (`image`: none, optional, required).
+//   image: create (text → image), rework (image → image), inpaint (repaint a masked part),
+//          upscale (a dedicated upscaler mode)
+//   video: create (text → video), animate (the photo is the first frame),
+//          reference (a person or object from a photo in a new video), restyle (video → video)
+export const TASK_INPUTS = {
+  create: {},
+  rework: { image: true },
+  inpaint: { image: true, mask: true },
+  upscale: { image: true, noPrompt: true },
+  animate: { image: true },
+  reference: { image: true },
+  restyle: { video: true, imageOptional: true },
+};
+
+export function presetTasks(p) {
+  if (Array.isArray(p.tasks)) return p.tasks.filter((t) => TASK_INPUTS[t]);
+  const image = p.image || 'none';
+  if (p.kind === 'video') return image === 'none' ? ['create'] : image === 'required' ? ['animate'] : ['create', 'animate'];
+  return image === 'none' ? ['create'] : image === 'required' ? ['rework', 'inpaint'] : ['create', 'rework', 'inpaint'];
+}
+
 export function presetsWithAvailability() {
   const catalog = loadCatalog();
   return loadPresets().map((p) => {
@@ -29,6 +52,7 @@ export function presetsWithAvailability() {
     const missing = models.filter((m) => !m.entry || !isInstalled(m.entry));
     return {
       ...p,
+      tasks: presetTasks(p),
       available: missing.length === 0,
       missing: missing.map((m) => ({
         id: m.id,

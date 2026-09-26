@@ -227,16 +227,38 @@ const ROLE_FLAGS = {
   motion_module: '--motion-module',
   // A language model as the text encoder (Z-Image: Qwen3)
   llm: '--llm',
+  // An ESRGAN upscaler (the upscale task)
+  upscaler: '--upscale-model',
 };
 
-function buildArgs(job, preset, outBase, initImage) {
-  const p = job.params;
-  const args = ['-M', preset.kind === 'image' ? 'img_gen' : 'vid_gen'];
+// The mode's image arguments with the job's own strength instead of the mode's, when it has one
+function imageArgs(preset, p) {
+  const a = [...(preset.imageArgs || [])];
+  const i = a.indexOf('--strength');
+  if (p.strength != null) {
+    if (i >= 0) a.splice(i, 2);
+    a.push('--strength', String(p.strength));
+  }
+  return a;
+}
+
+function modelArgs(preset) {
+  const args = [];
   for (const { role, name, file } of preset.models) {
     const full = path.join(dirs.models, file);
     if (!fs.existsSync(full)) throw new Error(`Model not downloaded: ${name}`);
     if (ROLE_FLAGS[role]) args.push(ROLE_FLAGS[role], full);
   }
+  return args;
+}
+
+function buildArgs(job, preset, outBase, initImage, controlDir) {
+  const p = job.params;
+  // Upscaling runs the ESRGAN model alone: no prompt, no sampling
+  if (p.task === 'upscale') {
+    return ['-M', 'upscale', ...modelArgs(preset), '-i', path.join(dirs.uploads, p.image), ...(preset.extraArgs || []), '-o', `${outBase}.png`];
+  }
+  const args = ['-M', preset.kind === 'image' ? 'img_gen' : 'vid_gen', ...modelArgs(preset)];
   if (preset.loraDir) args.push('--lora-model-dir', path.join(dirs.models, preset.loraDir));
   args.push('-p', p.prompt + (preset.promptSuffix || ''));
   if (p.negative) args.push('-n', p.negative);
@@ -250,7 +272,11 @@ function buildArgs(job, preset, outBase, initImage) {
   if (p.flowShift != null) args.push('--flow-shift', String(p.flowShift));
   // A continuation segment stays closer to the last frame (continueArgs) than regular image-to-video
   if (initImage) args.push('-i', initImage, ...(preset.continueArgs || preset.imageArgs || []));
-  else if (p.image) args.push('-i', path.join(dirs.uploads, p.image), ...(preset.imageArgs || []));
+  else if (p.image) args.push('-i', path.join(dirs.uploads, p.image), ...imageArgs(preset, p));
+  // Inpainting: white in the mask is repainted, black is kept
+  if (p.mask && !initImage) args.push('--mask', path.join(dirs.uploads, p.mask));
+  // Video to video (VACE): the frames that carry the motion of the uploaded video
+  if (controlDir) args.push('--control-video', controlDir);
   if (preset.preview && preset.preview !== 'none') {
     args.push('--preview', preset.preview, '--preview-path', path.join(dirs.previews, job.id + (preset.kind === 'image' ? '.png' : '.webp')),
       '--preview-interval', '1');
@@ -299,6 +325,31 @@ function runSd(job, args, log) {
   });
 }
 
+// The control video for video to video (VACE): the uploaded video at the job's fps and size,
+// cut to its frame count, as contours (edges: keeps the motion and shapes, the look comes from the
+// prompt and the reference) or in grayscale (gray: keeps more of the original). Frames go to a
+// directory, as sd-cli expects; a shorter video gives fewer frames, and the job follows it (4n+1).
+async function controlFrames(job, tmpBase) {
+  const p = job.params;
+  const dir = `${tmpBase}_ctrl`;
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.mkdirSync(dir, { recursive: true });
+  const look = p.control === 'gray' ? 'format=gray' : 'edgedetect=low=0.08:high=0.2';
+  const vf = `fps=${p.fps},scale=${p.width}:${p.height}:force_original_aspect_ratio=increase,crop=${p.width}:${p.height},${look}`;
+  const r = await runCmd('ffmpeg', ['-loglevel', 'error', '-y', '-i', path.join(dirs.uploads, p.video), '-vf', vf,
+    '-frames:v', String(p.frames), path.join(dir, 'frame_%04d.png')], 'ffmpeg.control_video');
+  const n = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => f.endsWith('.png')).length : 0;
+  if (job.status !== 'running') return null;
+  if (r.code !== 0 || n < 5) throw new Error('Could not read the video: ' + (r.err.trim() || 'too few frames'));
+  const frames = Math.floor((n - 1) / 4) * 4 + 1;
+  if (frames < p.frames) {
+    for (const f of fs.readdirSync(dir).sort().slice(frames)) fs.rmSync(path.join(dir, f), { force: true });
+    p.frames = frames;
+    p.duration = (frames - 1) / p.fps;
+  }
+  return dir;
+}
+
 function newProgress(segment, segments, doneSegments = []) {
   return { stage: 'prepare', stages: { prepare: { startedAt: Date.now() } }, loading: null, segment, segments, doneSegments };
 }
@@ -322,6 +373,7 @@ async function run(job) {
     }
     for (const f of job._saved || []) fs.rmSync(f, { force: true });
     delete job._saved;
+    fs.rmSync(`${tmpBase}_ctrl`, { recursive: true, force: true });
   };
 
   try {
@@ -348,7 +400,9 @@ async function run(job) {
         current.tel?.phase('prepare', { segment: i + 1 });
       }
       const outBase = `${tmpBase}_s${i}`;
-      const args = buildArgs(job, preset, outBase, init);
+      const controlDir = job.params.video && i === 0 ? await controlFrames(job, tmpBase) : null;
+      if (job.status !== 'running') break;
+      const args = buildArgs(job, preset, outBase, init, controlDir);
       if (i === 0) job.cmd = [config.sdCli, ...args].join(' ');
       const { code, signal, spawnError } = await runSd(job, args, log);
       if (job.status !== 'running') break;
@@ -359,6 +413,9 @@ async function run(job) {
       if (preset.kind !== 'image') {
         if (!fs.existsSync(`${outBase}.avi`)) throw new Error('sd-cli did not save the video');
         outputs.push(`${outBase}.avi`);
+      } else if (!job._saved?.length && fs.existsSync(`${outBase}.png`)) {
+        // The upscale mode saves its result without the "save result image" line
+        job._saved = [`${outBase}.png`];
       }
     }
     if (job.status !== 'running') {

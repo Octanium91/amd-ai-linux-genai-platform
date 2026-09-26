@@ -91,6 +91,16 @@
       "prefix": "RAW photo",
       "suffix": "photorealistic, 8k uhd, dslr, soft lighting, high quality, film grain"
     },
+    "reference": {
+      "width": 1024,
+      "height": 1024,
+      "frames": 1,
+      "steps": 30,
+      "cfg": 5,
+      "samplingSec": 143,
+      "decodeSec": 17,
+      "otherSec": 2
+    },
     "image": "optional",
     "models": {
       "model": "realvisxl-v5",
@@ -198,6 +208,16 @@
     "promptQuality": {
       "prefix": "RAW photo",
       "suffix": "photorealistic, 8k uhd, dslr, soft lighting, high quality, film grain"
+    },
+    "reference": {
+      "width": 1024,
+      "height": 1024,
+      "frames": 1,
+      "steps": 6,
+      "cfg": 1.5,
+      "samplingSec": 29,
+      "decodeSec": 17,
+      "otherSec": 2
     },
     "image": "optional",
     "models": {
@@ -308,6 +328,16 @@
     "promptQuality": {
       "suffix": "Photorealistic, natural light, rich detail, sharp focus."
     },
+    "reference": {
+      "width": 1024,
+      "height": 1024,
+      "frames": 1,
+      "steps": 8,
+      "cfg": 1,
+      "samplingSec": 149,
+      "decodeSec": 17,
+      "otherSec": 2
+    },
     "image": "optional",
     "models": {
       "diffusion": "z-image-turbo-q8",
@@ -396,6 +426,44 @@
       "ru": {
         "name": "Z-Image Turbo · фото",
         "description": "Современная модель на 6B за 8 шагов: сильный фотореализм, понимает длинные описания на естественном языке, умеет писать текст на изображении."
+      }
+    }
+  },
+  {
+    "id": "img-upscale-esrgan",
+    "kind": "image",
+    "name": "Real-ESRGAN · upscale ×4",
+    "description": "Makes a photo 4× larger and restores fine detail. No prompt needed.",
+    "tasks": [
+      "upscale"
+    ],
+    "image": "required",
+    "models": {
+      "upscaler": "realesrgan-x4plus"
+    },
+    "defaults": {
+      "width": 512,
+      "height": 512,
+      "cfg": 1,
+      "sampler": "euler",
+      "negative": "",
+      "quality": {
+        "normal": 1
+      }
+    },
+    "preview": "none",
+    "extraArgs": [
+      "--upscale-tile-size",
+      "256"
+    ],
+    "i18n": {
+      "uk": {
+        "name": "Real-ESRGAN · збільшення ×4",
+        "description": "Збільшує фото в 4 рази й відновлює дрібні деталі. Промпт не потрібен."
+      },
+      "ru": {
+        "name": "Real-ESRGAN · увеличение ×4",
+        "description": "Увеличивает фото в 4 раза и восстанавливает мелкие детали. Промпт не нужен."
       }
     }
   },
@@ -760,6 +828,84 @@
       "ru": {
         "name": "Wan 2.1 T2V 1.3B (экспериментально)",
         "description": "Лёгкая Wan 2.1, только текст → видео. На этой платформе ещё не проверялась."
+      }
+    }
+  },
+  {
+    "id": "vid-wan21-vace",
+    "kind": "video",
+    "name": "Wan 2.1 VACE 1.3B (experimental)",
+    "description": "Puts a person or object from a photo into a new video, or keeps the motion of an uploaded video and changes its look. Wan 2.1 at 16 fps, one pass up to 5 s.",
+    "experimental": true,
+    "promptQuality": {
+      "suffix": "Photorealistic, cinematic lighting, rich detail, smooth natural motion."
+    },
+    "tasks": [
+      "reference",
+      "restyle"
+    ],
+    "image": "optional",
+    "models": {
+      "diffusion": "wan21-vace-1.3b-q8",
+      "vae": "wan21-vae",
+      "t5xxl": "umt5-xxl-q8"
+    },
+    "defaults": {
+      "width": 832,
+      "height": 480,
+      "cfg": 6,
+      "flowShift": 3,
+      "sampler": "euler",
+      "negative": "blurry, low quality, distorted, deformed, static, overexposed, watermark, text, subtitles, extra limbs, bad hands",
+      "nativeFps": 16,
+      "maxFrames": 81,
+      "segmentFrames": 81,
+      "maxSegments": 1,
+      "duration": 2,
+      "quality": {
+        "draft": 12,
+        "normal": 20,
+        "high": 30
+      }
+    },
+    "resolutions": [
+      [
+        832,
+        480
+      ],
+      [
+        480,
+        832
+      ],
+      [
+        640,
+        640
+      ]
+    ],
+    "recommendedResolutions": [
+      [
+        832,
+        480
+      ],
+      [
+        480,
+        832
+      ]
+    ],
+    "preview": "proj",
+    "extraArgs": [
+      "--diffusion-fa",
+      "--vae-tiling",
+      "--offload-to-cpu"
+    ],
+    "i18n": {
+      "uk": {
+        "name": "Wan 2.1 VACE 1.3B (експериментальний)",
+        "description": "Вставляє людину чи предмет із фото в нове відео або зберігає рух завантаженого відео й змінює його вигляд. Wan 2.1 на 16 fps, один прохід до 5 с."
+      },
+      "ru": {
+        "name": "Wan 2.1 VACE 1.3B (экспериментальный)",
+        "description": "Вставляет человека или предмет с фото в новое видео либо сохраняет движение загруженного видео и меняет его вид. Wan 2.1 на 16 fps, один проход до 5 с."
       }
     }
   }

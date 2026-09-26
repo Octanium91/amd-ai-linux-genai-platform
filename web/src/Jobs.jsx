@@ -114,7 +114,7 @@ export function ActiveJob({ job, skew, onCancel }) {
   const now = useNow(skew);
   const [showLog, setShowLog] = useState(false);
   const pr = job.progress || {};
-  const stages = STAGES[jobKind(job)] || STAGES.video;
+  const stages = (job.params?.task === 'upscale' && STAGES.upscale) || STAGES[jobKind(job)] || STAGES.video;
   const idx = stages.findIndex((s) => s.key === pr.stage);
   const total = job.startedAt ? (now - job.startedAt) / 1000 : 0;
 

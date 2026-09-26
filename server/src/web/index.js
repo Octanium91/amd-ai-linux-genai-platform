@@ -13,7 +13,7 @@ import {
   cancelDownload, deleteModel, diskUsage, enqueueDownloads, loadCatalog, modelStatus,
 } from './models.js';
 import { jobParams, jobSpec } from './params.js';
-import { loadPresets, loadTemplates, presetsWithAvailability } from './presets.js';
+import { loadPresets, loadTemplates, presetsWithAvailability, TASK_INPUTS } from './presets.js';
 import { readJson } from '../common/store.js';
 import { promptAdminRoutes, promptRoutes } from './prompt.js';
 import { settingsRoutes } from './settings.js';
@@ -42,17 +42,21 @@ const api = express.Router();
 api.use(requireAuth);
 
 // Uploads are named by the server; the extension comes from the file's content, not from the
-// client, and only PNG, JPEG and WebP are kept (an SVG or HTML "image" would run scripts in the
-// platform's origin when opened)
+// client, and only PNG, JPEG and WebP images and MP4, MOV and WebM videos are kept (an SVG or
+// HTML "image" would run scripts in the platform's origin when opened). A job may carry a photo,
+// a mask (white = repaint) and a video, depending on its task.
+const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
+const MAX_VIDEO_BYTES = 300 * 1024 * 1024;
 const upload = multer({
   storage: multer.diskStorage({
     destination: dirs.uploads,
     filename: (req, file, cb) => cb(null, `${Date.now()}-${crypto.randomBytes(3).toString('hex')}.upload`),
   }),
-  limits: { fileSize: 25 * 1024 * 1024, files: 1, fields: 40, fieldSize: 64 * 1024, parts: 42 },
-  fileFilter: (req, file, cb) => cb(null, /^image\//.test(file.mimetype)),
+  limits: { fileSize: MAX_VIDEO_BYTES, files: 3, fields: 40, fieldSize: 64 * 1024, parts: 44 },
+  fileFilter: (req, file, cb) => cb(null, file.fieldname === 'video' ? /^video\//.test(file.mimetype) : /^image\//.test(file.mimetype)),
 });
-const UPLOAD_NAME = /^\d+-[0-9a-f]{6}\.(png|jpg|webp)$/;
+const jobFiles = upload.fields([{ name: 'image', maxCount: 1 }, { name: 'mask', maxCount: 1 }, { name: 'video', maxCount: 1 }]);
+const UPLOAD_NAME = /^\d+-[0-9a-f]{6}\.(png|jpg|webp|mp4|mov|webm)$/;
 
 function imageType(file) {
   const b = Buffer.alloc(12);
@@ -65,6 +69,19 @@ function imageType(file) {
   if (b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'png';
   if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'jpg';
   if (b.toString('latin1', 0, 4) === 'RIFF' && b.toString('latin1', 8, 12) === 'WEBP') return 'webp';
+  return null;
+}
+
+function videoType(file) {
+  const b = Buffer.alloc(12);
+  const fd = fs.openSync(file, 'r');
+  try {
+    fs.readSync(fd, b, 0, 12, 0);
+  } finally {
+    fs.closeSync(fd);
+  }
+  if (b.toString('latin1', 4, 8) === 'ftyp') return b.toString('latin1', 8, 10) === 'qt' ? 'mov' : 'mp4';
+  if (b.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]))) return 'webm';
   return null;
 }
 
@@ -107,36 +124,56 @@ api.get('/diagnostics', async (req, res) => {
 api.get('/presets', (req, res) => res.json(presetsWithAvailability()));
 api.get('/templates', (req, res) => res.json(loadTemplates()));
 
-api.post('/jobs', upload.single('image'), async (req, res) => {
+api.post('/jobs', jobFiles, async (req, res) => {
   const b = req.body || {};
+  const uploaded = Object.values(req.files || {}).flat();
   const reject = (msg) => {
-    if (req.file) fs.rmSync(req.file.path, { force: true });
+    for (const f of uploaded) fs.rmSync(f.path, { force: true });
     res.status(400).json({ error: msg });
   };
   const preset = presetsWithAvailability().find((p) => p.id === b.presetId);
   if (!preset) return reject('Unknown mode');
   if (!preset.available) return reject('Models not downloaded: ' + preset.missing.map((m) => m.name).join(', '));
-  if (!String(b.prompt || '').trim()) return reject('Enter a prompt');
-  if (String(b.prompt).length > MAX_PROMPT || String(b.negative ?? '').length > MAX_PROMPT) {
+  const task = b.task && TASK_INPUTS[b.task] ? b.task : preset.tasks[0];
+  if (!preset.tasks.includes(task)) return reject('This mode cannot do this task');
+  const needs = TASK_INPUTS[task];
+  if (!needs.noPrompt && !String(b.prompt || '').trim()) return reject('Enter a prompt');
+  if (String(b.prompt || '').length > MAX_PROMPT || String(b.negative ?? '').length > MAX_PROMPT) {
     return reject('The prompt is too long (at most 4000 characters)');
   }
 
-  let image = null;
-  if (req.file) {
-    const type = imageType(req.file.path);
-    if (!type) return reject('Only PNG, JPEG and WebP images are accepted');
-    image = req.file.filename.replace(/\.upload$/, `.${type}`);
-    fs.renameSync(req.file.path, path.join(dirs.uploads, image));
-    req.file.path = path.join(dirs.uploads, image);
-  } else if (UPLOAD_NAME.test(String(b.imageRef || ''))) {
-    const ref = path.join(dirs.uploads, b.imageRef);
-    if (fs.statSync(ref, { throwIfNoEntry: false })?.isFile()) image = b.imageRef;
-  }
-  if (preset.image === 'none' && image) {
-    if (req.file) fs.rmSync(req.file.path, { force: true });
-    image = null;
-  }
-  if (preset.image === 'required' && !image) return reject('This mode requires an image');
+  // Every file is renamed by its real content type; a file already uploaded earlier can be
+  // referred to by name (repeating or restarting a job)
+  const take = (field, typeOf, maxBytes, badType) => {
+    const f = req.files?.[field]?.[0];
+    if (f) {
+      if (f.size > maxBytes) return { error: 'The file is too large' };
+      const type = typeOf(f.path);
+      if (!type) return { error: badType };
+      const name = f.filename.replace(/\.upload$/, `.${type}`);
+      fs.renameSync(f.path, path.join(dirs.uploads, name));
+      f.path = path.join(dirs.uploads, name);
+      return { name };
+    }
+    const ref = String(b[`${field}Ref`] || '');
+    if (UPLOAD_NAME.test(ref) && fs.statSync(path.join(dirs.uploads, ref), { throwIfNoEntry: false })?.isFile()) return { name: ref };
+    return { name: null };
+  };
+  const img = take('image', imageType, MAX_IMAGE_BYTES, 'Only PNG, JPEG and WebP images are accepted');
+  const mask = take('mask', imageType, MAX_IMAGE_BYTES, 'Only PNG, JPEG and WebP images are accepted');
+  const vid = take('video', videoType, MAX_VIDEO_BYTES, 'Only MP4, MOV and WebM videos are accepted');
+  const error = img.error || mask.error || vid.error;
+  if (error) return reject(error);
+  // Inputs the task does not use are dropped: a text-to-image job never carries a photo
+  const drop = (name) => name && uploaded.some((f) => f.path.endsWith(name)) && fs.rmSync(path.join(dirs.uploads, name), { force: true });
+  const inputs = {
+    image: needs.image || needs.imageOptional ? img.name : (drop(img.name), null),
+    mask: needs.mask ? mask.name : (drop(mask.name), null),
+    video: needs.video ? vid.name : (drop(vid.name), null),
+  };
+  if (needs.image && !inputs.image) return reject('This task needs a photo');
+  if (needs.mask && !inputs.mask) return reject('Paint the part of the photo to change');
+  if (needs.video && !inputs.video) return reject('This task needs a video');
   const { jobs } = await workerState();
   if (jobs.filter((j) => j.status === 'queued' && j.user === req.user.username).length >= MAX_QUEUED_PER_USER) {
     return reject('Too many jobs in the queue (at most 20 per user)');
@@ -145,10 +182,10 @@ api.post('/jobs', upload.single('image'), async (req, res) => {
   try {
     res.json(await callWorker('/v1/jobs', {
       method: 'POST',
-      body: { user: req.user.username, params: jobParams(preset, b, image), spec: jobSpec(preset) },
+      body: { user: req.user.username, params: jobParams(preset, b, inputs.image, { ...inputs, task }), spec: jobSpec(preset) },
     }));
   } catch (e) {
-    if (req.file) fs.rmSync(req.file.path, { force: true });
+    for (const f of uploaded) fs.rmSync(f.path, { force: true });
     throw e;
   }
 });
@@ -168,8 +205,10 @@ api.post('/jobs/:id/retry', async (req, res) => {
   const preset = presetsWithAvailability().find((p) => p.id === job.params?.presetId);
   if (!preset) return res.status(400).json({ error: 'The mode of this job no longer exists' });
   if (!preset.available) return res.status(400).json({ error: 'Models not downloaded: ' + preset.missing.map((m) => m.name).join(', ') });
-  if (job.params.image && !fs.existsSync(path.join(dirs.uploads, path.basename(job.params.image)))) {
-    return res.status(400).json({ error: 'The source image of this job has been deleted' });
+  for (const k of ['image', 'mask', 'video']) {
+    if (job.params[k] && !fs.existsSync(path.join(dirs.uploads, path.basename(job.params[k])))) {
+      return res.status(400).json({ error: 'The source file of this job has been deleted' });
+    }
   }
   res.json(await callWorker(`/v1/jobs/${job.id}/retry`, { method: 'POST', body: { spec: jobSpec(preset) } }));
 });

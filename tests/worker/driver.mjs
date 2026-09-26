@@ -170,6 +170,21 @@ check('image batch: a sampling phase per image, one decoding, no empty phases',
 check('image batch: steps carry the image index', images.has(1) && images.has(2) && idoc.steps.rows.length === 12 && idoc.summary.secondsPerImage > 0,
   `images ${[...images]}, rows ${idoc.steps.rows.length}, s/image ${idoc.summary.secondsPerImage}`);
 
+// Tasks: upscale runs the ESRGAN mode alone; inpaint passes the mask and the job's strength
+const cmdOf = (id) => fs.readFileSync(`${DATA}/state/logs/${id}.log`, 'utf8').split('\n').find((l) => l.startsWith('$ ')) || '';
+const upSpec = { ...imgSpec, models: [], imageArgs: [], extraArgs: ['--upscale-tile-size', '256'] };
+let up = (await api('/v1/jobs', 'POST', { user: 'test', spec: upSpec, params: { kind: 'image', presetId: 'up', task: 'upscale', prompt: '', negative: '', width: 64, height: 64, steps: 1, cfg: 1, sampler: 'euler', seed: 1, count: 1, image: 'in.png' } })).body;
+up = await waitFor(up.id, (j) => ['done', 'failed'].includes(j.status));
+up.cmd = cmdOf(up.id);
+check('upscale: ESRGAN mode without sampling, result saved', up.status === 'done' && up.files?.length === 1 && /-M upscale/.test(up.cmd) && !/--steps/.test(up.cmd),
+  `${up.status} ${up.error || ''} ${up.cmd?.split(' ').slice(1, 4).join(' ')}`);
+const inSpec = { ...imgSpec, imageArgs: ['--strength', '0.6'] };
+let ip = (await api('/v1/jobs', 'POST', { user: 'test', spec: inSpec, params: { kind: 'image', presetId: 'in', task: 'inpaint', prompt: 'a hat', negative: '', width: 64, height: 64, steps: 6, cfg: 1, sampler: 'euler', seed: 1, count: 1, image: 'in.png', mask: 'mask.png', strength: 0.85 } })).body;
+ip = await waitFor(ip.id, (j) => ['done', 'failed'].includes(j.status));
+ip.cmd = cmdOf(ip.id);
+check('inpaint: the mask and the job strength replace the mode strength', ip.status === 'done' && /--mask \S*mask\.png/.test(ip.cmd) && /--strength 0\.85/.test(ip.cmd) && !/--strength 0\.6/.test(ip.cmd),
+  `${ip.status} ${(ip.cmd?.match(/--(mask|strength) \S+/g) || []).join(' ')}`);
+
 // gpu_metrics v3.0 as a Ryzen AI 9 HX 370 reported it at idle (Linux 6.12)
 const gm = await import('/src/worker/gpumetrics.js');
 const bytes = Buffer.from(
