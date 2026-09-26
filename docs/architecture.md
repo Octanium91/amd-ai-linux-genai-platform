@@ -125,6 +125,7 @@ Every route except sign-in requires a session. Mutating requests require the `X-
 | `cpu`, `gpu-arch` | not a Ryzen AI APU / not RDNA 3.5 (warn) |
 | `kernel` | older than 6.10 (warn) |
 | `gtt` | GTT is well below ¾ of RAM (warn, with the computed kernel parameters) |
+| `ttm` | the TTM limit (`ttm.pages_limit`) is below the GTT size: buffers above it are swapped out (warn, with the kernel parameters) |
 | `vulkan-heap` | the largest DEVICE_LOCAL heap is below 80 % of GTT, i.e. the unified heap is off (warn) |
 | `video-memory` | GTT below the ~22 GB Wan 2.2 needs (warn) |
 | `swap` | no swap (info) |

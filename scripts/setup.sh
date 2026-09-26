@@ -80,11 +80,21 @@ if [ -n "$GTT_FILE" ]; then
   VRAM_MB=$(( $(cat "${GTT_FILE%gtt_total}vram_total") / 1024 / 1024 ))
   echo "  RAM ${MEM_GB} GB · UMA carve-out ${VRAM_MB} MB · GTT ${GTT_GB} GB"
   REC=$(( MEM_GB * 3 / 4 ))
+  # amdgpu keeps GTT through TTM, which by default holds at most half of the RAM resident: with a
+  # larger GTT but the default TTM limit, buffers above it are swapped out and the GPU waits
+  TTM_PAGES=$(cat /sys/module/ttm/parameters/pages_limit 2>/dev/null || echo 0)
+  GTT_BYTES=$(cat "$GTT_FILE")
+  if [ "$TTM_PAGES" -gt 0 ] && [ $(( TTM_PAGES * 4096 )) -lt $(( GTT_BYTES / 100 * 95 )) ]; then
+    NEED=$(( (GTT_BYTES + 4095) / 4096 ))
+    warn "the kernel (TTM) keeps at most $(( TTM_PAGES * 4096 / 1024 / 1024 / 1024 )) GB of the ${GTT_GB} GB GTT in RAM: the rest is swapped out and heavy jobs run several times slower. Add:"
+    echo "      ttm.pages_limit=$NEED ttm.page_pool_size=$NEED"
+    echo "      → to GRUB_CMDLINE_LINUX_DEFAULT in /etc/default/grub (next to amdgpu.gttsize), then sudo update-grub and reboot"
+  fi
   if [ "$GTT_GB" -ge $(( REC - 2 )) ]; then ok "GTT is large enough"
   else
-    warn "GTT is ${GTT_GB} GB — too small for video models. ~${REC} GB (¾ of RAM) is recommended. Kernel parameter:"
-    echo "      amdgpu.gttsize=$(( REC * 1024 ))            (MiB; works on 6.x kernels, deprecated on newer ones)"
-    echo "      ttm.pages_limit=$(( REC * 262144 )) ttm.page_pool_size=$(( REC * 262144 ))   (current way, 4 KiB pages)"
+    warn "GTT is ${GTT_GB} GB — too small for video models. ~${REC} GB (¾ of RAM) is recommended. Kernel parameters (both):"
+    echo "      amdgpu.gttsize=$(( REC * 1024 )) ttm.pages_limit=$(( REC * 262144 )) ttm.page_pool_size=$(( REC * 262144 ))"
+    echo "      (gttsize in MiB sets the GTT size; the ttm values in 4 KiB pages let the kernel keep that much in RAM)"
     echo "      → add to GRUB_CMDLINE_LINUX_DEFAULT in /etc/default/grub, then sudo update-grub and reboot"
   fi
 else

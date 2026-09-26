@@ -133,6 +133,15 @@ async function collect() {
     });
   }
 
+  // --- TTM limit: amdgpu keeps GTT buffers through TTM, which by default holds at most half of the
+  // RAM resident. amdgpu.gttsize alone makes GTT larger, but everything above the TTM limit is
+  // swapped out: constant swapping, an idle GPU and jobs several times slower
+  const ttmPages = readNum('/sys/module/ttm/parameters/pages_limit');
+  if (sys?.gtt && ttmPages) {
+    const ttm = ttmPages * 4096;
+    add('ttm', ttm >= sys.gtt * 0.95 ? 'ok' : 'warn', { ttm, gtt: sys.gtt, pages: Math.ceil(sys.gtt / 4096) });
+  }
+
   // --- unified Vulkan heap: without it Vulkan only offers the small UMA carve-out ---
   if (gpu) {
     const full = await run('vulkaninfo', []);

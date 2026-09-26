@@ -24,7 +24,7 @@ The whole lineup is RDNA 3.5 (gfx1150/gfx1151/gfx1152), supported by Mesa RADV s
 | NPU | XDNA 2 (`1022:17f0`), not used, see below |
 | Memory | 32 GB LPDDR5X, shared with the GPU |
 | BIOS | UMA Frame Buffer = 512 MB (the minimum; the GPU takes the rest dynamically through GTT) |
-| Kernel | Debian 13 `6.12.x`, parameter `amdgpu.gttsize=24576` → 24 GB GTT |
+| Kernel | Debian 13 `6.12.x`, parameters `amdgpu.gttsize=24576 ttm.pages_limit=6291456 ttm.page_pool_size=6291456` → 24 GB GTT, all of it resident |
 | Mesa | 25.0.7 (RADV), `mesa-vulkan-drivers` from Debian 13 |
 | Disk | 4 TB NVMe (models and results) |
 
@@ -37,12 +37,12 @@ An APU has two memory pools for the GPU:
 
 Two steps are required:
 
-1. **Enlarge GTT.** By default the kernel gives the GPU about half of the RAM. We recommend ~¾ of RAM (24 GB for 32 GB; ~48 GB for 64 GB; ~96 GB for 128 GB). Kernel parameter in `/etc/default/grub` → `GRUB_CMDLINE_LINUX_DEFAULT`:
+1. **Enlarge GTT and the TTM limit — both.** By default the kernel gives the GPU about half of the RAM. We recommend ~¾ of RAM (24 GB for 32 GB; ~48 GB for 64 GB; ~96 GB for 128 GB). Two parameters are needed in `/etc/default/grub` → `GRUB_CMDLINE_LINUX_DEFAULT`: `amdgpu.gttsize` sets the GTT size, and `ttm.pages_limit` lets TTM (the kernel memory manager amdgpu keeps GTT with) hold that much in RAM. With `amdgpu.gttsize` alone the GTT reports 24 GB, but TTM still keeps at most half of the RAM resident and swaps the rest out: measured on the reference machine, an AnimateDiff job with a ~16 GB working set swapped continuously, the GPU was idle two thirds of the time and the job ran about 2.5× slower. The **System** section warns about this (`GPU memory limit (TTM)`).
    ```
-   amdgpu.gttsize=24576                                  # MiB; works on 6.12 (deprecated on newer kernels)
-   ttm.pages_limit=6291456 ttm.page_pool_size=6291456     # current way: 4 KiB pages (24 GB = 6291456)
+   amdgpu.gttsize=24576 ttm.pages_limit=6291456 ttm.page_pool_size=6291456
+   # gttsize in MiB (deprecated on newer kernels, which size GTT from the ttm limit); ttm values in 4 KiB pages (24 GB = 6291456)
    ```
-   Then `sudo update-grub` and reboot. Check with `cat /sys/class/drm/card*/device/mem_info_gtt_total`. `scripts/setup.sh` computes the values for your RAM.
+   Then `sudo update-grub` and reboot. Check with `cat /sys/class/drm/card*/device/mem_info_gtt_total` and `cat /sys/module/ttm/parameters/pages_limit` (× 4096 must be at least the GTT size). `scripts/setup.sh` computes the values for your RAM.
 2. **Unify the Vulkan heaps.** On APUs, RADV exposes a small DEVICE_LOCAL heap (≈ UMA) plus part of GTT separately by default. The Mesa option `radv_enable_unified_heap_on_apu=true` makes a single DEVICE_LOCAL heap the size of GTT. The platform enables it both through an environment variable and through `config/drirc`. Check with `./scripts/check-gpu.sh`: the reference machine shows a `24.50 GiB` heap, not 512 MB.
 
 The UMA size in the BIOS can stay at the minimum: with the unified heap it is not needed, and the RAM stays available to the system.

@@ -16,6 +16,10 @@ Inside the container, run `./scripts/check-gpu.sh`: it must report `RADV GFX115x
 
 If `check-gpu.sh` shows a heap the size of the UMA carve-out, the `radv_enable_unified_heap_on_apu` option was not applied. Check that it is in `environment` in `docker-compose.yml` and that `config/drirc` is mounted. The Mesa warning `option value ... ignored` is expected here: the environment variable takes precedence over drirc.
 
+## Heavy jobs are slow, the GPU is often idle and the host swaps
+
+If the telemetry (or `vmstat 5`) shows constant swap-in/swap-out during a job while plenty of RAM is free, and `hw.gpu.utilization` stays well below 100 %, the TTM limit is smaller than the GTT: `cat /sys/module/ttm/parameters/pages_limit` × 4096 bytes must be at least `mem_info_gtt_total`. With only `amdgpu.gttsize` set, TTM keeps at most half of the RAM resident and swaps the rest. Add `ttm.pages_limit` and `ttm.page_pool_size` next to `amdgpu.gttsize` (the System section shows the values), update GRUB and reboot. On the reference machine this made an AnimateDiff job with a ~16 GB working set run about 2.5× slower.
+
 ## GTT is small
 
 Check `cat /sys/class/drm/card*/device/mem_info_gtt_total`. If it is about half of the RAM, enlarge GTT with a kernel parameter, see [hardware.md](hardware.md#memory-uma-gtt-and-the-vulkan-heap).

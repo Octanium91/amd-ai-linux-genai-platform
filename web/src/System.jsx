@@ -72,8 +72,21 @@ const CHECKS = {
         : t('Only {gtt} of {ram} RAM is available to the GPU; video models need more. Recommended: about {rec} GB (¾ of RAM).', v);
     },
     advice: (p) => (p.reason === 'unknown' ? null : {
-      text: t('Add one of these kernel parameters to GRUB_CMDLINE_LINUX_DEFAULT in /etc/default/grub, then update GRUB and reboot:'),
-      commands: [`amdgpu.gttsize=${p.gttsizeMiB}`, `ttm.pages_limit=${p.ttmPages} ttm.page_pool_size=${p.ttmPages}`, 'sudo update-grub && sudo reboot'],
+      text: t('Add these kernel parameters to GRUB_CMDLINE_LINUX_DEFAULT in /etc/default/grub, then update GRUB and reboot. amdgpu.gttsize sets the GTT size, ttm.pages_limit lets the kernel keep that much in RAM without swapping it out:'),
+      commands: [`amdgpu.gttsize=${p.gttsizeMiB} ttm.pages_limit=${p.ttmPages} ttm.page_pool_size=${p.ttmPages}`, 'sudo update-grub && sudo reboot'],
+    }),
+  },
+  ttm: {
+    title: 'GPU memory limit (TTM)',
+    text: (s, p) => {
+      const v = { ttm: fmtBytes(p.ttm), gtt: fmtBytes(p.gtt) };
+      return s === 'ok'
+        ? t('The kernel may keep {ttm} of GPU memory in RAM, as much as the GTT.', v)
+        : t('The GTT is {gtt}, but the kernel (TTM) keeps at most {ttm} of it in RAM. Everything above is swapped out: the GPU waits and heavy jobs run several times slower.', v);
+    },
+    advice: (p) => ({
+      text: t('Add to GRUB_CMDLINE_LINUX_DEFAULT in /etc/default/grub (next to amdgpu.gttsize), then update GRUB and reboot:'),
+      commands: [`ttm.pages_limit=${p.pages} ttm.page_pool_size=${p.pages}`, 'sudo update-grub && sudo reboot'],
     }),
   },
   'vulkan-heap': {
