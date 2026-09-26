@@ -134,6 +134,7 @@ function systemPrompt(preset, style, ctx) {
     ...RULES[style],
     'The idea may be in any language; always answer in English.',
     'Keep everything the user asked for and do not add subjects they did not mention; make it specific and visual.',
+    'The first exchange is only an example of the format: never reuse its objects, places, weather or wording.',
   ];
   if (preset.kind === 'video') {
     lines.push(ctx.duration

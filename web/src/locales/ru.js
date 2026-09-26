@@ -431,5 +431,5 @@ export default {
   "To prompt": "В промпт",
   "Turn the description into a detailed prompt for this mode ({model})": "Превратить описание в подробный промпт для этого режима ({model})",
   "Writing…": "Пишу…",
-  "Recommended: dolphin-llama3 (8B, understands descriptions in any language, 5–8 s per prompt). dolphin-phi (2.7B) is faster but often loses the meaning of non-English descriptions. Install on the Ollama server with:": "Рекомендуется: dolphin-llama3 (8B, понимает описание на любом языке, 5–8 с на промпт). dolphin-phi (2.7B) быстрее, но часто теряет смысл неанглийских описаний. Установите на сервере Ollama:",
+  "Recommended: dolphin-llama3 (8B, 4.7 GB, the most accurate, 5–15 s per prompt) or huihui_ai/qwen2.5-abliterate:3b (1.9 GB, fast, 3–7 s, understands other languages, simpler wording). dolphin-phi often loses the meaning of non-English descriptions. Install on the Ollama server with:": "Рекомендуется: dolphin-llama3 (8B, 4,7 ГБ, самая точная, 5–15 с на промпт) или huihui_ai/qwen2.5-abliterate:3b (1,9 ГБ, быстрая, 3–7 с, понимает другие языки, формулировки проще). dolphin-phi часто теряет смысл неанглийских описаний. Установите на сервере Ollama:",
 };
