@@ -2,6 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { api, clipSeconds, fmtDuration, jobKind, QUALITY_LABEL, STAGES } from './util.js';
 import { t } from './i18n.js';
 
+// The task of a job that is not plain generation, as a chip
+const TASK_CHIP = {
+  inpaint: () => `🖌 ${t('Change a part')}`,
+  upscale: () => `⤢ ${t('Upscale')}`,
+  reference: () => `👤 ${t('Put a person in')}`,
+  restyle: () => `🎞 ${t('Change a video')}`,
+};
+
 export function ParamChips({ p, user }) {
   const video = (p.kind || 'video') === 'video';
   return (
@@ -13,7 +21,9 @@ export function ParamChips({ p, user }) {
       {p.segments > 1 && <span className="extra-text">{t('extra · 2 segments')}</span>}
       <span>CFG {p.cfg}</span>
       <span>seed {p.seed}</span>
-      {p.image && <span>🖼 {video ? t('image → video') : t('image → image')}</span>}
+      {TASK_CHIP[p.task]
+        ? <span>{TASK_CHIP[p.task]()}</span>
+        : p.image && <span>🖼 {video ? t('image → video') : t('image → image')}</span>}
       {user && <span>👤 {user}</span>}
     </div>
   );

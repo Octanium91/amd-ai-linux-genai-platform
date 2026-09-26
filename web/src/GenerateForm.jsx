@@ -566,6 +566,9 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
             )}
           </div>
           <input ref={fileInput} type="file" accept="image/*" hidden onChange={(e) => onFile(e.target.files[0])} />
+          {isVideo && task.key !== 'animate' && (
+            <span className="field-hint">{t('The photo is cropped to the video frame from the center: the person or object should be fully in view, ideally on a plain background.')}</span>
+          )}
           {previewUrl && task.mask && (
             <>
               <img src={previewUrl} alt="" hidden onLoad={onPhotoLoad} />

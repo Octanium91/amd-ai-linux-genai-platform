@@ -479,4 +479,5 @@ export default {
   "The file of this job has been deleted": "Файл этой задачи удалён",
   "The upscaler is not downloaded: an administrator can download it in Models": "Апскейлер не скачан: администратор может скачать его в разделе «Модели»",
   "Upscale ×4": "Увеличить ×4",
+  "The photo is cropped to the video frame from the center: the person or object should be fully in view, ideally on a plain background.": "Фото обрезается под кадр видео от центра: человек или предмет должны быть полностью в кадре, лучше всего на однотонном фоне.",
 };
