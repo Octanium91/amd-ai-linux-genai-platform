@@ -387,61 +387,64 @@ export async function enhancePrompt(s, preset, input, signal = null) {
   return { prompt, style, model: s.model, seconds: Math.round((Date.now() - started) / 100) / 10 };
 }
 
-// A storyboard for a long video, written in two steps the way a director would. The video is
-// rendered in parts, each continuing from the last frame of the previous one.
-//   1. The outline: the idea grows into a simple continuous story of a few steps (about one per 12 s)
-//      that fills the whole length, plus a subject block and a style block that stay word for word the
-//      same in every part, so the character and the place do not change.
-//   2. Each step is written out into its parts, knowing how the previous step ended and what comes next.
-// A small model asked for 64 actions at once writes ten and stops; a few short requests keep it on track.
+// A storyboard for a long video. The video is rendered in parts, each continuing from the last frame
+// of the previous one. Following global + local prompting (VideoStudio, Vlogger, prompt schedules):
+//   - the anchor is the user's main prompt, in English, inserted by the server verbatim and first in
+//     every part, so who, where and what kind of event never change (CLIP reads the first ~20 tokens
+//     best, so it goes first, lightly weighted);
+//   - the language model writes only what changes: one action and one camera move per part, along a
+//     story arc (setup, rising action, climax, ending inside the same event), naming the characters
+//     exactly as the idea does. It never describes looks, the place or the light.
+// Long videos are planned in two steps: the arc as a few beats (about one per 12 s), then each beat
+// written out into its parts, knowing how the previous one ended. The fields are numbered and required
+// (b1…bN, a1…aN, c1…cN): a small model given an array writes a few items and stops.
 const BEAT_SECONDS = 12;
 
-// A tiny idea grown into a story on purpose: small models copy the example more than the rules
-const OUTLINE_EXAMPLE = {
-  ask: '5 steps, 60 seconds\nIdea: собака моргает на солнце',
+const BEATS_EXAMPLE = {
+  ask: '4 beats\nIdea: два рыцаря сражаются на мосту',
   answer: {
-    idea_en: 'a dog blinks in the sun',
-    subject: 'a golden retriever with a red collar, soft golden fur',
-    style: 'sunny backyard with green grass and a wooden fence, warm afternoon light, realistic, cinematic',
-    s1: 'the dog lies on the grass in the sun, blinking slowly and half asleep',
-    s2: 'a butterfly lands near its nose; the dog lifts its head and watches it',
-    s3: 'the dog gets up and follows the butterfly across the grass, wagging its tail',
-    s4: 'it jumps playfully at the butterfly, which flies up over the fence',
-    s5: 'the dog trots back to its sunny spot, turns around and lies down again, content',
+    idea_en: 'two knights fight on a bridge',
+    names: 'two knights',
+    b1: 'the two knights face each other and draw their swords',
+    b2: 'the two knights clash, swords striking, one pushes the other back',
+    b3: 'the two knights fight harder, one knight is knocked down and rolls away from a blow',
+    b4: 'the two knights lock swords in a last exchange and stand exhausted, breathing hard',
   },
 };
 
-const EXPAND_EXAMPLE = {
-  ask: '3 parts\nStep: she stops at the water, takes a paper bag out of her pocket and ducks swim closer\nBefore: she walks slowly along a leaf-covered path towards the pond\nAfter: she crouches and throws crumbs',
+const PARTS_EXAMPLE = {
+  ask: '3 parts\nNames: two knights\nBeat: the two knights clash, swords striking, one pushes the other back\nBefore: the two knights face each other and draw their swords\nAfter: one knight is knocked down',
   answer: {
-    a1: 'slows down and stops at the edge of the pond, looking at the water',
-    a2: 'reaches into her coat pocket and pulls out a small paper bag',
-    a3: 'opens the bag as two ducks turn and swim towards her',
+    a1: 'the two knights step forward and their swords clash',
+    c1: 'medium shot, slow push in',
+    a2: 'the two knights exchange fast strikes, sparks fly from the blades',
+    c2: 'tracking shot',
+    a3: 'one of the two knights shoves the other back towards the railing',
+    c3: 'low angle',
   },
 };
 
-function outlineSystem(steps, seconds) {
+function beatsSystem(n, seconds) {
   return [
-    `You are a film director planning one continuous shot of about ${seconds} seconds for an AI video model. It is rendered in parts, each continuing from the last frame of the previous one.`,
-    'First write idea_en: an exact English translation of the idea, nothing added.',
-    '- subject: the main character or object with fixed visual details (age, hair, clothing, colors, materials); repeated word for word in every part.',
-    '- style: the place, lighting, look and camera style, the same for the whole shot.',
-    `- s1 … s${steps}: the ${steps} steps of a simple, believable story that fills the whole length, about ${Math.round(seconds / steps)} seconds each, in order. Grow even a tiny idea into a story with a beginning, a middle and an end: the subject notices something, reacts, moves, does something with it, settles down. At least half of the steps have a clearly visible movement of the whole body or something new happening (it gets up, walks, jumps, plays, something appears); small face movements alone do not show in the video. Every step is different and follows from the previous one; the same place, no new main characters, no cuts, no jumps in time. One sentence each, only what can be seen.`,
+    `You plan the story of one continuous shot of about ${seconds} seconds for an AI video model; it is rendered in parts, each continuing from the previous one.`,
+    'First write idea_en: an exact English translation of the idea, nothing added, nothing removed.',
+    'names: the main characters or objects exactly as idea_en names them (for example "Batman and Superman"), copied word for word from idea_en.',
+    `b1 … b${n}: the ${n} beats of the story in order, following the arc setup, rising action, climax, ending. Every beat names the characters exactly as in names, keeps the same kind of event as the idea (a fight stays a fight, a walk stays a walk, the ending stays inside the event), adds no new characters, and does not describe looks, the place or the light. Each beat is one short sentence.`,
     'The idea may be in any language; always answer in English. The first exchange is only an example of the format: never reuse its content.',
-    `Answer with JSON with the fields idea_en, subject, style, ${Array.from({ length: steps }, (_, i) => `s${i + 1}`).join(', ')}.`,
+    `Answer with JSON with the fields idea_en, names, ${Array.from({ length: n }, (_, i) => `b${i + 1}`).join(', ')}.`,
   ].join('\n');
 }
 
-function expandSystem(style, n, partSeconds) {
+function partsSystem(style, n) {
   return [
-    `You are a film director. Write exactly ${n} consecutive actions, one per part of about ${partSeconds} seconds, that play out the given story step from its beginning to its end.`,
-    'The first action continues directly from "Before"; the last one leads into "After". Every action is a small continuous step, different from the others: never repeat an action or write "again".',
-    'Describe only what the subject does and how the camera moves, never how the subject looks or the place.',
+    `Write ${n} consecutive parts that play out the given beat, from where "Before" ended to where "After" begins. For each part k write:`,
+    '- ak: the action of that part, naming the characters exactly as in Names (no pronouns, no nicknames); one small continuous step, different from the other parts, a little more intense as the beat builds. It never describes looks, the place or the light.',
+    '- ck: the camera for that part in at most 6 words (shot size or movement).',
     style === 'tags'
-      ? 'Each action is a short English phrase of at most 12 words, only things that can be seen.'
-      : 'Each action is one English sentence of 8 to 25 words, only things that can be seen.',
+      ? 'Each action is a short English phrase of at most 15 words, present tense, only things that can be seen.'
+      : 'Each action is one English sentence of 10 to 30 words, present tense, with the speed and size of the motion, only things that can be seen.',
     'The first exchange is only an example of the format: never reuse its content.',
-    `Answer with JSON with the fields ${Array.from({ length: n }, (_, i) => `a${i + 1}`).join(', ')}, one action each.`,
+    `Answer with JSON with the fields ${Array.from({ length: n }, (_, i) => `a${i + 1}, c${i + 1}`).join(', ')}.`,
   ].join('\n');
 }
 
@@ -468,15 +471,12 @@ async function chatJson(s, system, example, ask, format, numPredict, signal) {
   }
 }
 
-// A JSON schema with numbered required fields (s1…sN or a1…aN): structured output cannot leave any out,
-// where a small model given an array writes a few items and stops
-const numbered = (fixed, prefix, n) => {
-  const keys = [...fixed, ...Array.from({ length: n }, (_, i) => `${prefix}${i + 1}`)];
-  return { type: 'object', properties: Object.fromEntries(keys.map((k) => [k, { type: 'string' }])), required: keys };
-};
-
+// A JSON schema with required string fields: structured output cannot leave any out
+const requiredFields = (keys) => ({ type: 'object', properties: Object.fromEntries(keys.map((k) => [k, { type: 'string' }])), required: keys });
+const numberedKeys = (prefixes, n) => Array.from({ length: n }, (_, i) => prefixes.map((p) => `${p}${i + 1}`)).flat();
 const cleanText = (x) => String(x || '').replace(/\s+/g, ' ').replace(/^["'\s]+|["'\s.]+$/g, '').trim();
 const actionKey = (x) => String(x || '').toLowerCase().replace(/\bagain\b/g, '').replace(/\W+/g, ' ').trim();
+const words = (x) => new Set(String(x || '').toLowerCase().match(/[a-z0-9]{3,}/g) || []);
 
 export async function storyboard(s, preset, input, signal = null) {
   const parts = Math.max(2, Math.min(64, Math.round(Number(input.parts) || 2)));
@@ -484,54 +484,59 @@ export async function storyboard(s, preset, input, signal = null) {
   const seconds = Math.round(parts * partSeconds);
   const style = promptStyle(preset);
   const started = Date.now();
-  const nSteps = Math.max(1, Math.min(12, Math.round(seconds / BEAT_SECONDS), parts));
+  const nBeats = Math.max(1, Math.min(12, Math.round(seconds / BEAT_SECONDS), parts));
 
-  // 1. The outline
-  const outline = await chatJson(s, outlineSystem(nSteps, seconds), OUTLINE_EXAMPLE,
-    `${nSteps} steps, ${seconds} seconds\n${input.hasImage ? 'The shot starts from a photo the user uploaded: keep its subject.\n' : ''}Idea: ${input.idea}`,
-    numbered(['idea_en', 'subject', 'style'], 's', nSteps), 300 + nSteps * 70, signal);
-  if (outline.truncated) return { truncated: true };
-  const o = outline.data || {};
-  const subject = cleanText(o.subject) || cleanText(o.idea_en);
-  const look = cleanText(o.style);
-  let steps = Array.from({ length: nSteps }, (_, i) => cleanText(o[`s${i + 1}`])).filter(Boolean);
-  if (!subject) return {};
-  if (!steps.length) steps = [cleanText(o.idea_en) || input.idea];
-  steps = steps.slice(0, nSteps);
+  // 1. The arc as beats, and the anchor
+  const b = await chatJson(s, beatsSystem(nBeats, seconds), BEATS_EXAMPLE, `${nBeats} beats\nIdea: ${input.idea}`,
+    requiredFields(['idea_en', 'names', ...numberedKeys(['b'], nBeats)]), 250 + nBeats * 50, signal);
+  if (b.truncated) return { truncated: true };
+  const idea = cleanText(b.data?.idea_en);
+  // The anchor: the main prompt itself when it is already English, otherwise its exact translation;
+  // quality words are the mode's business and are added at the end
+  const anchor = cleanText(NOT_LATIN.test(input.idea) ? idea : input.idea)
+    .split(/\s*,\s*/).filter((x) => x && !QUALITY_WORDS.test(x)).join(', ');
+  if (!anchor) return {};
+  // Names only count when every word of them is in the anchor (the model may not invent characters)
+  let names = cleanText(b.data?.names);
+  if (!names || [...words(names)].some((w) => !words(anchor).has(w))) names = '';
+  let beats = Array.from({ length: nBeats }, (_, i) => cleanText(b.data?.[`b${i + 1}`])).filter(Boolean);
+  if (!beats.length) beats = [anchor];
 
-  // 2. Each step written out into its share of the parts
-  const counts = steps.map((_, i) => Math.floor(((i + 1) * parts) / steps.length) - Math.floor((i * parts) / steps.length));
-  const actions = [];
+  // 2. Each beat written out into its share of the parts
+  const counts = beats.map((_, i) => Math.floor(((i + 1) * parts) / beats.length) - Math.floor((i * parts) / beats.length));
+  const list = [];
   const seen = new Set();
-  for (let i = 0; i < steps.length; i++) {
+  for (let i = 0; i < beats.length; i++) {
     const n = counts[i];
     if (!n) continue;
-    const r = await chatJson(s, expandSystem(style, n, partSeconds), EXPAND_EXAMPLE,
-      `${n} parts\nStep: ${steps[i]}\nBefore: ${actions.at(-1) || (i ? steps[i - 1] : 'the shot begins')}\nAfter: ${steps[i + 1] || 'the shot ends calmly'}`,
-      numbered([], 'a', n), 150 + n * 60, signal);
-    // Every field is required, so the list is complete; an empty or repeated one keeps the step itself
+    const r = await chatJson(s, partsSystem(style, n), PARTS_EXAMPLE,
+      `${n} parts\nNames: ${names || anchor}\nBeat: ${beats[i]}\nBefore: ${list.at(-1)?.action || (i ? beats[i - 1] : 'the shot begins')}\nAfter: ${beats[i + 1] || 'the shot ends'}`,
+      requiredFields(numberedKeys(['a', 'c'], n)), 150 + n * 70, signal);
     for (let k = 0; k < n; k++) {
-      let a = r.truncated ? '' : cleanText(r.data?.[`a${k + 1}`]);
-      if (!a || seen.has(actionKey(a))) a = seen.has(actionKey(steps[i])) ? actions.at(-1) || steps[i] : steps[i];
-      seen.add(actionKey(a));
-      actions.push(a);
+      let action = r.truncated ? '' : cleanText(r.data?.[`a${k + 1}`]);
+      const camera = r.truncated ? '' : cleanText(r.data?.[`c${k + 1}`]);
+      if (!action || seen.has(actionKey(action))) action = seen.has(actionKey(beats[i])) ? list.at(-1)?.action || beats[i] : beats[i];
+      // A part that does not name the characters gets them in front, so it still shows them
+      if (names && ![...words(names)].some((w) => words(action).has(w))) action = `${names} ${action}`;
+      seen.add(actionKey(action));
+      list.push({ action, camera });
     }
   }
 
   const quality = preset.promptQuality || {};
-  const prompts = actions.map((action) => {
+  const prompts = list.map(({ action, camera }, k) => {
     if (style === 'tags') {
-      const budget = CLIP_TOKENS - estTokens(preset.promptSuffix);
-      // The subject keeps at most about 30 tokens, so the part's action always fits
-      return assembleTags({ subject: clipTags(subject, 30), action, setting: look }, quality, budget, ['subject', 'action', 'setting']);
+      // (anchor:1.15) first, never cut; the action and camera get what is left of the 77-token chunk
+      const head = `(${clipTags(anchor, 30)}:1.15)`;
+      const budget = CLIP_TOKENS - estTokens(preset.promptSuffix) - estTokens(head) - 1;
+      return `${head}, ${assembleTags({ action, camera }, quality, budget, ['action', 'camera'])}`;
     }
-    // "A small paper boat with a red sail floats down…. Rainy street, soft light."
     const trim = (x) => x.replace(/[.\s]+$/, '');
     const cap = (x) => x.charAt(0).toUpperCase() + x.slice(1);
-    const text = [cap(`${trim(subject)} ${trim(action)}`), look && cap(trim(look))].filter(Boolean).join('. ') + '.';
+    const text = [cap(trim(anchor)), `Part ${k + 1} of ${list.length}: ${trim(action)}`, camera && cap(trim(camera))].filter(Boolean).join('. ') + '.';
     return quality.suffix && !text.includes(quality.suffix) ? `${text} ${quality.suffix}` : text;
   });
-  return { prompts, subject, style: look, steps, actions, model: s.model, seconds: Math.round((Date.now() - started) / 100) / 10 };
+  return { prompts, anchor, names, beats, parts: list, model: s.model, seconds: Math.round((Date.now() - started) / 100) / 10 };
 }
 
 // One request per user at a time and two in total: each can hold the Ollama model (and GPU
