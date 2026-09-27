@@ -587,4 +587,6 @@ export default {
   "your lyrics": "ваш текст",
   "Hello! This text will be read aloud.": "Привет! Этот текст будет прочитан вслух.",
   "Could not build the mp3:": "Не удалось собрать mp3:",
+  "Speech reads the text as it is": "Речь читает текст как есть",
+  "The sound model understands only English: ✦ translates your description.": "Модель звука понимает только английский: ✦ переведёт ваше описание.",
 };

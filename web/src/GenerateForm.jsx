@@ -595,7 +595,7 @@ function PromptField({ form, set, preset, isVideo, hasImage, duration, task, use
     try {
       const r = await api('/api/prompt/enhance', {
         method: 'POST',
-        json: { presetId: preset.id, prompt: form.prompt, width: form.width, height: form.height, duration: isVideo ? duration : null, hasImage, task },
+        json: { presetId: preset.id, prompt: form.prompt, width: form.width, height: form.height, duration: isVideo ? duration : audio ? form.duration : null, hasImage, task, lyricsMode: audio ? form.lyricsMode : null },
       });
       setUndo(form.prompt);
       set('prompt')(r.prompt);
@@ -608,14 +608,15 @@ function PromptField({ form, set, preset, isVideo, hasImage, duration, task, use
 
   const admin = user?.role === 'admin';
   // Not set up: users do not see the button at all, administrators get a hint where to set it up
-  const showButton = !audio && (ready || status?.enabled || admin);
+  // Speech is read as written: nothing to improve there
+  const showButton = task !== 'speech' && (ready || status?.enabled || admin);
   const ap = audio ? AUDIO_PROMPT[task] : null;
   return (
     <div className="field">
       <label className="field-label" htmlFor="prompt-text">{ap ? t(ap.label) : isVideo ? t('Describe the video') : t('Describe the picture')}</label>
       <div className="prompt-box">
         <textarea id="prompt-text" rows={task === 'speech' ? 6 : 4} value={form.prompt} required disabled={busy}
-          placeholder={ap ? ap.placeholder || t('Hello! This text will be read aloud.') : ready
+          placeholder={ap && !(ready && task !== 'speech') ? ap.placeholder || t('Hello! This text will be read aloud.') : ready
             ? t('Describe your idea in any language — ✦ turns it into a detailed prompt')
             : isVideo ? 'a red fox running through fresh snow, cinematic lighting, slow motion' : 'portrait photo of an old fisherman, golden hour, 85mm, detailed skin'}
           onChange={(e) => {
@@ -640,8 +641,8 @@ function PromptField({ form, set, preset, isVideo, hasImage, duration, task, use
         </div>
       </div>
       {error && <div className="note warn">⚠ {error}</div>}
-      {task === 'sfx' && <span className="field-hint">{t('Describe it in English: the sound model understands only English.')}</span>}
-      {!audio && !ready && admin && !status?.enabled && <div className="note">{t('Connect an Ollama model in Settings to turn a short description into a detailed prompt.')}</div>}
+      {task === 'sfx' && <span className="field-hint">{ready ? t('The sound model understands only English: ✦ translates your description.') : t('Describe it in English: the sound model understands only English.')}</span>}
+      {task !== 'speech' && !ready && admin && !status?.enabled && <div className="note">{t('Connect an Ollama model in Settings to turn a short description into a detailed prompt.')}</div>}
     </div>
   );
 }

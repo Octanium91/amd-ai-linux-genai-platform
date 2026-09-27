@@ -76,7 +76,8 @@ export async function assistantStatus(force = false) {
 
 // How the mode reads a prompt. A mode may say so in catalog/presets.json (`promptStyle`); otherwise
 // a T5 or language-model text encoder (Wan, Z-Image) means natural language and CLIP (SD 1.5, SDXL) tags
-function promptStyle(preset) {
+function promptStyle(preset, task) {
+  if (preset.kind === 'audio') return task === 'sfx' ? 'sfx' : 'music';
   if (preset.promptStyle) return preset.promptStyle;
   return preset.models?.t5xxl || preset.models?.llm ? 'natural' : 'tags';
 }
@@ -111,6 +112,39 @@ const EXAMPLES = {
   },
 };
 
+// Audio: a music caption for ACE-Step (it reads genre, instruments, tempo, voice and mood) and a
+// sound description for Stable Audio (it understands only English)
+const AUDIO_EXAMPLES = {
+  music: {
+    idea: 'грустная песня про осень под гитару',
+    answer: { idea_en: 'a sad song about autumn with a guitar', prompt: 'melancholic acoustic folk ballad, fingerpicked nylon guitar, soft cello, light brushed percussion, slow tempo around 70 BPM, minor key, intimate breathy female vocal, warm and nostalgic autumn mood, close and natural studio sound' },
+  },
+  sfx: {
+    idea: 'дверь скрипит в старом доме',
+    answer: { idea_en: 'a door creaks in an old house', prompt: 'an old wooden door slowly creaking open on rusty hinges, close perspective, dry wood texture, quiet empty room with a faint echo, light wind outside' },
+  },
+};
+
+const AUDIO_RULES = {
+  music: (ctx) => [
+    'You are an expert music producer writing captions for the ACE-Step text-to-music model.',
+    'First write idea_en: an exact English translation of the idea, nothing added. Then write the caption strictly about idea_en.',
+    'The caption is one line of comma-separated English phrases, 25 to 60 words: genre and subgenre, the main instruments, the tempo (with an approximate BPM), the key or scale when it fits, the vocal (gender, timbre, style), the mood and energy, and the production sound.',
+    ctx.lyricsMode === 'instrumental'
+      ? 'The track is instrumental: write "instrumental, no vocals" and describe no singer.'
+      : 'If the idea asks for a language of the vocals, or is written in a language other than English and asks for a song, name the vocal language (for example "sung in Russian").',
+    'No lyrics in the caption, no song titles and no names of real artists.',
+    ctx.duration ? `The track lasts about ${ctx.duration} seconds.` : '',
+  ],
+  sfx: (ctx) => [
+    'You are an expert sound designer writing prompts for the Stable Audio sound-effect model, which understands only English.',
+    'First write idea_en: an exact English translation of the idea, nothing added. Then write the prompt strictly about idea_en.',
+    'The prompt is one English phrase or sentence, 10 to 40 words: the sound source and what it does, materials and textures, the distance or perspective (close, distant), the space and its acoustics (a room, outdoors, a hall), and quiet background sounds when they fit.',
+    'Describe only sounds: no visuals, no music unless the idea asks for it, no speech with words.',
+    ctx.duration ? `The sound lasts about ${ctx.duration} seconds.` : '',
+  ],
+};
+
 const RULES = {
   tags: () => [
     'You are an expert prompt engineer for photorealistic Stable Diffusion models (SD 1.5, SDXL) with a CLIP text encoder.',
@@ -135,6 +169,17 @@ const RULES = {
       : 'Only things that can be seen: no sounds, smells or inner thoughts. Text that should appear on the image goes in double quotes.',
   ],
 };
+
+function audioSystemPrompt(style, ctx) {
+  return [
+    ...AUDIO_RULES[style](ctx),
+    'The idea may be in any language; always answer in English.',
+    'Keep everything the user asked for and do not add things they did not mention; make it specific.',
+    'The first exchange is only an example of the format: never reuse its instruments, sounds or wording.',
+    'If the idea is already a detailed English description, keep every detail of it and only complete it.',
+    'Answer with JSON: {"idea_en": "...", "prompt": "..."}.',
+  ].filter(Boolean).join('\n');
+}
 
 function systemPrompt(preset, style, ctx, tagFields = TAG_FIELDS) {
   const lines = [
@@ -219,16 +264,18 @@ export async function enhancePrompt(s, preset, input, signal = null) {
   const width = Number(input.width) || null;
   const height = Number(input.height) || null;
   const duration = Number(input.duration) > 0 ? Math.round(Number(input.duration) * 10) / 10 : null;
-  const style = promptStyle(preset);
+  const style = promptStyle(preset, input.task);
+  const audio = preset.kind === 'audio';
   // What the language model is told about the job (not UI text)
   const orientation = width > height ? 'landscape' : width < height ? 'portrait' : 'square';
   const describe = (idea) => [
     ['Mode', `${preset.name}. ${preset.description || ''}`.trim()],
     ['Models', modelNames.join(', ')],
-    ['Size', width && height ? `${width}x${height}, ${orientation}` : ''],
+    ['Size', !audio && width && height ? `${width}x${height}, ${orientation}` : ''],
+    ['Length', audio && duration ? `${duration} s` : ''],
     ['Idea', idea],
   ].filter(([, v]) => v).map(([k, v]) => k + ': ' + v).join('\n');
-  const example = EXAMPLES[style][preset.kind] || EXAMPLES[style].video;
+  const example = audio ? AUDIO_EXAMPLES[style] : EXAMPLES[style][preset.kind] || EXAMPLES[style].video;
   // Inpainting repaints only the masked part: no background or camera to describe there
   const tagFields = input.task === 'inpaint' ? INPAINT_FIELDS : TAG_FIELDS;
   const exampleAnswer = style === 'tags'
@@ -249,7 +296,7 @@ export async function enhancePrompt(s, preset, input, signal = null) {
     // Room for the translation and the answer, more for a long idea
     options: { temperature: 0.4, num_predict: Math.min(1200, 400 + Math.round(input.idea.length / 2)) },
     messages: [
-      { role: 'system', content: systemPrompt(preset, style, { duration, hasImage: !!input.hasImage, task: input.task }, tagFields) },
+      { role: 'system', content: audio ? audioSystemPrompt(style, { duration, lyricsMode: input.lyricsMode }) : systemPrompt(preset, style, { duration, hasImage: !!input.hasImage, task: input.task }, tagFields) },
       { role: 'user', content: describe(example.idea) },
       { role: 'assistant', content: JSON.stringify(exampleAnswer) },
       { role: 'user', content: describe(input.idea) },
@@ -300,6 +347,7 @@ export function promptRoutes(api) {
     if (idea.length > 2000) return res.status(400).json({ error: 'The description is too long (at most 2000 characters)' });
     const preset = loadPresets().find((p) => p.id === req.body?.presetId);
     if (!preset) return res.status(400).json({ error: 'Unknown mode' });
+    if (req.body?.task === 'speech') return res.status(400).json({ error: 'Speech reads the text as it is' });
     const user = req.user.username;
     if (running.has(user) || running.size >= MAX_RUNNING) return res.status(429).json({ error: 'The prompt assistant is busy, try again in a moment' });
 
@@ -308,7 +356,7 @@ export function promptRoutes(api) {
     const abort = new AbortController();
     res.on('close', () => !res.writableFinished && abort.abort());
     try {
-      const r = await enhancePrompt(s, preset, { idea, width: req.body.width, height: req.body.height, duration: req.body.duration, hasImage: !!req.body.hasImage, task: String(req.body.task || '') }, abort.signal);
+      const r = await enhancePrompt(s, preset, { idea, width: req.body.width, height: req.body.height, duration: req.body.duration, hasImage: !!req.body.hasImage, task: String(req.body.task || ''), lyricsMode: String(req.body.lyricsMode || '') }, abort.signal);
       if (r.truncated) return res.status(502).json({ error: 'The model answer was cut off, try a shorter description' });
       if (!r.prompt) return res.status(502).json({ error: 'The model returned an empty prompt, try again' });
       res.json(r);
