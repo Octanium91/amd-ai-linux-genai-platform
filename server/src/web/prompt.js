@@ -402,23 +402,19 @@ const OUTLINE_EXAMPLE = {
     idea_en: 'a girl feeds ducks in an autumn park',
     subject: 'a young woman with long auburn hair, beige wool coat, red scarf',
     style: 'autumn park with golden trees and a small pond, soft afternoon light, realistic, cinematic',
-    steps: [
-      'she walks slowly along a leaf-covered path towards the pond, looking around',
-      'she stops at the water, takes a paper bag out of her pocket and ducks swim closer',
-      'she crouches and throws crumbs, the ducks gather and she laughs',
-      'she stands up, brushes off her hands and watches the ducks swim away',
-    ],
+    s1: 'she walks slowly along a leaf-covered path towards the pond, looking around',
+    s2: 'she stops at the water, takes a paper bag out of her pocket and ducks swim closer',
+    s3: 'she crouches and throws crumbs, the ducks gather and she laughs',
+    s4: 'she stands up, brushes off her hands and watches the ducks swim away',
   },
 };
 
 const EXPAND_EXAMPLE = {
   ask: '3 parts\nStep: she stops at the water, takes a paper bag out of her pocket and ducks swim closer\nBefore: she walks slowly along a leaf-covered path towards the pond\nAfter: she crouches and throws crumbs',
   answer: {
-    actions: [
-      'slows down and stops at the edge of the pond, looking at the water',
-      'reaches into her coat pocket and pulls out a small paper bag',
-      'opens the bag as two ducks turn and swim towards her',
-    ],
+    a1: 'slows down and stops at the edge of the pond, looking at the water',
+    a2: 'reaches into her coat pocket and pulls out a small paper bag',
+    a3: 'opens the bag as two ducks turn and swim towards her',
   },
 };
 
@@ -428,9 +424,9 @@ function outlineSystem(steps, seconds) {
     'First write idea_en: an exact English translation of the idea, nothing added.',
     '- subject: the main character or object with fixed visual details (age, hair, clothing, colors, materials); repeated word for word in every part.',
     '- style: the place, lighting, look and camera style, the same for the whole shot.',
-    `- steps: exactly ${steps} steps of a simple, believable story that fills the whole length, about ${Math.round(seconds / steps)} seconds each, in order. Grow the idea into a small story: the subject notices something, reacts, moves, does something, settles. Every step is different and follows from the previous one; the same place, no new main characters, no cuts, no jumps in time. One sentence each, only what can be seen.`,
+    `- s1 … s${steps}: the ${steps} steps of a simple, believable story that fills the whole length, about ${Math.round(seconds / steps)} seconds each, in order. Grow even a tiny idea into a story with a beginning, a middle and an end: the subject notices something, reacts, moves, does something with it, settles down. At least half of the steps have a clearly visible movement of the whole body or something new happening (it gets up, walks, jumps, plays, something appears); small face movements alone do not show in the video. Every step is different and follows from the previous one; the same place, no new main characters, no cuts, no jumps in time. One sentence each, only what can be seen.`,
     'The idea may be in any language; always answer in English. The first exchange is only an example of the format: never reuse its content.',
-    'Answer with JSON with the fields idea_en, subject, style, steps.',
+    `Answer with JSON with the fields idea_en, subject, style, ${Array.from({ length: steps }, (_, i) => `s${i + 1}`).join(', ')}.`,
   ].join('\n');
 }
 
@@ -443,7 +439,7 @@ function expandSystem(style, n, partSeconds) {
       ? 'Each action is a short English phrase of at most 12 words, only things that can be seen.'
       : 'Each action is one English sentence of 8 to 25 words, only things that can be seen.',
     'The first exchange is only an example of the format: never reuse its content.',
-    'Answer with JSON: {"actions": ["...", "..."]}.',
+    `Answer with JSON with the fields ${Array.from({ length: n }, (_, i) => `a${i + 1}`).join(', ')}, one action each.`,
   ].join('\n');
 }
 
@@ -470,6 +466,13 @@ async function chatJson(s, system, example, ask, format, numPredict, signal) {
   }
 }
 
+// A JSON schema with numbered required fields (s1…sN or a1…aN): structured output cannot leave any out,
+// where a small model given an array writes a few items and stops
+const numbered = (fixed, prefix, n) => {
+  const keys = [...fixed, ...Array.from({ length: n }, (_, i) => `${prefix}${i + 1}`)];
+  return { type: 'object', properties: Object.fromEntries(keys.map((k) => [k, { type: 'string' }])), required: keys };
+};
+
 const cleanText = (x) => String(x || '').replace(/\s+/g, ' ').replace(/^["'\s]+|["'\s.]+$/g, '').trim();
 const actionKey = (x) => String(x || '').toLowerCase().replace(/\bagain\b/g, '').replace(/\W+/g, ' ').trim();
 
@@ -484,16 +487,12 @@ export async function storyboard(s, preset, input, signal = null) {
   // 1. The outline
   const outline = await chatJson(s, outlineSystem(nSteps, seconds), OUTLINE_EXAMPLE,
     `${nSteps} steps, ${seconds} seconds\n${input.hasImage ? 'The shot starts from a photo the user uploaded: keep its subject.\n' : ''}Idea: ${input.idea}`,
-    {
-      type: 'object',
-      properties: { idea_en: { type: 'string' }, subject: { type: 'string' }, style: { type: 'string' }, steps: { type: 'array', items: { type: 'string' } } },
-      required: ['idea_en', 'subject', 'style', 'steps'],
-    }, 300 + nSteps * 70, signal);
+    numbered(['idea_en', 'subject', 'style'], 's', nSteps), 300 + nSteps * 70, signal);
   if (outline.truncated) return { truncated: true };
   const o = outline.data || {};
   const subject = cleanText(o.subject) || cleanText(o.idea_en);
   const look = cleanText(o.style);
-  let steps = (Array.isArray(o.steps) ? o.steps : []).map(cleanText).filter(Boolean);
+  let steps = Array.from({ length: nSteps }, (_, i) => cleanText(o[`s${i + 1}`])).filter(Boolean);
   if (!subject) return {};
   if (!steps.length) steps = [cleanText(o.idea_en) || input.idea];
   steps = steps.slice(0, nSteps);
@@ -507,15 +506,11 @@ export async function storyboard(s, preset, input, signal = null) {
     if (!n) continue;
     const r = await chatJson(s, expandSystem(style, n, partSeconds), EXPAND_EXAMPLE,
       `${n} parts\nStep: ${steps[i]}\nBefore: ${actions.at(-1) || (i ? steps[i - 1] : 'the shot begins')}\nAfter: ${steps[i + 1] || 'the shot ends calmly'}`,
-      { type: 'object', properties: { actions: { type: 'array', items: { type: 'string' } } }, required: ['actions'] },
-      150 + n * 60, signal);
-    let list = r.truncated ? [] : (Array.isArray(r.data?.actions) ? r.data.actions : []).map(cleanText).filter(Boolean);
-    // Missing or repeated actions: the step itself, then its moments with "slowly" and "still"
-    const fill = [steps[i], `slowly continues: ${steps[i]}`, `pauses for a moment, then ${steps[i]}`];
-    list = list.filter((a) => !seen.has(actionKey(a)));
-    for (const f of fill) if (list.length < n && !seen.has(actionKey(f)) && !list.some((a) => actionKey(a) === actionKey(f))) list.push(f);
-    while (list.length < n) list.push(list.at(-1) || steps[i]);
-    for (const a of list.slice(0, n)) {
+      numbered([], 'a', n), 150 + n * 60, signal);
+    // Every field is required, so the list is complete; an empty or repeated one keeps the step itself
+    for (let k = 0; k < n; k++) {
+      let a = r.truncated ? '' : cleanText(r.data?.[`a${k + 1}`]);
+      if (!a || seen.has(actionKey(a))) a = seen.has(actionKey(steps[i])) ? actions.at(-1) || steps[i] : steps[i];
       seen.add(actionKey(a));
       actions.push(a);
     }
