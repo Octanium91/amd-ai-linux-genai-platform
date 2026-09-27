@@ -108,7 +108,11 @@ Set it up in **Settings → Prompt assistant**: the server address (`http://host
 The model acts as a prompt engineer for the mode. It is told the mode, its models, the size, the clip length and whether a start image is used, gets one worked example, and first writes `idea_en`, an exact English translation of the idea, which keeps a small model on topic. The rest depends on how the mode reads prompts:
 
 - **tags** (Stable Diffusion 1.5 with CLIP: Realistic Vision, AnimateLCM, AnimateDiff): the model fills short phrases for `subject`, `action`, `setting`, `lighting`, `camera`. The server assembles them in this order, drops duplicates, quality words and anything not visual (sounds, smells), keeps about 45 words, since CLIP reads only the first 75 tokens, and adds the mode's quality tags;
-- **natural** (Wan with a T5 encoder): 2–4 sentences about the subject, the motion over time, the setting, the light and the camera, one continuous shot, followed by the mode's quality sentence.
+- **natural** (Wan with a T5 encoder): 2–4 sentences about the subject, the motion over time, the setting, the light and the camera, one continuous shot, followed by the mode's quality sentence;
+- **music** (ACE-Step): one line of English phrases: genre, instruments, tempo with an approximate BPM, key, vocal, mood and production. The server removes any singer from an instrumental and adds "instrumental, no vocals", and adds "sung in Russian" (or another language) when the idea names the vocal language, since a 3B model misses both;
+- **sfx** (Stable Audio, English only): the model fills `source`, `texture`, `space` and `background`; the server puts the translated idea first, so its sounds are never lost, and drops what cannot be heard (colors, smells, sunlight). With `huihui_ai/qwen2.5-abliterate:3b` both take about 2–5 s.
+
+Speech has no button: its text is read as written.
 
 The quality tags are `promptQuality` in `catalog/presets.json`: `{"prefix": "RAW photo", "suffix": "8k uhd, dslr, soft lighting, high quality, film grain, Fujifilm XT3"}` for Realistic Vision (the model author's recipe), a cinematic suffix for the AnimateDiff modes and a sentence for Wan. Your own modes can set their own.
 
