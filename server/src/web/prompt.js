@@ -413,6 +413,8 @@ function storyboardSystem(style, parts, partSeconds) {
     '- subject: the main character or object with fixed visual details (age, hair, clothing, colors, materials). It is repeated word for word in every part, so the character never changes.',
     '- style: the place, lighting, look and camera style, the same for every part.',
     `- actions: exactly ${parts} entries in order, one per part: what the subject does in that part, a small continuous step from the previous part, in the same place unless the idea asks for a change. No new characters, no cuts, no jumps.`,
+    'Spread the steps of the idea over all parts from the first to the last. Every action must be different from all the others: never repeat an action or add "again". If the idea has fewer steps than parts, fill the gaps with small natural moments that lead to the next step (looking around, turning the head, a pause, a slow step, the camera slowly moving closer).',
+    'The actions describe only what happens, never how the subject looks or the place: those are in subject and style.',
     style === 'tags'
       ? 'Write subject, style and every action as short comma-separated English phrases, only things that can be seen; each action at most 12 words.'
       : 'Write subject and style as English phrases and every action as one English sentence of 8 to 25 words, only things that can be seen.',
@@ -438,7 +440,7 @@ export async function storyboard(s, preset, input, signal = null) {
     keep_alive: '1m',
     think: false,
     format,
-    options: { temperature: 0.5, num_predict: Math.min(4000, 300 + parts * 45) },
+    options: { temperature: 0.6, repeat_penalty: 1.15, num_predict: Math.min(4000, 300 + parts * 45) },
     messages: [
       { role: 'system', content: storyboardSystem(style, parts, partSeconds) },
       { role: 'user', content: ask(STORY_EXAMPLE.idea, STORY_EXAMPLE.parts) },
