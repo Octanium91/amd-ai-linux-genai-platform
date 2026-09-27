@@ -13,6 +13,7 @@ All numbers are measured, not estimated, unless marked as an estimate.
 | AnimateDiff v3 | 512×512, 16 frames, 20 steps, CFG 8 | 899 s (~45 s/step) | 57 s | 957 s |
 | AnimateLCM, **extra 5 s** | 2 segments × 20 frames, 4 steps (Draft), continuation strength 0.55 | — | — | 402 s (through the UI, with 8→24 fps interpolation) |
 | AnimateLCM, extra 5 s | same, continuation strength 0.75 | 208 s + ~214 s | — | 531 s |
+| AnimateLCM, **10.6 s from 6 parts with a storyboard** | 512×512, 6 × 15 frames, 6 steps (Standard), CFG 1, a scene per part from the prompt assistant, seed + part, colour-matched seams | — | — | **532 s** (8 min 52 s, through the queue, 8→24 fps); the same cat and window throughout, colours steady across the seams, slightly less contrast by the end; the motion within each part stays small |
 | Wan 2.2 TI2V 5B Q8_0 | 832×480, 17 frames, 10 steps | 676 s (~63 s/step) | 2027 s (tiled VAE) | 45 min |
 | Wan 2.2 TI2V 5B Q8_0 | 832×480, 49 frames, 25 steps | ~172 s/step | — | ≈ 2.5–3 h (estimate) |
 | Wan 2.2 TI2V 5B Q8_0, **High** | 832×480, 49 frames (2 s), 40 steps, CFG 5 | 10 400–10 500 s (~265 s/step) | 5 100–5 170 s (tiled VAE) | **4 h 20 min** (two clips, through the UI) |
