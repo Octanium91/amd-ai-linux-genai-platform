@@ -28,6 +28,9 @@ Only administrators can download and delete models. On first start, while no mod
 | `wan21-vace-1.3b` | [Wan 2.1 VACE 1.3B](https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged), fp16 (the GGUF from calcuis/wan-1.3b-gguf does not load in sd-cli: its 5-dimensional patch embedding is rejected by ggml) | putting a person into a video, video → video | 4.0 GB | Apache-2.0 |
 | `birefnet-lite` | [BiRefNet lite](https://huggingface.co/ZhengPeng7/BiRefNet_lite), ONNX ([onnx-community](https://huggingface.co/onnx-community/BiRefNet_lite-ONNX)) | background removal | 214 MB | MIT |
 | `realesrgan-x4plus` | [Real-ESRGAN x4plus](https://github.com/xinntao/Real-ESRGAN) | upscaling ×4 | 64 MB | BSD-3-Clause |
+| `ace-step-15-turbo-q8` | [ACE-Step 1.5](https://huggingface.co/ACE-Step/Ace-Step1.5) turbo, one GGUF Q8_0 with the planner LM, text encoder, DiT and VAE ([audio-cpp/audio.cpp-gguf](https://huggingface.co/audio-cpp/audio.cpp-gguf)) | music | 5.8 GB | MIT |
+| `stable-audio-3-small-sfx-q8` | [Stable Audio 3 Small SFX](https://huggingface.co/stabilityai/stable-audio-3-small-sfx), GGUF Q8_0 (audio-cpp) | sound effects | 1.6 GB | Stability AI Community License: free under USD 1M yearly revenue, attribution "Powered by Stability AI"; the Gemma text encoder falls under the Gemma Terms of Use |
+| `supertonic-3-f16` | [Supertonic 3](https://huggingface.co/Supertone/supertonic-3), GGUF F16 (audio-cpp) | speech | 298 MB | BigScience OpenRAIL-M (its use restrictions apply) |
 
 Licenses are taken from the Hugging Face model cards. Check them yourself before using results commercially.
 
@@ -46,7 +49,10 @@ A mode is a ready-made combination of models and parameters, described in [catal
 | Wan 2.2 TI2V 5B | video | Wan 2.2 5B + VAE + UMT5 | 832×480, 49 frames at 24 fps, 25 steps | hours (meant for Strix Halo) |
 | Wan 2.1 T2V 1.3B | video | Wan 2.1 1.3B + VAE + UMT5 | 832×480, 16 fps | not measured (experimental) |
 | Real-ESRGAN · upscale ×4 | image | Real-ESRGAN x4plus | the photo's size ×4 | not measured yet |
-| Wan 2.1 VACE 1.3B | video | VACE 1.3B + Wan 2.1 VAE + UMT5 | 832×480, 16 fps, one pass up to 5 s | not measured yet (experimental) |
+| Wan 2.1 VACE 1.3B | video | VACE 1.3B + Wan 2.1 VAE + UMT5 | 832×480, 16 fps, one pass up to 5 s, EasyCache | ~17 min per 2 s clip (experimental) |
+| ACE-Step 1.5 · music | audio | ACE-Step 1.5 turbo | 30 s (10 s – 4 min), 8 steps; lyrics by the model, yours or none | **~35 s** per 30 s track |
+| Stable Audio 3 Small · sound effects | audio | Stable Audio 3 Small SFX | 8 s (1–30 s), 8 steps | **~5 s** |
+| Supertonic 3 · speech | audio | Supertonic 3 | 10 voices, 31 languages, speed 0.7–1.5 | **~4 s** for 10 s of speech |
 
 The Draft / Standard / High quality levels set the number of steps, which each mode defines itself (see `defaults.quality`).
 
@@ -63,7 +69,12 @@ The form starts with the task, and the mode list shows only the modes that fit i
 | **Upscale** | image | a photo up to 2048 px on the long side | Real-ESRGAN x4plus in sd-cli's `upscale` mode: 4× the size, no prompt; also a button in the viewer |
 | **Animate a photo** | video | a photo | the photo is the first frame (image → video) |
 | **Put a person in** | video | a photo of a person or object, a description | Wan 2.1 VACE: the photo is a reference (`-i`), fitted and centred on a white canvas the way VACE prepares references (sd-cli alone would crop it) |
+| **Music** | audio | a style description; lyrics written by the model, your own (`[verse]`, `[chorus]`…) or none; a length | ACE-Step 1.5 through audio.cpp: the planner LM writes the lyrics and the structure, the DiT renders 48 kHz stereo, the VAE decodes it |
+| **Sound effect** | audio | an English description, a length | Stable Audio 3 Small SFX through audio.cpp, 44.1 kHz stereo |
+| **Speech** | audio | a text, a voice, its language, a speed | Supertonic 3 through audio.cpp; the language must be the text's |
 | **Change a video** | video | a video, optionally a reference photo, a description | Wan 2.1 VACE video → video: ffmpeg turns the start of the video into control frames at the job's fps and size (`--control-video`), as contours (VACE's scribble condition: denoised, lightly blurred, edge-detected; keeps the motion and shapes) or grayscale (VACE's colorization: keeps almost everything, the prompt changes the colors); a portrait upload switches the size to portrait |
+
+Every video can also get a **soundtrack**: an uploaded audio file (MP3, WAV, OGG, FLAC, M4A or a video with sound) from a chosen start point, an audio result of the platform ("Use as the sound of a video" in the viewer), or, for Change a video, the sound of the uploaded video. The worker cuts or pads it to the clip's exact length, fades it in and out and muxes it as AAC; if that fails the clip is kept silent with a warning.
 
 Photos are turned upright by their EXIF orientation and scaled to at most 2048 px in the browser before upload; the server refuses photos above 50 megapixels. VACE is slow on the 890M: ~2 min per step at 832×480×33 frames, about 45 minutes per 2 s clip.
 

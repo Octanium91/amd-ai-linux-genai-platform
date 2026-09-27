@@ -153,9 +153,9 @@ function runCmd(cmd, args, phase, timeoutMs = 30 * 60 * 1000, withOut = false) {
   });
 }
 
-function slug(text) {
+function slug(text, fallback = 'gen') {
   const s = String(text).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/, '');
-  return s || 'gen';
+  return s || fallback;
 }
 
 function stamp(ts) {
@@ -174,7 +174,7 @@ function finish(job, status, error) {
 
 // The job id keeps names unique: two jobs queued in the same second with the same prompt and seed
 // (for example the same scene at two sizes) would otherwise write the same file
-const baseName = (job) => `${stamp(job.createdAt)}_${job.params.task === 'upscale' ? 'upscale-x4_' : ''}${slug(job.params.prompt)}_${job.params.seed}_${job.id.slice(0, 6)}`;
+const baseName = (job) => `${stamp(job.createdAt)}_${job.params.task === 'upscale' ? 'upscale-x4_' : ''}${slug(job.params.prompt, job.params.kind === 'audio' ? job.params.task : 'gen')}_${job.params.seed}_${job.id.slice(0, 6)}`;
 
 async function makeThumb(job, src) {
   const thumb = path.join(dirs.thumbs, job.id + '.jpg');

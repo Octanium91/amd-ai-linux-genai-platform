@@ -37,6 +37,22 @@ Peak GTT usage: AnimateDiff and AnimateLCM ~8 GB; Wan 2.2 5B ~16 GB during sampl
 
 With continuation strength 0.55 the second segment of an extra-length clip keeps the composition of the first one; with 0.75 it drifted into a different scene.
 
+## Audio
+
+audio.cpp `v0.8.2-audio8-perf-hotfix`, Vulkan (RADV GFX1150), Q8_0 or F16 GGUF packages. Times are the whole job through the queue unless marked as a direct CLI run.
+
+| Mode | Request | Total |
+|---|---|---|
+| **ACE-Step 1.5 turbo**, music | 30 s, lyrics written by the model, 8 steps | **35 s** (48 kHz stereo) |
+| ACE-Step 1.5 turbo | 30 s, own lyrics (verse and chorus) | 36 s (direct CLI run) |
+| ACE-Step 1.5 turbo | 20 s instrumental | 26 s (CLI: planner LM 13.1 s, diffusion 2.0 s, VAE decoding 9.3 s) |
+| **Stable Audio 3 Small SFX** | 8 s, a campfire with crickets | **5 s** (44.1 kHz stereo) |
+| Stable Audio 3 Small SFX | 10 s, rain on a tin roof with thunder | 3.9 s (direct CLI run) |
+| **Supertonic 3**, speech | a Russian sentence of 10 s | **4 s** (44.1 kHz mono) |
+| Supertonic 3 | Russian 6 s, Ukrainian 5.6 s, English 3.2 s | 2–3 s each (direct CLI run, including the container start) |
+
+Music takes about as long to make as to listen to; the planner LM and the VAE take most of it, the 8 diffusion steps only 2 s.
+
 ## Images
 
 | Mode | Parameters | Total |
