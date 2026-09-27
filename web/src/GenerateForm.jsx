@@ -38,6 +38,27 @@ const photoLabel = (task) => ({
   restyle: t('Reference photo (optional)'),
 })[task] || t('Photo');
 
+// A photo as the engine should see it: turned upright by its EXIF orientation (the browser shows it
+// that way, sd-cli would not) and at most 2048 px on the long side (the mask canvas and the
+// upload stay small; no mode generates larger)
+const MAX_PHOTO_SIDE = 2048;
+async function normalizePhoto(file) {
+  try {
+    const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    const k = Math.min(1, MAX_PHOTO_SIDE / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas');
+    c.width = Math.round(bmp.width * k);
+    c.height = Math.round(bmp.height * k);
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    bmp.close();
+    const png = file.type === 'image/png';
+    const blob = await new Promise((r) => c.toBlob(r, png ? 'image/png' : 'image/jpeg', 0.95));
+    return blob ? new File([blob], png ? 'photo.png' : 'photo.jpg', { type: blob.type }) : file;
+  } catch {
+    return file;
+  }
+}
+
 // The generation size for a photo: its aspect ratio at about the mode's default pixel count,
 // in multiples of 64, so the photo is not stretched
 function fitSize(w, h, d) {
@@ -83,22 +104,26 @@ function videoPlan(preset, duration, segmentFrames) {
   const hardMax = d.maxFrames ?? 121;
   const minFrames = d.minFrames ?? 5;
   const trained = Math.min(hardMax, d.segmentFrames ?? hardMax);
-  const toFrames = (sec) => (exact ? Math.round(sec * fps) : Math.round((sec * fps) / 4) * 4 + 1);
-  const seconds = (f) => (exact ? f : f - 1) / fps;
+  // A clip of f frames lasts f / fps; every seam between passes drops one repeated frame
+  const seconds = (f) => f / fps;
+  const total = (f, n) => (f * n - (n - 1)) / fps;
   let seg = Number(segmentFrames) > 0 ? Math.round(Number(segmentFrames)) : trained;
   if (!exact) seg = Math.round((seg - 1) / 4) * 4 + 1;
   seg = Math.min(hardMax, Math.max(minFrames, seg));
   const extendable = preset?.kind === 'video' && preset?.image !== 'none';
   const maxSegments = extendable ? Math.max(1, d.maxSegments ?? 2) : 1;
   const segSeconds = seconds(seg);
-  const maxDuration = segSeconds * maxSegments;
+  const maxDuration = total(seg, maxSegments);
   const wanted = Math.min(maxDuration, Math.max(0.5, Number(duration) || d.duration || 2));
-  const segments = Math.min(maxSegments, Math.max(1, Math.ceil(wanted / segSeconds - 1e-6)));
-  const frames = Math.min(seg, Math.max(minFrames, toFrames(wanted / segments)));
+  let segments = 1;
+  while (segments < maxSegments && total(seg, segments) < wanted - 1e-6) segments++;
+  // Frames per pass so that the passes joined at their seams give the wanted length
+  const perPass = (wanted * fps + segments - 1) / segments;
+  const frames = Math.min(seg, Math.max(minFrames, exact ? Math.ceil(perPass - 1e-6) : Math.round((perPass - 1) / 4) * 4 + 1));
   return {
     frames, segments, fps, segmentFrames: seg, trainedFrames: trained, segSeconds, maxDuration, maxSegments, extendable,
-    // The real length: every seam drops the frame that repeats the previous pass's last one
-    hardMax, minFrames, duration: seconds(frames) * segments - (exact && segments > 1 ? (segments - 1) / fps : 0), beyondTraining: frames > trained,
+    // The real length of the joined clip
+    hardMax, minFrames, duration: total(frames, segments), beyondTraining: frames > trained,
   };
 }
 
@@ -205,24 +230,27 @@ function MaskEditor({ src, onChange }) {
       g.stroke();
     }
   };
+  // One finger or pen at a time: a second touch does not draw a line across the photo
   const down = (e) => {
+    if (drawing.current) return;
     e.preventDefault();
     view.current.setPointerCapture(e.pointerId);
     const p = point(e);
-    drawing.current = p;
+    drawing.current = { id: e.pointerId, p };
     stroke(p, p);
   };
   const move = (e) => {
-    if (!drawing.current) return;
+    if (drawing.current?.id !== e.pointerId) return;
     const p = point(e);
-    stroke(drawing.current, p);
-    drawing.current = p;
+    stroke(drawing.current.p, p);
+    drawing.current.p = p;
   };
-  const up = () => {
-    if (!drawing.current) return;
+  const up = (e) => {
+    if (drawing.current?.id !== e.pointerId) return;
     drawing.current = null;
     setPainted(true);
-    mask.current.toBlob((b) => onChange(b), 'image/png');
+    // A promise: a submit right after the stroke waits for this very mask
+    onChange(new Promise((resolve) => mask.current.toBlob(resolve, 'image/png')));
   };
   const clear = () => {
     const img = view.current.previousSibling;
@@ -335,7 +363,8 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
   const [error, setError] = useState('');
   const [drag, setDrag] = useState(false);
   const [taskKey, setTaskKey] = useState('create');
-  const [maskBlob, setMaskBlob] = useState(null);
+  const [maskBlob, setMaskBlob] = useState(null); // a promise of the mask PNG
+  const [photoSize, setPhotoSize] = useState(null); // [width, height] of the current photo
   const [video, setVideo] = useState(null); // File
   const [videoRef, setVideoRef] = useState(null); // name of an already uploaded video
   const fileInput = useRef(null);
@@ -373,6 +402,15 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
     onReuseApplied?.();
   }, [reuse, kind]);
 
+  useEffect(() => {
+    const task = (TASKS[kind] || TASKS.image).find((x) => x.key === taskKey);
+    const current = presets.find((p) => p.id === form?.presetId);
+    if (!form || !task || !current || fitsTask(current, task)) return;
+    const fit = presets.filter((p) => fitsTask(p, task));
+    const p = fit.find((x) => x.available) || fit[0];
+    if (p) setForm((f) => ({ ...fromPreset(p), prompt: f.prompt, strength: f.strength }));
+  }, [taskKey, form?.presetId, presets, kind]);
+
   const previewUrl = useMemo(() => {
     if (image) return URL.createObjectURL(image);
     if (imageRef) return `/files/uploads/${imageRef}`;
@@ -392,7 +430,8 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
   const set = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
   const pickPreset = (id) => {
     const p = presets.find((x) => x.id === id);
-    setForm((f) => ({ ...fromPreset(p), prompt: f.prompt }));
+    const fitted = photoSize && ['rework', 'inpaint'].includes(taskKey) && p ? fitSize(photoSize[0], photoSize[1], p.defaults || {}) : null;
+    setForm((f) => ({ ...fromPreset(p), prompt: f.prompt, strength: f.strength, ...(fitted ? { width: fitted[0], height: fitted[1] } : {}) }));
     if (p?.image === 'none') {
       setImage(null);
       setImageRef(null);
@@ -433,12 +472,20 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
   const eta = estimate(jobs, isVideo ? { ...form, frames: plan.frames * plan.segments, steps } : { ...form, frames: form.count, steps }, preset, system?.gpuPower);
   const interpolated = form.outFps !== plan.fps;
 
-  const onFile = (f) => {
+  const onFile = async (f) => {
     if (f && f.type.startsWith('image/')) {
-      setImage(f);
-      setImageRef(null);
       setMaskBlob(null);
+      setImage(await normalizePhoto(f));
+      setImageRef(null);
     }
+  };
+  const onVideoMeta = (e) => {
+    const v = e.currentTarget;
+    if (!v.videoWidth || !preset) return;
+    const portrait = v.videoHeight > v.videoWidth;
+    if (portrait === Number(form.height) > Number(form.width)) return;
+    const r = (preset.recommendedResolutions || preset.resolutions || []).find(([w, h]) => (h > w) === portrait);
+    if (r) setForm((f) => ({ ...f, width: r[0], height: r[1] }));
   };
   const onVideo = (f) => {
     if (f && f.type.startsWith('video/')) {
@@ -448,6 +495,7 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
   };
   // Rework and inpaint follow the photo's aspect ratio
   const onPhotoLoad = (e) => {
+    setPhotoSize([e.currentTarget.naturalWidth, e.currentTarget.naturalHeight]);
     if (!['rework', 'inpaint'].includes(task.key) || !preset) return;
     const [w, h] = fitSize(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight, preset.defaults || {});
     setForm((f) => (f.width === w && f.height === h ? f : { ...f, width: w, height: h }));
@@ -471,7 +519,9 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
       if (upscale && !form.prompt.trim()) fd.set('prompt', '');
       if (acceptsImage && image) fd.append('image', image);
       else if (acceptsImage && imageRef) fd.append('imageRef', imageRef);
-      if (task.mask && maskBlob) fd.append('mask', maskBlob, 'mask.png');
+      const maskPng = task.mask ? await maskBlob : null;
+      if (task.mask && !maskPng) throw new Error(t('Paint the part of the photo to change.'));
+      if (maskPng) fd.append('mask', maskPng, 'mask.png');
       if (task.video && video) fd.append('video', video);
       else if (task.video && videoRef) fd.append('videoRef', videoRef);
       await api('/api/jobs', { method: 'POST', body: fd });
@@ -583,7 +633,7 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
           <span className="field-label">{t('Video')}</span>
           {videoUrl ? (
             <div className="video-pick">
-              <video src={videoUrl} controls muted playsInline preload="metadata" />
+              <video src={videoUrl} controls muted playsInline preload="metadata" onLoadedMetadata={onVideoMeta} />
               <button type="button" className="btn-icon drop-clear" title={t('Remove')} onClick={() => { setVideo(null); setVideoRef(null); }}>×</button>
             </div>
           ) : (
@@ -599,7 +649,7 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
             <span className="field-label">{t('What to keep from the video')}</span>
             <select value={form.control || 'edges'} onChange={(e) => set('control')(e.target.value)}>
               <option value="edges">{t('Contours: the motion and shapes, a new look from the prompt')}</option>
-              <option value="gray">{t('Grayscale: more of the original, new colors and details')}</option>
+              <option value="gray">{t('Recolor: keeps almost all of the original, the prompt changes the colors')}</option>
             </select>
           </label>
         </div>

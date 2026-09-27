@@ -31,10 +31,11 @@ for (const j of jobs) {
 if (interrupted.length) save(true);
 closeInterrupted(interrupted);
 
-// Temporary segment files (.<job id>_s<n>…) of jobs interrupted by a restart are useless: remove them
+// Temporary files of jobs interrupted by a restart (.<job id>_s<n>… segments, _ctrl control frame
+// directories, _ref prepared references) are useless: remove them
 try {
   for (const f of fs.readdirSync(dirs.output)) {
-    if (/^\.[0-9a-f]{12}_s\d+/.test(f)) fs.rmSync(path.join(dirs.output, f), { force: true });
+    if (/^\.[0-9a-f]{12}_(s\d+|ctrl|ref)/.test(f)) fs.rmSync(path.join(dirs.output, f), { recursive: true, force: true });
   }
 } catch {}
 
@@ -102,16 +103,22 @@ function parseLine(job, line) {
 // ---------- helpers ----------
 
 // Helper commands (ffmpeg); with telemetry on, each one is a phase of its own and is recorded
-function runCmd(cmd, args, phase) {
+function runCmd(cmd, args, phase, timeoutMs = 30 * 60 * 1000) {
   const tel = current?.tel;
   if (tel && phase) tel.phase(phase, { segment: current.job.progress?.segment });
   const startedAt = Date.now();
   return new Promise((resolve) => {
     const p = spawn(cmd, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    // A cancel kills the job's current process: during ffmpeg that is this one
+    const owner = current;
+    if (owner) owner.proc = p;
+    const timer = setTimeout(() => p.kill('SIGKILL'), timeoutMs);
     if (tel) tel.pid = p.pid;
     let err = '';
     p.stderr.on('data', (d) => (err += d));
     const done = (r) => {
+      clearTimeout(timer);
+      if (owner?.proc === p) owner.proc = null;
       if (tel) {
         tel.pid = null;
         tel.command({ program: cmd, phase: phase || null, args, exitCode: r.code, startedAt, endedAt: Date.now(), error: r.code ? r.err.trim().slice(-500) : null });
@@ -202,11 +209,30 @@ async function finalizeVideo(job, segments) {
   await makeThumb(job, path.join(dirs.output, job.files[0]));
 }
 
+// Inpainting repaints the masked part, but sd-cli returns the whole image through the VAE, which
+// softens the rest and leaves a seam at the latent grid. The original photo is pasted back outside
+// the mask, widened and feathered, as sd-cli framed it (scaled and centre-cropped to the job size).
+async function compositeInpaint(job, file) {
+  const p = job.params;
+  const fit = `scale=${p.width}:${p.height}:force_original_aspect_ratio=increase,crop=${p.width}:${p.height}`;
+  const graph = `[0]${fit},format=gbrp[o];[1]scale=${p.width}:${p.height},format=gbrp[g];`
+    + `[2]${fit},format=gray,dilation,dilation,dilation,dilation,gblur=sigma=6,format=gbrp[m];[o][g][m]maskedmerge,format=rgb24`;
+  const tmp = `${file}.comp.png`;
+  const r = await runCmd('ffmpeg', ['-loglevel', 'error', '-y', '-i', path.join(dirs.uploads, p.image), '-i', file,
+    '-i', path.join(dirs.uploads, p.mask), '-filter_complex', graph, '-frames:v', '1', tmp], 'ffmpeg.composite');
+  if (r.code === 0 && fs.existsSync(tmp)) fs.renameSync(tmp, file);
+  else {
+    fs.rmSync(tmp, { force: true });
+    job.warning = 'The repainted part could not be blended into the original photo; the whole image is from the model';
+  }
+}
+
 async function finalizeImages(job) {
   const base = baseName(job);
   const saved = (job._saved || []).filter((f) => fs.existsSync(f));
   delete job._saved;
   if (!saved.length) throw new Error('sd-cli did not save any image');
+  if (job.params.task === 'inpaint' && job.params.mask) for (const f of saved) await compositeInpaint(job, f);
   job.files = saved.map((src, i) => {
     const name = saved.length > 1 ? `${base}_${i + 1}.png` : `${base}.png`;
     fs.renameSync(src, path.join(dirs.output, name));
@@ -252,7 +278,7 @@ function modelArgs(preset) {
   return args;
 }
 
-function buildArgs(job, preset, outBase, initImage, controlDir) {
+function buildArgs(job, preset, outBase, initImage, controlDir, refImage) {
   const p = job.params;
   // Upscaling runs the ESRGAN model alone: no prompt, no sampling
   if (p.task === 'upscale') {
@@ -272,6 +298,7 @@ function buildArgs(job, preset, outBase, initImage, controlDir) {
   if (p.flowShift != null) args.push('--flow-shift', String(p.flowShift));
   // A continuation segment stays closer to the last frame (continueArgs) than regular image-to-video
   if (initImage) args.push('-i', initImage, ...(preset.continueArgs || preset.imageArgs || []));
+  else if (refImage) args.push('-i', refImage);
   else if (p.image) args.push('-i', path.join(dirs.uploads, p.image), ...imageArgs(preset, p));
   // Inpainting: white in the mask is repainted, black is kept
   if (p.mask && !initImage) args.push('--mask', path.join(dirs.uploads, p.mask));
@@ -334,14 +361,17 @@ async function controlFrames(job, tmpBase) {
   const dir = `${tmpBase}_ctrl`;
   fs.rmSync(dir, { recursive: true, force: true });
   fs.mkdirSync(dir, { recursive: true });
-  const look = p.control === 'gray' ? 'format=gray' : 'edgedetect=low=0.08:high=0.2';
+  // Denoising and a light blur first: per-frame edges of noise and texture flicker, and VACE reads flicker as motion
+  const look = p.control === 'gray' ? 'format=gray' : 'hqdn3d=4:3:6:4,gblur=sigma=1.2,edgedetect=low=0.1:high=0.25';
   // sd-cli loads only RGB frames: contours and grayscale are written with three channels
   const vf = `fps=${p.fps},scale=${p.width}:${p.height}:force_original_aspect_ratio=increase,crop=${p.width}:${p.height},${look},format=rgb24`;
   const r = await runCmd('ffmpeg', ['-loglevel', 'error', '-y', '-i', path.join(dirs.uploads, p.video), '-vf', vf,
     '-frames:v', String(p.frames), path.join(dir, 'frame_%04d.png')], 'ffmpeg.control_video');
   const n = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => f.endsWith('.png')).length : 0;
   if (job.status !== 'running') return null;
-  if (r.code !== 0 || n < 5) throw new Error('Could not read the video: ' + (r.err.trim() || 'too few frames'));
+  // A damaged end of the file still leaves usable frames: only too few of them fail the job
+  if (n < 5) throw new Error('Could not read the video: ' + (r.err.trim().slice(-300) || 'too few frames'));
+  if (r.code !== 0) job.warning = 'The video could not be read to the end; its readable part was used';
   const frames = Math.floor((n - 1) / 4) * 4 + 1;
   if (frames < p.frames) {
     for (const f of fs.readdirSync(dir).sort().slice(frames)) fs.rmSync(path.join(dir, f), { force: true });
@@ -349,6 +379,18 @@ async function controlFrames(job, tmpBase) {
     p.duration = (frames - 1) / p.fps;
   }
   return dir;
+}
+
+// The reference photo for VACE, prepared the way VACE itself does it: scaled to fit the frame and
+// centred on a white canvas. sd-cli would crop it to the frame and could cut off a head or legs.
+async function referenceImage(job, tmpBase) {
+  const p = job.params;
+  const out = `${tmpBase}_ref.png`;
+  const vf = `scale=${p.width}:${p.height}:force_original_aspect_ratio=decrease,pad=${p.width}:${p.height}:(ow-iw)/2:(oh-ih)/2:color=white,format=rgb24`;
+  const r = await runCmd('ffmpeg', ['-loglevel', 'error', '-y', '-i', path.join(dirs.uploads, p.image), '-vf', vf, '-frames:v', '1', out], 'ffmpeg.reference');
+  if (job.status !== 'running') return null;
+  if (r.code !== 0 || !fs.existsSync(out)) throw new Error('Could not prepare the reference photo: ' + r.err.trim().slice(-300));
+  return out;
 }
 
 function newProgress(segment, segments, doneSegments = []) {
@@ -375,6 +417,7 @@ async function run(job) {
     for (const f of job._saved || []) fs.rmSync(f, { force: true });
     delete job._saved;
     fs.rmSync(`${tmpBase}_ctrl`, { recursive: true, force: true });
+    fs.rmSync(`${tmpBase}_ref.png`, { force: true });
   };
 
   try {
@@ -402,8 +445,9 @@ async function run(job) {
       }
       const outBase = `${tmpBase}_s${i}`;
       const controlDir = job.params.video && i === 0 ? await controlFrames(job, tmpBase) : null;
+      const refImage = job.params.image && ['reference', 'restyle'].includes(job.params.task) && i === 0 ? await referenceImage(job, tmpBase) : null;
       if (job.status !== 'running') break;
-      const args = buildArgs(job, preset, outBase, init, controlDir);
+      const args = buildArgs(job, preset, outBase, init, controlDir, refImage);
       if (i === 0) job.cmd = [config.sdCli, ...args].join(' ');
       const { code, signal, spawnError } = await runSd(job, args, log);
       if (job.status !== 'running') break;
@@ -480,7 +524,15 @@ export function nextJob() {
 
 // ---------- create, cancel, delete ----------
 
+// Uploaded files a job refers to: plain names inside the uploads directory, nothing else
+const UPLOAD_FIELDS = ['image', 'mask', 'video'];
+const UPLOAD_NAME = /^[\w.-]+\.(png|jpg|webp|mp4|mov|webm)$/;
+export function validUploads(params) {
+  return UPLOAD_FIELDS.every((k) => params?.[k] == null || (UPLOAD_NAME.test(params[k]) && !params[k].startsWith('.')));
+}
+
 export function enqueueJob({ user, params, spec }) {
+  if (!validUploads(params)) throw Object.assign(new Error('Invalid file name'), { status: 400 });
   const job = {
     id: crypto.randomBytes(6).toString('hex'),
     status: 'queued',
@@ -538,8 +590,10 @@ export function deleteJob(job) {
   rm(path.join(dirs.thumbs, job.id + '.jpg'));
   for (const ext of ['.webp', '.png']) rm(path.join(dirs.previews, job.id + ext));
   rm(path.join(dirs.logs, job.id + '.log'));
-  const img = job.params?.image;
-  if (img && !jobs.some((j) => j.params?.image === img)) rm(path.join(dirs.uploads, img));
+  for (const k of UPLOAD_FIELDS) {
+    const f = job.params?.[k];
+    if (f && !jobs.some((j) => UPLOAD_FIELDS.some((x) => j.params?.[x] === f))) rm(path.join(dirs.uploads, path.basename(f)));
+  }
   save(true);
 }
 

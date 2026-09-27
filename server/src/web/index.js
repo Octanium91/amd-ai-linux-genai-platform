@@ -80,10 +80,51 @@ function videoType(file) {
   } finally {
     fs.closeSync(fd);
   }
-  if (b.toString('latin1', 4, 8) === 'ftyp') return b.toString('latin1', 8, 10) === 'qt' ? 'mov' : 'mp4';
+  // An ftyp box is also used by HEIC/AVIF images and M4A audio: only video brands pass
+  if (b.toString('latin1', 4, 8) === 'ftyp') {
+    const brand = b.toString('latin1', 8, 12);
+    if (brand.startsWith('qt')) return 'mov';
+    return /^(isom|iso[2-9]|mp4[12]|avc1|M4V |M4VH|3gp[4-9]|3g2[abc]|mmp4|MSNV|dash|f4v )$/.test(brand) ? 'mp4' : null;
+  }
   if (b.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]))) return 'webm';
   return null;
 }
+
+// Width and height from the image header (PNG IHDR, JPEG SOF, WebP VP8/VP8L/VP8X), or null
+function imageSize(file) {
+  const b = Buffer.alloc(Math.min(fs.statSync(file).size, 256 * 1024));
+  const fd = fs.openSync(file, 'r');
+  try {
+    fs.readSync(fd, b, 0, b.length, 0);
+  } finally {
+    fs.closeSync(fd);
+  }
+  if (b.length >= 24 && b.toString('latin1', 12, 16) === 'IHDR') return [b.readUInt32BE(16), b.readUInt32BE(20)];
+  if (b[0] === 0xff && b[1] === 0xd8) {
+    for (let i = 2; i + 9 < b.length;) {
+      if (b[i] !== 0xff) return null;
+      const marker = b[i + 1];
+      const len = b.readUInt16BE(i + 2);
+      if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker)) return [b.readUInt16BE(i + 7), b.readUInt16BE(i + 5)];
+      i += 2 + len;
+    }
+    return null;
+  }
+  if (b.toString('latin1', 0, 4) === 'RIFF' && b.toString('latin1', 8, 12) === 'WEBP') {
+    const chunk = b.toString('latin1', 12, 16);
+    if (chunk === 'VP8X') return [1 + b.readUIntLE(24, 3), 1 + b.readUIntLE(27, 3)];
+    if (chunk === 'VP8L') {
+      const v = b.readUInt32LE(21);
+      return [1 + (v & 0x3fff), 1 + ((v >> 14) & 0x3fff)];
+    }
+    if (chunk === 'VP8 ') return [b.readUInt16LE(26) & 0x3fff, b.readUInt16LE(28) & 0x3fff];
+  }
+  return null;
+}
+// Photos above 50 megapixels are refused; the upscaler takes at most 2048 px on the long side
+// (its result is 4× larger in each direction and must fit in memory)
+const MAX_PIXELS = 50e6;
+const MAX_UPSCALE_SIDE = 2048;
 
 // Limits against oversized requests: prompts, and jobs one user may keep waiting in the queue
 const MAX_PROMPT = 4000;
@@ -124,7 +165,17 @@ api.get('/diagnostics', async (req, res) => {
 api.get('/presets', (req, res) => res.json(presetsWithAvailability()));
 api.get('/templates', (req, res) => res.json(loadTemplates()));
 
-api.post('/jobs', jobFiles, async (req, res) => {
+async function beforeUpload(req, res, next) {
+  const length = Number(req.headers['content-length'] || 0);
+  if (length > MAX_VIDEO_BYTES + 2 * MAX_IMAGE_BYTES + 1024 * 1024) return res.status(413).json({ error: 'The file is too large' });
+  const { jobs } = await workerState();
+  if (jobs.filter((j) => j.status === 'queued' && j.user === req.user.username).length >= MAX_QUEUED_PER_USER) {
+    return res.status(400).json({ error: 'Too many jobs in the queue (at most 20 per user)' });
+  }
+  next();
+}
+
+api.post('/jobs', beforeUpload, jobFiles, async (req, res) => {
   const b = req.body || {};
   const uploaded = Object.values(req.files || {}).flat();
   const reject = (msg) => {
@@ -135,6 +186,8 @@ api.post('/jobs', jobFiles, async (req, res) => {
   if (!preset) return reject('Unknown mode');
   if (!preset.available) return reject('Models not downloaded: ' + preset.missing.map((m) => m.name).join(', '));
   const task = b.task && TASK_INPUTS[b.task] ? b.task : preset.tasks[0];
+  // An engine of an older version would ignore the photo, mask or video and silently do something else
+  if (task !== 'create' && !(await workerState()).worker?.compatible) return reject('The generation engine is being updated, try again in a minute');
   if (!preset.tasks.includes(task)) return reject('This mode cannot do this task');
   const needs = TASK_INPUTS[task];
   if (!needs.noPrompt && !String(b.prompt || '').trim()) return reject('Enter a prompt');
@@ -155,15 +208,30 @@ api.post('/jobs', jobFiles, async (req, res) => {
       f.path = path.join(dirs.uploads, name);
       return { name };
     }
-    const ref = String(b[`${field}Ref`] || '');
+    // A mask is always painted anew; photos and videos of earlier jobs can be reused by name
+    const ref = field === 'mask' ? '' : String(b[`${field}Ref`] || '');
     if (UPLOAD_NAME.test(ref) && fs.statSync(path.join(dirs.uploads, ref), { throwIfNoEntry: false })?.isFile()) return { name: ref };
     return { name: null };
   };
-  const img = take('image', imageType, MAX_IMAGE_BYTES, 'Only PNG, JPEG and WebP images are accepted');
-  const mask = take('mask', imageType, MAX_IMAGE_BYTES, 'Only PNG, JPEG and WebP images are accepted');
-  const vid = take('video', videoType, MAX_VIDEO_BYTES, 'Only MP4, MOV and WebM videos are accepted');
+  let img;
+  let mask;
+  let vid;
+  try {
+    img = take('image', imageType, MAX_IMAGE_BYTES, 'Only PNG, JPEG and WebP images are accepted');
+    mask = take('mask', imageType, MAX_IMAGE_BYTES, 'Only PNG, JPEG and WebP images are accepted');
+    vid = take('video', videoType, MAX_VIDEO_BYTES, 'Only MP4, MOV and WebM videos are accepted');
+  } catch (e) {
+    console.error(`[jobs] upload: ${e.message}`);
+    return reject('The file could not be saved');
+  }
   const error = img.error || mask.error || vid.error;
   if (error) return reject(error);
+  let size = null;
+  if (img.name) {
+    size = imageSize(path.join(dirs.uploads, img.name));
+    if (size && size[0] * size[1] > MAX_PIXELS) return reject('The photo is too large (at most 50 megapixels)');
+    if (task === 'upscale' && (!size || Math.max(...size) > MAX_UPSCALE_SIDE)) return reject('The photo is too large to upscale (at most 2048 px on the long side)');
+  }
   // Inputs the task does not use are dropped: a text-to-image job never carries a photo
   const drop = (name) => name && uploaded.some((f) => f.path.endsWith(name)) && fs.rmSync(path.join(dirs.uploads, name), { force: true });
   const inputs = {
@@ -174,10 +242,8 @@ api.post('/jobs', jobFiles, async (req, res) => {
   if (needs.image && !inputs.image) return reject('This task needs a photo');
   if (needs.mask && !inputs.mask) return reject('Paint the part of the photo to change');
   if (needs.video && !inputs.video) return reject('This task needs a video');
-  const { jobs } = await workerState();
-  if (jobs.filter((j) => j.status === 'queued' && j.user === req.user.username).length >= MAX_QUEUED_PER_USER) {
-    return reject('Too many jobs in the queue (at most 20 per user)');
-  }
+  // An upscale job's size is its result: the photo ×4
+  if (task === 'upscale' && size) Object.assign(b, { width: size[0] * 4, height: size[1] * 4 });
 
   try {
     res.json(await callWorker('/v1/jobs', {
@@ -204,13 +270,21 @@ api.post('/jobs/:id/upscale', async (req, res) => {
   const src = path.join(dirs.output, path.basename(file));
   const type = fs.existsSync(src) && imageType(src);
   if (!type) return res.status(404).json({ error: 'The file of this job has been deleted' });
+  const size = imageSize(src);
+  if (!size || Math.max(...size) > MAX_UPSCALE_SIDE) return res.status(400).json({ error: 'The photo is too large to upscale (at most 2048 px on the long side)' });
   const image = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}.${type}`;
-  fs.copyFileSync(src, path.join(dirs.uploads, image));
-  const body = { presetId: preset.id, prompt: job.params.prompt || '', negative: '' };
-  res.json(await callWorker('/v1/jobs', {
-    method: 'POST',
-    body: { user: req.user.username, params: jobParams(preset, body, image, { image, task: 'upscale' }), spec: jobSpec(preset) },
-  }));
+  const dest = path.join(dirs.uploads, image);
+  fs.copyFileSync(src, dest);
+  const body = { presetId: preset.id, prompt: job.params.prompt || '', negative: '', width: size[0] * 4, height: size[1] * 4 };
+  try {
+    res.json(await callWorker('/v1/jobs', {
+      method: 'POST',
+      body: { user: req.user.username, params: jobParams(preset, body, image, { image, task: 'upscale' }), spec: jobSpec(preset) },
+    }));
+  } catch (e) {
+    fs.rmSync(dest, { force: true });
+    throw e;
+  }
 });
 
 api.post('/jobs/:id/cancel', async (req, res) => {

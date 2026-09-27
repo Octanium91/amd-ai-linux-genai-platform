@@ -7,7 +7,7 @@ import { config, WORKER_API } from '../common/config.js';
 import { tokenMatches, workerToken } from '../common/token.js';
 import { diagnostics, logDiagnostics } from './diagnostics.js';
 import {
-  cancelJob, deleteJob, draining, enqueueJob, jobs, jobSummary, modelsInUse, nextJob, retryJob, runningJob, setDrain, shutdownJobs,
+  cancelJob, deleteJob, draining, enqueueJob, jobs, jobSummary, modelsInUse, nextJob, retryJob, runningJob, setDrain, shutdownJobs, validUploads,
 } from './queue.js';
 import { systemInfo } from './system.js';
 
@@ -89,6 +89,7 @@ const routes = [
   ['POST', /^\/v1\/jobs$/, async (req) => {
     const b = await readBody(req);
     if (!b.user || !b.params || !b.spec?.models) throw new HttpError(400, 'Invalid job');
+    if (!validUploads(b.params)) throw new HttpError(400, 'Invalid file name');
     return jobSummary(enqueueJob(b));
   }],
   ['GET', /^\/v1\/jobs\/([\w-]+)$/, (req, url, id) => jobSummary(findJob(id))],

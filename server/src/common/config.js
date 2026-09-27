@@ -35,7 +35,8 @@ export const config = {
 };
 
 // Version of the web ↔ worker API; both sides refuse to work with a different major version
-export const WORKER_API = 1;
+// 2: jobs carry a task and may carry a mask, a video, a control type and a strength
+export const WORKER_API = 2;
 
 // Some directories are mounted read-only in one of the containers (output in web, models in worker)
 for (const d of Object.values(config.dirs)) {

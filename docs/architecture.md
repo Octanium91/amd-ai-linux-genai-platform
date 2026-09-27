@@ -109,6 +109,7 @@ Every route except sign-in requires a session. Mutating requests require the `X-
 | GET | `/api/models` | user | catalog, statuses, download progress, disk space |
 | POST | `/api/models/download` `{ids}` · `/api/models/:id/cancel` | admin | download / cancel |
 | DELETE | `/api/models/:id` | admin | delete (refused while the model is in use) |
+| POST | `/api/jobs/:id/upscale` | user | `{index}`: upscales one image of a finished job ×4 as a new job (at most 2048 px on the long side) |
 | GET/PUT | `/api/settings` | admin | platform settings (telemetry on/off and size limit; the prompt assistant's Ollama address, model, on/off) |
 | GET | `/api/settings/ollama?url=` | admin | the Ollama server's version and installed models, for choosing one in Settings |
 | GET | `/api/prompt/status` | user | whether the "To prompt" button can work (enabled, server reachable, model installed; checked at most every 30 s) |

@@ -89,7 +89,7 @@
     "description": "Photorealistic SDXL at 1024 px: more detail and better composition than SD 1.5, but several times slower.",
     "promptQuality": {
       "prefix": "RAW photo",
-      "suffix": "photorealistic, 8k uhd, dslr, soft lighting, high quality, film grain"
+      "suffix": "photorealistic, 8k uhd, dslr, high quality, film grain"
     },
     "reference": {
       "width": 1024,
@@ -207,7 +207,7 @@
     "description": "The same RealVisXL distilled for 5–8 steps: SDXL quality in a fraction of the time. The negative prompt is not used at CFG 1.",
     "promptQuality": {
       "prefix": "RAW photo",
-      "suffix": "photorealistic, 8k uhd, dslr, soft lighting, high quality, film grain"
+      "suffix": "photorealistic, 8k uhd, dslr, high quality, film grain"
     },
     "reference": {
       "width": 1024,
@@ -326,7 +326,7 @@
     "description": "A modern 6B model in 8 steps: strong photorealism, understands long descriptions in natural language, can render text on the image.",
     "promptStyle": "natural",
     "promptQuality": {
-      "suffix": "Photorealistic, natural light, rich detail, sharp focus."
+      "suffix": "Photorealistic, rich detail, sharp focus."
     },
     "reference": {
       "width": 1024,
@@ -663,7 +663,7 @@
     "name": "Wan 2.2 TI2V 5B (real motion, slow)",
     "description": "A full video model: coherent motion, text and image to video. Much slower than AnimateDiff; best on Strix Halo.",
     "promptQuality": {
-      "suffix": "Photorealistic, cinematic lighting, rich detail, smooth natural motion."
+      "suffix": "Photorealistic, rich detail, smooth natural motion."
     },
     "reference": {
       "width": 832,
@@ -763,7 +763,7 @@
     "name": "Wan 2.1 T2V 1.3B (experimental)",
     "description": "Lightweight Wan 2.1, text to video only. Not yet tested on this platform.",
     "promptQuality": {
-      "suffix": "Photorealistic, cinematic lighting, rich detail, smooth natural motion."
+      "suffix": "Photorealistic, rich detail, smooth natural motion."
     },
     "experimental": true,
     "image": "none",
@@ -838,7 +838,7 @@
     "description": "Puts a person or object from a photo into a new video, or keeps the motion of an uploaded video and changes its look. Wan 2.1 at 16 fps, one pass up to 5 s.",
     "experimental": true,
     "promptQuality": {
-      "suffix": "Photorealistic, cinematic lighting, rich detail, smooth natural motion."
+      "suffix": "Photorealistic, rich detail, smooth natural motion."
     },
     "tasks": [
       "reference",

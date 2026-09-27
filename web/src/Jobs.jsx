@@ -12,13 +12,24 @@ const TASK_CHIP = {
 
 export function ParamChips({ p, user }) {
   const video = (p.kind || 'video') === 'video';
+  // An upscale has no generation settings: the mode, the result size and the task
+  if (p.task === 'upscale') {
+    return (
+      <div className="pchips">
+        <span>{p.presetName || p.presetId}</span>
+        {p.width > 0 && <span>{p.width}×{p.height}</span>}
+        <span>{TASK_CHIP.upscale()}</span>
+        {user && <span>👤 {user}</span>}
+      </div>
+    );
+  }
   return (
     <div className="pchips">
       <span>{p.presetName || p.presetId}</span>
       <span>{p.width}×{p.height}</span>
       {video ? <span>{t('{s} s', { s: clipSeconds(p).toFixed(1) })} · {p.outFps ?? p.fps} fps</span> : <span>× {p.count || 1}</span>}
       <span className={p.quality === 'extra' ? 'extra-text' : ''}>{QUALITY_LABEL[p.quality] ? t(QUALITY_LABEL[p.quality]) : t('{n} steps', { n: p.steps })}</span>
-      {p.segments > 1 && <span className="extra-text">{t('extra · 2 segments')}</span>}
+      {p.segments > 1 && <span className="extra-text">{t('extra · {n} segments', { n: p.segments })}</span>}
       <span>CFG {p.cfg}</span>
       <span>seed {p.seed}</span>
       {TASK_CHIP[p.task]

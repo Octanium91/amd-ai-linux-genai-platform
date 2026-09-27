@@ -56,6 +56,9 @@ const EXTRA = [
   'Could not build the mp4:',
   'Only PNG, JPEG and WebP images are accepted',
   'Only MP4, MOV and WebM videos are accepted',
+  // job.warning texts set by the worker
+  'The video could not be read to the end; its readable part was used',
+  'The repainted part could not be blended into the original photo; the whole image is from the model',
 ];
 for (const k of EXTRA) keys.add(k);
 // Never translated: language names, hardware family names, identifiers

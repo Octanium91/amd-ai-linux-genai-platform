@@ -23,22 +23,26 @@ export function videoPlan(preset, duration, segmentFrames) {
   const hardMax = d.maxFrames ?? 121;
   const minFrames = d.minFrames ?? 5;
   const trained = Math.min(hardMax, d.segmentFrames ?? hardMax);
-  const toFrames = (sec) => (exact ? Math.round(sec * fps) : Math.round((sec * fps) / 4) * 4 + 1);
-  const seconds = (f) => (exact ? f : f - 1) / fps;
+  // A clip of f frames lasts f / fps; every seam between passes drops one repeated frame
+  const seconds = (f) => f / fps;
+  const total = (f, n) => (f * n - (n - 1)) / fps;
   let seg = Number(segmentFrames) > 0 ? Math.round(Number(segmentFrames)) : trained;
   if (!exact) seg = Math.round((seg - 1) / 4) * 4 + 1;
   seg = Math.min(hardMax, Math.max(minFrames, seg));
   const extendable = preset.kind === 'video' && preset.image !== 'none';
   const maxSegments = extendable ? Math.max(1, d.maxSegments ?? 2) : 1;
   const segSeconds = seconds(seg);
-  const maxDuration = segSeconds * maxSegments;
+  const maxDuration = total(seg, maxSegments);
   const wanted = Math.min(maxDuration, Math.max(0.5, Number(duration) || d.duration || 2));
-  const segments = Math.min(maxSegments, Math.max(1, Math.ceil(wanted / segSeconds - 1e-6)));
-  const frames = Math.min(seg, Math.max(minFrames, toFrames(wanted / segments)));
+  let segments = 1;
+  while (segments < maxSegments && total(seg, segments) < wanted - 1e-6) segments++;
+  // Frames per pass so that the passes joined at their seams give the wanted length
+  const perPass = (wanted * fps + segments - 1) / segments;
+  const frames = Math.min(seg, Math.max(minFrames, exact ? Math.ceil(perPass - 1e-6) : Math.round((perPass - 1) / 4) * 4 + 1));
   return {
     frames, segments, fps, segmentFrames: seg, trainedFrames: trained, segSeconds, maxDuration, maxSegments, extendable,
-    // The real length: every seam drops the frame that repeats the previous pass's last one
-    duration: seconds(frames) * segments - (exact && segments > 1 ? (segments - 1) / fps : 0), beyondTraining: frames > trained,
+    // The real length of the joined clip
+    duration: total(frames, segments), beyondTraining: frames > trained,
   };
 }
 
@@ -73,6 +77,12 @@ export function jobParams(preset, body, image, inputs = {}) {
     image,
     task: inputs.task || null,
   };
+  // Upscaling: the size is the result's (the photo ×4), shown on the job card
+  if (inputs.task === 'upscale') {
+    params.width = Math.round(Number(body.width)) || null;
+    params.height = Math.round(Number(body.height)) || null;
+    params.count = 1;
+  }
   if (inputs.mask) params.mask = inputs.mask;
   if (inputs.video) {
     params.video = inputs.video;

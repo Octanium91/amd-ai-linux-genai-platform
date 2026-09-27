@@ -57,11 +57,13 @@ The form starts with the task, and the mode list shows only the modes that fit i
 |---|---|---|---|
 | **Create** | image, video | a description | text → image or video |
 | **Rework a photo** | image | a photo, "how much to change" | image → image (`-i`, `--strength`); the size follows the photo's aspect ratio |
-| **Change a part** | image | a photo, a part painted over it with the brush, "how much to change" | inpainting: `--mask` (white is repainted, black kept) |
-| **Upscale** | image | a photo | Real-ESRGAN x4plus in sd-cli's `upscale` mode: 4× the size, no prompt |
+| **Change a part** | image | a photo, a part painted over it with the brush, "how much to change" | inpainting: `--mask` (white is repainted, black kept); afterwards ffmpeg pastes the original photo back outside the widened, feathered mask, so the rest keeps its sharpness and no seam of the 8 px latent grid shows |
+| **Upscale** | image | a photo up to 2048 px on the long side | Real-ESRGAN x4plus in sd-cli's `upscale` mode: 4× the size, no prompt; also a button in the viewer |
 | **Animate a photo** | video | a photo | the photo is the first frame (image → video) |
-| **Put a person in** | video | a photo of a person or object, a description | Wan 2.1 VACE: the photo is a reference (`-i`), the person appears in a new scene |
-| **Change a video** | video | a video, optionally a reference photo, a description | Wan 2.1 VACE video → video: ffmpeg turns the start of the video into control frames at the job's fps and size (`--control-video`), as contours (keeps the motion and shapes) or grayscale (keeps more of the original) |
+| **Put a person in** | video | a photo of a person or object, a description | Wan 2.1 VACE: the photo is a reference (`-i`), fitted and centred on a white canvas the way VACE prepares references (sd-cli alone would crop it) |
+| **Change a video** | video | a video, optionally a reference photo, a description | Wan 2.1 VACE video → video: ffmpeg turns the start of the video into control frames at the job's fps and size (`--control-video`), as contours (VACE's scribble condition: denoised, lightly blurred, edge-detected; keeps the motion and shapes) or grayscale (VACE's colorization: keeps almost everything, the prompt changes the colors); a portrait upload switches the size to portrait |
+
+Photos are turned upright by their EXIF orientation and scaled to at most 2048 px in the browser before upload; the server refuses photos above 50 megapixels. VACE is slow on the 890M: ~2 min per step at 832×480×33 frames, about 45 minutes per 2 s clip.
 
 A mode lists its tasks in `tasks`; without it they follow from `image`: `none` means Create only, `optional` adds the photo tasks (Rework and Change a part for images, Animate for video), `required` leaves only them. The prompt assistant knows the task: for Change a part it describes only the painted area, for Change a video the new look rather than a new motion.
 

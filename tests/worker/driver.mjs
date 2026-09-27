@@ -185,6 +185,11 @@ ip.cmd = cmdOf(ip.id);
 check('inpaint: the mask and the job strength replace the mode strength', ip.status === 'done' && /--mask \S*mask\.png/.test(ip.cmd) && /--strength 0\.85/.test(ip.cmd) && !/--strength 0\.6/.test(ip.cmd),
   `${ip.status} ${(ip.cmd?.match(/--(mask|strength) \S+/g) || []).join(' ')}`);
 
+// A job can only refer to plain upload names: no path outside the uploads directory
+const bad = await api('/v1/jobs', 'POST', { user: 'test', spec: imgSpec, params: { kind: 'image', presetId: 'x', task: 'rework', prompt: 'x', negative: '', width: 64, height: 64, steps: 1, cfg: 1, sampler: 'euler', seed: 1, count: 1, image: '../state/jobs.json' } });
+const bad2 = await api('/v1/jobs', 'POST', { user: 'test', spec: imgSpec, params: { kind: 'image', presetId: 'x', task: 'restyle', prompt: 'x', negative: '', width: 64, height: 64, steps: 1, cfg: 1, sampler: 'euler', seed: 1, count: 1, video: '.hidden.mp4' } });
+check('upload names outside the uploads directory are refused', bad.status === 400 && bad2.status === 400, `${bad.status} ${bad2.status}`);
+
 // gpu_metrics v3.0 as a Ryzen AI 9 HX 370 reported it at idle (Linux 6.12)
 const gm = await import('/src/worker/gpumetrics.js');
 const bytes = Buffer.from(
