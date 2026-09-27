@@ -590,7 +590,7 @@ export function storyboardRoutes(api) {
     const abort = new AbortController();
     res.on('close', () => !res.writableFinished && abort.abort());
     try {
-      const r = await storyboard(s, preset, { idea, parts: req.body.parts, partSeconds: req.body.partSeconds, hasImage: !!req.body.hasImage }, abort.signal);
+      const r = await storyboard({ ...s, model: s.storyboardModel || s.model }, preset, { idea, parts: req.body.parts, partSeconds: req.body.partSeconds, hasImage: !!req.body.hasImage }, abort.signal);
       if (r.truncated) return res.status(502).json({ error: 'The model answer was cut off, try a shorter description' });
       if (!r.prompts) return res.status(502).json({ error: 'The model returned an empty prompt, try again' });
       res.json(r);

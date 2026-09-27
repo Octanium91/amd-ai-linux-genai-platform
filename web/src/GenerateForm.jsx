@@ -160,7 +160,7 @@ function StoryboardField({ form, set, preset, plan, hasImage }) {
       </span>
       {ready ? (
         <button type="button" className="btn btn-small" disabled={busy || !form.prompt.trim()} onClick={write}>
-          {busy ? t('Writing the scenes…') : `✦ ${t('Write the scenes with AI')}`}
+          {busy ? (n > 8 ? t('Writing the scenes… up to a few minutes for a long video') : t('Writing the scenes…')) : `✦ ${t('Write the scenes with AI')}`}
         </button>
       ) : (
         <span className="field-hint">{t('Without the prompt assistant, write a scene for each part yourself: empty parts repeat the main prompt, and the action repeats with it.')}</span>

@@ -599,4 +599,7 @@ export default {
   "Without the prompt assistant, write a scene for each part yourself: empty parts repeat the main prompt, and the action repeats with it.": "Без помічника з промптів напишіть сцену для кожної частини самі: порожні частини повторюють основний промпт, а з ним повторюється й дія.",
   "Write the scenes with AI": "Розписати сцени з ШІ",
   "Writing the scenes…": "Пишу сцени…",
+  "A storyboard of dozens of parts needs a larger model: dolphin-llama3 (8B) writes a real story in 1–3 minutes, 3B models repeat themselves. Empty: the model above.": "Раскадровці з десятків частин потрібна більша модель: dolphin-llama3 (8B) пише справжню історію за 1–3 хвилини, моделі на 3B повторюються. Порожньо — модель вище.",
+  "Model for the scenes of long videos": "Модель для сцен довгих відео",
+  "Writing the scenes… up to a few minutes for a long video": "Пишу сцени… для довгого відео до кількох хвилин",
 };

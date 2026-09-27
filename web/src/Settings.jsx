@@ -212,6 +212,14 @@ function PromptAssistantSettings() {
         </span>
         {missing && <span className="field-hint warn">{t('This model is not installed on the Ollama server: run "ollama pull {model}" there.', { model: form.model })}</span>}
       </label>
+      <label className="field">
+        <span className="field-label">{t('Model for the scenes of long videos')}</span>
+        <div className="model-pick">
+          <input list="ollama-models" value={form.storyboardModel || ''} placeholder={form.model} onChange={(e) => setForm({ ...form, storyboardModel: e.target.value })} />
+        </div>
+        <span className="field-hint">{t('A storyboard of dozens of parts needs a larger model: dolphin-llama3 (8B) writes a real story in 1–3 minutes, 3B models repeat themselves. Empty: the model above.')}</span>
+        {models && form.storyboardModel && !has(form.storyboardModel) && <span className="field-hint warn">{t('This model is not installed on the Ollama server: run "ollama pull {model}" there.', { model: form.storyboardModel })}</span>}
+      </label>
       {error && <div className="error">{error}</div>}
       {msg && <div className="muted small">{msg}</div>}
       <div className="modal-actions">

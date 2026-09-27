@@ -74,7 +74,9 @@ export function settingsRoutes(api, requireAdmin) {
       if (!url) return res.status(400).json({ error: 'The Ollama address must be an http:// or https:// URL' });
       const model = String(p.model || '').trim();
       if (!/^[\w.:/-]{1,200}$/.test(model)) return res.status(400).json({ error: 'Enter the name of an Ollama model' });
-      settings.promptAssistant = { enabled: p.enabled === true, url, model };
+      const storyboardModel = String(p.storyboardModel ?? '').trim();
+      if (storyboardModel && !/^[\w.:/-]{1,200}$/.test(storyboardModel)) return res.status(400).json({ error: 'Enter the name of an Ollama model' });
+      settings.promptAssistant = { enabled: p.enabled === true, url, model, storyboardModel };
     }
     writeSettings(settings);
     res.json(settings);
