@@ -930,7 +930,11 @@
     "extraArgs": [
       "--diffusion-fa",
       "--vae-tiling",
-      "--offload-to-cpu"
+      "--offload-to-cpu",
+      "--cache-mode",
+      "easycache",
+      "--cache-option",
+      "threshold=0.2"
     ],
     "i18n": {
       "uk": {

@@ -20,6 +20,19 @@ All numbers are measured, not estimated, unless marked as an estimate.
 | Wan 2.1 VACE 1.3B fp16, **put a person in** | 832×480, 33 frames (2 s at 16 fps), 20 steps, CFG 6, reference photo | ~121 s/step, plus two VAE encodes of ~160 s | — | **49 min** (through the UI) |
 | Wan 2.1 VACE 1.3B fp16, **change a video** | 832×480, 29 frames from a 2 s upload, 20 steps, CFG 6, contour control frames | — | — | **30 min** (through the UI); pose, framing and motion followed the upload, the look followed the prompt |
 
+### Wan 2.1 VACE speedups
+
+The same "change a video" job (832×480, 29 frames from a 2 s upload, 20 steps, CFG 6, contour control, seed 777) with different engine flags, queued straight on the worker:
+
+| Flags | Preparing (control frames, encodes) | Sampling | Decoding | Total |
+|---|---|---|---|---|
+| `--offload-to-cpu` (the preset until now) | 262 s | 1354 s (67.5 s/step) | 173 s | **1789 s** |
+| no offload | 257 s | 1254 s (62.2 s/step) | 162 s | **1674 s** (−6%); peak RAM 27.1 of 30.5 GB |
+| no offload + `--cache-mode easycache --cache-option threshold=0.2` | 257 s | 545 s | 165 s | **968 s** (−46%) |
+| `--offload-to-cpu` + easycache, threshold 0.2 (**the preset now**) | 263 s | 583 s | 163 s | **1009 s** (−44%) |
+
+EasyCache skips the model on steps where its output barely changes, so sampling took 40% of the time. Frames from the three clips were nearly identical (same face, pose and framing); the EasyCache clip is slightly softer and lower in contrast. Dropping the offload saves only 6% and brings RAM close to the limit, so the preset keeps `--offload-to-cpu` and adds EasyCache: a VACE clip now takes about 17 minutes instead of 30.
+
 Peak GTT usage: AnimateDiff and AnimateLCM ~8 GB; Wan 2.2 5B ~16 GB during sampling and up to 22.3 GB during VAE decoding.
 
 With continuation strength 0.55 the second segment of an extra-length clip keeps the composition of the first one; with 0.75 it drifted into a different scene.
