@@ -130,7 +130,8 @@ export function ActiveJob({ job, skew, onCancel, mine = true }) {
       </div>
 
       <div className="hero">
-        <div className="hero-media" style={{ cursor: 'default', aspectRatio: job.previewAt ? undefined : aspect }}>
+        {/* The frame keeps the job's proportions; the small latent preview is scaled up to fill it */}
+        <div className="hero-media live-preview" style={{ aspectRatio: aspect }}>
           {job.previewAt ? (
             <img src={`/files/previews/${job.id}${job.previewExt || '.webp'}?t=${Math.floor(job.previewAt)}`} alt="" />
           ) : (

@@ -687,3 +687,6 @@ input[type="range"].extra { accent-color: var(--warn); }
   .menu { right: -4px; }
   .sysbar { padding: 8px 0; }
 }
+/* the running job's preview: the job's own aspect ratio, the tiny latent image scaled to fill it */
+.hero-media.live-preview { cursor: default; align-self: start; width: 100%; max-height: 60vh; }
+.hero-media.live-preview img { width: 100%; height: 100%; max-height: none; object-fit: contain; filter: blur(0.6px); }
