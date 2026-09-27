@@ -121,7 +121,7 @@ const AUDIO_EXAMPLES = {
   },
   sfx: {
     idea: 'дверь скрипит в старом доме',
-    answer: { idea_en: 'a door creaks in an old house', prompt: 'an old wooden door slowly creaking open on rusty hinges, close perspective, dry wood texture, quiet empty room with a faint echo, light wind outside' },
+    answer: { idea_en: 'a door creaks in an old house', source: 'old wooden door slowly creaking open on rusty hinges', texture: 'dry wood, squeaking metal', space: 'close, quiet empty room with a faint echo', background: 'light wind outside' },
   },
 };
 
@@ -138,9 +138,12 @@ const AUDIO_RULES = {
   ],
   sfx: (ctx) => [
     'You are an expert sound designer writing prompts for the Stable Audio sound-effect model, which understands only English.',
-    'First write idea_en: an exact English translation of the idea, nothing added. Then write the prompt strictly about idea_en.',
-    'The prompt is one English phrase or sentence, 10 to 40 words: the sound source and what it does, materials and textures, the distance or perspective (close, distant), the space and its acoustics (a room, outdoors, a hall), and quiet background sounds when they fit.',
-    'Describe only sounds: no visuals, no music unless the idea asks for it, no speech with words.',
+    'First write idea_en: an exact English translation of the idea, nothing added. Then fill the other fields with short English phrases, strictly about the sounds of idea_en:',
+    '- source: what makes the sound and what it does, with every sound source named in idea_en',
+    '- texture: the materials and the character of the sound',
+    '- space: the distance (close, distant) and the place with its acoustics',
+    '- background: quiet background sounds that belong there, or an empty string',
+    'Each field at most 12 words. Only what can be heard: no colors, light, smells, weather that makes no sound, or feelings.',
     ctx.duration ? `The sound lasts about ${ctx.duration} seconds.` : '',
   ],
 };
@@ -177,8 +180,57 @@ function audioSystemPrompt(style, ctx) {
     'Keep everything the user asked for and do not add things they did not mention; make it specific.',
     'The first exchange is only an example of the format: never reuse its instruments, sounds or wording.',
     'If the idea is already a detailed English description, keep every detail of it and only complete it.',
-    'Answer with JSON: {"idea_en": "...", "prompt": "..."}.',
+    style === 'sfx'
+      ? 'Answer with JSON with the fields idea_en, source, texture, space, background.'
+      : 'Answer with JSON: {"idea_en": "...", "prompt": "..."}.',
   ].filter(Boolean).join('\n');
+}
+
+const SFX_FIELDS = ['source', 'texture', 'space', 'background'];
+// Parts a sound model cannot use; a small language model adds them anyway
+const NOT_AUDIBLE = /\b(colou?rs?|colou?red|pastel|scents?|smells?|fragran\w*|aroma\w*|sunlight|sunny|sunshine|morning light|bright day|looks?|visible|views?|shiny|glowing)\b/i;
+const VOCAL = /\b(vocals?|vocalist|singers?|singing|sung|voices?|choir|choral|rap|lyrics?)\b/i;
+// A language the idea asks the vocals to be in ("на русском", "in Ukrainian", "українською")
+const VOCAL_LANGS = [
+  [/русск|по-русски|\brussian\b/i, 'Russian'],
+  [/украин|україн|\bukrainian\b/i, 'Ukrainian'],
+  [/английск|англійськ|\benglish\b/i, 'English'],
+  [/немецк|німецьк|\bgerman\b/i, 'German'],
+  [/французск|французьк|\bfrench\b/i, 'French'],
+  [/испанск|іспанськ|\bspanish\b/i, 'Spanish'],
+  [/итальянск|італійськ|\bitalian\b/i, 'Italian'],
+  [/польск|польськ|\bpolish\b/i, 'Polish'],
+  [/японск|японськ|\bjapanese\b/i, 'Japanese'],
+  [/корейск|корейськ|\bkorean\b/i, 'Korean'],
+  [/китайск|китайськ|\bchinese\b/i, 'Chinese'],
+];
+const parts = (text) => String(text || '').split(/\s*,\s*/).map((x) => x.trim()).filter(Boolean);
+
+// The caption as ACE-Step gets it: no singer in an instrumental, the vocal language the idea asks for
+export function finishMusicCaption(caption, idea, lyricsMode) {
+  let list = parts(caption.replace(/\s+/g, ' ').replace(/^["'\s]+|["'\s]+$/g, ''));
+  if (lyricsMode === 'instrumental') {
+    list = list.filter((x) => !VOCAL.test(x) || /\b(no|without)\s+vocals?\b/i.test(x));
+    if (!list.some((x) => /instrumental/i.test(x))) list.push('instrumental, no vocals');
+  } else {
+    const lang = VOCAL_LANGS.find(([re]) => re.test(idea))?.[1];
+    if (lang && !list.some((x) => new RegExp(`\\b${lang}\\b`, 'i').test(x))) list.push(`sung in ${lang}`);
+  }
+  return list.join(', ');
+}
+
+// A sound description from the fields: the translated idea first, so its sounds are never lost,
+// then the details, without repeats and without what cannot be heard
+export function assembleSfx(data) {
+  const seen = new Set();
+  const out = [];
+  for (const part of [data.idea_en, ...SFX_FIELDS.map((k) => data[k])].flatMap(parts)) {
+    const key = part.toLowerCase();
+    if (seen.has(key) || NOT_AUDIBLE.test(part)) continue;
+    seen.add(key);
+    out.push(part);
+  }
+  return out.join(', ');
 }
 
 function systemPrompt(preset, style, ctx, tagFields = TAG_FIELDS) {
@@ -282,7 +334,7 @@ export async function enhancePrompt(s, preset, input, signal = null) {
     ? Object.fromEntries(['idea_en', ...tagFields].map((k) => [k, example.answer[k]]))
     : example.answer;
   // idea_en comes first: the translation, generated before the rest, keeps a small model on topic
-  const fields = ['idea_en', ...(style === 'tags' ? tagFields : ['prompt'])];
+  const fields = ['idea_en', ...(style === 'tags' ? tagFields : style === 'sfx' ? SFX_FIELDS : ['prompt'])];
   const format = { type: 'object', properties: Object.fromEntries(fields.map((k) => [k, { type: 'string' }])), required: fields };
   const started = Date.now();
   const body = {
@@ -324,6 +376,10 @@ export async function enhancePrompt(s, preset, input, signal = null) {
       order = ['subject'];
     }
     prompt = content(f, order) ? assembleTags(f, quality, budget, order) : '';
+  } else if (style === 'sfx') {
+    prompt = assembleSfx(data);
+  } else if (style === 'music') {
+    prompt = finishMusicCaption(String(data.prompt || data.idea_en || ''), input.idea, input.lyricsMode);
   } else {
     prompt = String(data.prompt || data.idea_en || '').replace(/\s+/g, ' ').replace(/^["'\s]+|["'\s]+$/g, '').trim();
     if (prompt && quality.suffix && !prompt.includes(quality.suffix)) prompt = `${prompt} ${quality.suffix}`;
