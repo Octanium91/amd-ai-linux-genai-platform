@@ -499,6 +499,8 @@ export async function storyboard(s, preset, input, signal = null) {
   // Names only count when every word of them is in the anchor (the model may not invent characters)
   let names = cleanText(b.data?.names);
   if (!names || [...words(names)].some((w) => !words(anchor).has(w))) names = '';
+  // "Batman, Superman" reads as "Batman and Superman" in front of an action
+  const namesText = names.replace(/\s*,\s*(?:and\s+)?/g, ', ').replace(/, ([^,]+)$/, ' and $1');
   let beats = Array.from({ length: nBeats }, (_, i) => cleanText(b.data?.[`b${i + 1}`])).filter(Boolean);
   if (!beats.length) beats = [anchor];
 
@@ -514,10 +516,12 @@ export async function storyboard(s, preset, input, signal = null) {
       requiredFields(numberedKeys(['a', 'c'], n)), 150 + n * 70, signal);
     for (let k = 0; k < n; k++) {
       let action = r.truncated ? '' : cleanText(r.data?.[`a${k + 1}`]);
-      const camera = r.truncated ? '' : cleanText(r.data?.[`c${k + 1}`]);
+      let camera = r.truncated ? '' : cleanText(r.data?.[`c${k + 1}`]);
+      // One part is one continuous shot: no cuts
+      if (/\bcut/i.test(camera)) camera = '';
       if (!action || seen.has(actionKey(action))) action = seen.has(actionKey(beats[i])) ? list.at(-1)?.action || beats[i] : beats[i];
       // A part that does not name the characters gets them in front, so it still shows them
-      if (names && ![...words(names)].some((w) => words(action).has(w))) action = `${names} ${action}`;
+      if (names && ![...words(names)].some((w) => words(action).has(w))) action = `${namesText}: ${action}`;
       seen.add(actionKey(action));
       list.push({ action, camera });
     }
