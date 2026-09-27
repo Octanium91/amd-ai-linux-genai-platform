@@ -17,6 +17,8 @@ All numbers are measured, not estimated, unless marked as an estimate.
 | Wan 2.2 TI2V 5B Q8_0 | 832×480, 49 frames, 25 steps | ~172 s/step | — | ≈ 2.5–3 h (estimate) |
 | Wan 2.2 TI2V 5B Q8_0, **High** | 832×480, 49 frames (2 s), 40 steps, CFG 5 | 10 400–10 500 s (~265 s/step) | 5 100–5 170 s (tiled VAE) | **4 h 20 min** (two clips, through the UI) |
 | Wan 2.2 TI2V 5B Q8_0 | 832×480, 65 frames, 40 steps | ~207 s/step | — | > 3 h (estimate) |
+| Wan 2.1 VACE 1.3B fp16, **put a person in** | 832×480, 33 frames (2 s at 16 fps), 20 steps, CFG 6, reference photo | ~121 s/step, plus two VAE encodes of ~160 s | — | **49 min** (through the UI) |
+| Wan 2.1 VACE 1.3B fp16, **change a video** | 832×480, 29 frames from a 2 s upload, 20 steps, CFG 6, contour control frames | — | — | **30 min** (through the UI); pose, framing and motion followed the upload, the look followed the prompt |
 
 Peak GTT usage: AnimateDiff and AnimateLCM ~8 GB; Wan 2.2 5B ~16 GB during sampling and up to 22.3 GB during VAE decoding.
 
