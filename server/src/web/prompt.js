@@ -396,16 +396,18 @@ export async function enhancePrompt(s, preset, input, signal = null) {
 // A small model asked for 64 actions at once writes ten and stops; a few short requests keep it on track.
 const BEAT_SECONDS = 12;
 
+// A tiny idea grown into a story on purpose: small models copy the example more than the rules
 const OUTLINE_EXAMPLE = {
-  ask: '4 steps, 48 seconds\nIdea: девушка кормит уток в осеннем парке',
+  ask: '5 steps, 60 seconds\nIdea: собака моргает на солнце',
   answer: {
-    idea_en: 'a girl feeds ducks in an autumn park',
-    subject: 'a young woman with long auburn hair, beige wool coat, red scarf',
-    style: 'autumn park with golden trees and a small pond, soft afternoon light, realistic, cinematic',
-    s1: 'she walks slowly along a leaf-covered path towards the pond, looking around',
-    s2: 'she stops at the water, takes a paper bag out of her pocket and ducks swim closer',
-    s3: 'she crouches and throws crumbs, the ducks gather and she laughs',
-    s4: 'she stands up, brushes off her hands and watches the ducks swim away',
+    idea_en: 'a dog blinks in the sun',
+    subject: 'a golden retriever with a red collar, soft golden fur',
+    style: 'sunny backyard with green grass and a wooden fence, warm afternoon light, realistic, cinematic',
+    s1: 'the dog lies on the grass in the sun, blinking slowly and half asleep',
+    s2: 'a butterfly lands near its nose; the dog lifts its head and watches it',
+    s3: 'the dog gets up and follows the butterfly across the grass, wagging its tail',
+    s4: 'it jumps playfully at the butterfly, which flies up over the fence',
+    s5: 'the dog trots back to its sunny spot, turns around and lies down again, content',
   },
 };
 
