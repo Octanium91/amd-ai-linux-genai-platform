@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Stands in for audiocpp_cli: prints phase lines like audio.cpp --log and writes a WAV of the
+# requested length (a tone); the arguments are kept for the test to check
+out=""; dur=2
+args=("$@")
+for ((i = 0; i < ${#args[@]}; i++)); do
+  case "${args[$i]}" in
+    --out) out="${args[$((i + 1))]}";;
+    --duration-seconds) dur="${args[$((i + 1))]}";;
+  esac
+done
+printf '%s\n' "$@" > /data/t/audio-args
+echo "[TIMING ts=0] ace_step.dit.weights.buffer_mb 100"
+sleep 0.3
+echo "[TIMING ts=0] ace_step.planner.total_ms 10"
+sleep 0.3
+echo "[TIMING ts=0] ace_step.vae.decode.total_ms 10"
+[ -e /data/t/audio-fail ] && { echo "audiocpp_cli failed: out of memory"; exit 3; }
+/usr/bin/ffmpeg -loglevel error -y -f lavfi -i "sine=f=440:d=$dur" "$out" || exit 4
+echo "audio_out=$out"

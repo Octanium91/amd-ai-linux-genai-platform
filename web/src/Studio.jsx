@@ -5,7 +5,7 @@ import GenerateForm from './GenerateForm.jsx';
 import { ActiveJob } from './Jobs.jsx';
 import Gallery, { Modal, ResultHero } from './Gallery.jsx';
 
-// The create workspace: the form on the left (images or video), on the right the running job or
+// The create workspace: the form on the left (images, video or audio), on the right the running job or
 // the latest result with what to do next, a line about the queue and the recent results.
 // The GPU is shared, so the running job is shown whatever its kind.
 export default function Studio({ kind, setKind, user, jobs, presets, templates, system, skew, refresh, reloadPresets, goModels, reuse, onReuseApplied, actions, goGallery, openQueue }) {
@@ -26,6 +26,7 @@ export default function Studio({ kind, setKind, user, jobs, presets, templates, 
         <div className="seg" role="tablist" aria-label={t('What to create')} style={{ marginBottom: 12 }}>
           <button role="tab" aria-selected={kind === 'image'} className={`seg-item ${kind === 'image' ? 'on' : ''}`} style={{ flex: 1, justifyContent: 'center' }} onClick={() => setKind('image')}>🖼 {t('Image')}</button>
           <button role="tab" aria-selected={kind === 'video'} className={`seg-item ${kind === 'video' ? 'on' : ''}`} style={{ flex: 1, justifyContent: 'center' }} onClick={() => setKind('video')}>🎬 {t('Video')}</button>
+          <button role="tab" aria-selected={kind === 'audio'} className={`seg-item ${kind === 'audio' ? 'on' : ''}`} style={{ flex: 1, justifyContent: 'center' }} onClick={() => setKind('audio')}>♪ {t('Audio')}</button>
         </div>
         <GenerateForm
           key={kind}

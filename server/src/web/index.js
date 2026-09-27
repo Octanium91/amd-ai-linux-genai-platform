@@ -324,6 +324,15 @@ api.post('/cutout', upload.single('image'), async (req, res) => {
 api.post('/jobs/:id/as-input', async (req, res) => {
   const job = await findJob(req.params.id);
   const file = job.files?.[Number(req.body?.index) || 0];
+  // An audio result becomes a soundtrack upload
+  if (file && /\.(mp3|wav)$/i.test(file)) {
+    const src = path.join(dirs.output, path.basename(file));
+    const type = fs.existsSync(src) && audioType(src);
+    if (!type) return res.status(404).json({ error: 'The file of this job has been deleted' });
+    const audio = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}.${type}`;
+    fs.copyFileSync(src, path.join(dirs.uploads, audio));
+    return res.json({ audio });
+  }
   if (!file || !/\.(png|jpe?g|webp)$/i.test(file)) return res.status(400).json({ error: 'Only images can be used as a photo' });
   const src = path.join(dirs.output, path.basename(file));
   const type = fs.existsSync(src) && imageType(src);

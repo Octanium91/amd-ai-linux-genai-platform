@@ -1,4 +1,4 @@
-import { dateLocale, t, tError } from './i18n.js';
+import { dateLocale, getLang, t, tError } from './i18n.js';
 
 // Every mutating request carries the CSRF header; 401 means the session has expired
 export const CSRF = { 'X-Requested-With': 'genai-platform' };
@@ -55,6 +55,12 @@ export const STAGES = {
     { key: 'decoding', label: 'Finishing' },
     { key: 'saving', label: 'Saving the video' },
   ],
+  audio: [
+    { key: 'prepare', label: 'Getting ready' },
+    { key: 'sampling', label: 'Composing' },
+    { key: 'decoding', label: 'Finishing' },
+    { key: 'saving', label: 'Saving' },
+  ],
   image: [
     { key: 'prepare', label: 'Getting ready' },
     { key: 'sampling', label: 'Drawing' },
@@ -81,6 +87,21 @@ export const STATUS_LABEL = {
 };
 
 export const jobKind = (j) => j.params?.kind || 'video';
+
+// Speech: the built-in voices (F1–F5, M1–M5) and the languages of the speech model
+export const SPEECH_VOICES = ['F1', 'F2', 'F3', 'F4', 'F5', 'M1', 'M2', 'M3', 'M4', 'M5'];
+export const SPEECH_LANGS = ['en', 'uk', 'ru', 'de', 'fr', 'es', 'it', 'pt', 'pl', 'cs', 'sk', 'sl', 'hr', 'bg', 'ro', 'hu', 'nl', 'sv', 'da', 'fi', 'et', 'lv', 'lt', 'el', 'tr', 'ar', 'hi', 'id', 'vi', 'ja', 'ko'];
+export const voiceName = (v) => (/^F\d$/.test(v || '') ? t('Female {n}', { n: v.slice(1) }) : /^M\d$/.test(v || '') ? t('Male {n}', { n: v.slice(1) }) : v || '');
+export function langName(code) {
+  try {
+    const name = new Intl.DisplayNames([getLang()], { type: 'language' }).of(code);
+    return name ? name[0].toUpperCase() + name.slice(1) : code;
+  } catch {
+    return code;
+  }
+}
+// The length of an audio result: measured after saving, otherwise the requested one
+export const audioSeconds = (j) => j.audioSec ?? j.params?.duration ?? null;
 export const fileUrl = (name) => `/files/output/${encodeURIComponent(name)}`;
 
 function stageDuration(job, key) {
@@ -99,7 +120,28 @@ const scaleRun = (r, p, gpuFactor = 1) =>
 
 // Time estimate: from the latest successful job of the same mode on this machine; before the first
 // one, from the mode's reference measurement scaled by the relative power of this GPU.
+// Audio has no steps to count: the time grows with the length (music, effects) or the text
+// (speech). The last run of the mode gives the rate; before that, the mode's reference measurement.
+function estimateAudio(jobs, params, preset) {
+  const speech = params.task === 'speech' || preset?.engine?.task === 'tts';
+  const amount = (p, j) => (speech ? String(p.prompt || '').length : Number(j?.audioSec ?? p.duration) || 0);
+  const job = jobs
+    .filter((j) => j.status === 'done' && j.params.presetId === params.presetId && j.durationSec)
+    .sort((a, b) => b.finishedAt - a.finishedAt)[0];
+  const want = amount(params);
+  const ref = preset?.reference || {};
+  const fixed = ref.fixedSec ?? 3;
+  if (job) {
+    const had = amount(job.params, job);
+    const rate = had > 0 ? Math.max(0, job.durationSec - fixed) / had : 0;
+    return { sec: fixed + rate * want, source: 'history' };
+  }
+  if (preset?.reference) return { sec: fixed + (speech ? ref.perChar ?? 0.01 : ref.perAudioSec ?? 1) * want, source: 'reference' };
+  return null;
+}
+
 export function estimate(jobs, params, preset, gpuPower) {
+  if (preset?.kind === 'audio') return estimateAudio(jobs, params, preset);
   const job = jobs
     .filter((j) => j.status === 'done' && j.params.presetId === params.presetId && j.progress)
     .sort((a, b) => b.finishedAt - a.finishedAt)[0];

@@ -101,6 +101,7 @@ export function jobParams(preset, body, image, inputs = {}) {
   if (image && ['rework', 'inpaint'].includes(inputs.task) && body.strength != null && body.strength !== '') {
     params.strength = clamp(body.strength, 0.05, 1, null);
   }
+  if (preset.kind === 'audio') return Object.assign(params, audioParams(preset, body, inputs.task));
   if (preset.kind === 'image') {
     params.count = Math.round(clamp(body.count, 1, 8, 1));
   } else {
@@ -117,6 +118,27 @@ export function jobParams(preset, body, image, inputs = {}) {
   return params;
 }
 
+// Music and sound effects have a length (the mode's range); music may carry lyrics: empty lets the
+// model write them, "[Instrumental]" asks for no vocals. Speech has a voice, a language and a speed.
+const VOICE = /^[A-Za-z0-9_-]{1,32}$/;
+const LANGUAGE = /^[a-z]{2}(-[a-z]{2})?$/;
+function audioParams(preset, body, task) {
+  const d = preset.defaults || {};
+  const out = { count: 1, width: null, height: null, cfg: null, sampler: null, flowShift: null, negative: '' };
+  if (task === 'speech') {
+    out.voice = VOICE.test(body.voice || '') ? body.voice : d.voice || null;
+    out.language = LANGUAGE.test(body.language || '') ? body.language : d.language || 'en';
+    out.speed = Math.round(clamp(body.speed, 0.5, 2, d.speed ?? 1) * 100) / 100;
+  } else {
+    out.duration = Math.round(clamp(body.duration, d.minDuration ?? 1, d.maxDuration ?? 30, d.duration ?? 10));
+  }
+  if (task === 'music') {
+    const lyrics = String(body.lyrics ?? '').trim().slice(0, 4000);
+    out.lyrics = body.lyricsMode === 'instrumental' ? '[Instrumental]' : body.lyricsMode === 'auto' ? '' : lyrics;
+  }
+  return out;
+}
+
 // What the worker needs to build the sd-cli command: model files by role and the mode's flags
 export function jobSpec(preset) {
   const catalog = loadCatalog();
@@ -128,6 +150,7 @@ export function jobSpec(preset) {
     imageArgs: preset.imageArgs || [],
     continueArgs: preset.continueArgs || null,
     preview: preset.preview || null,
+    engine: preset.engine || null,
     extraArgs: preset.extraArgs || [],
   };
 }

@@ -946,5 +946,126 @@
         "description": "Вставляет человека или предмет с фото в новое видео либо сохраняет движение загруженного видео и меняет его вид. Wan 2.1 на 16 fps, один проход до 5 с."
       }
     }
+  },
+  {
+    "id": "aud-ace-step",
+    "kind": "audio",
+    "name": "ACE-Step 1.5 · music",
+    "description": "Songs with vocals from a style description and lyrics (yours or written by the model), or instrumentals. A 30 s track takes about 40 s.",
+    "tasks": [
+      "music"
+    ],
+    "image": "none",
+    "models": {
+      "model": "ace-step-15-turbo-q8"
+    },
+    "engine": {
+      "family": "ace_step",
+      "task": "gen",
+      "route": "text2music"
+    },
+    "defaults": {
+      "duration": 30,
+      "minDuration": 10,
+      "maxDuration": 240,
+      "quality": {
+        "normal": 8
+      }
+    },
+    "reference": {
+      "fixedSec": 8,
+      "perAudioSec": 0.95
+    },
+    "preview": "none",
+    "i18n": {
+      "uk": {
+        "name": "ACE-Step 1.5 · музика",
+        "description": "Пісні з вокалом за описом стилю й текстом (вашим або написаним моделлю) чи інструментал. Трек на 30 с — близько 40 с."
+      },
+      "ru": {
+        "name": "ACE-Step 1.5 · музыка",
+        "description": "Песни с вокалом по описанию стиля и тексту (вашему или написанному моделью) или инструментал. Трек на 30 с — около 40 с."
+      }
+    }
+  },
+  {
+    "id": "aud-stable-audio-sfx",
+    "kind": "audio",
+    "name": "Stable Audio 3 Small · sound effects",
+    "description": "Sound effects and ambiences from an English description, up to 30 s. A 10 s effect takes a few seconds.",
+    "tasks": [
+      "sfx"
+    ],
+    "image": "none",
+    "models": {
+      "model": "stable-audio-3-small-sfx-q8"
+    },
+    "engine": {
+      "family": "stable_audio",
+      "task": "gen"
+    },
+    "defaults": {
+      "duration": 8,
+      "minDuration": 1,
+      "maxDuration": 30,
+      "quality": {
+        "normal": 8
+      }
+    },
+    "reference": {
+      "fixedSec": 2.5,
+      "perAudioSec": 0.15
+    },
+    "preview": "none",
+    "i18n": {
+      "uk": {
+        "name": "Stable Audio 3 Small · звукові ефекти",
+        "description": "Звукові ефекти й атмосфера за англійським описом, до 30 с. Ефект на 10 с — кілька секунд."
+      },
+      "ru": {
+        "name": "Stable Audio 3 Small · звуковые эффекты",
+        "description": "Звуковые эффекты и атмосфера по английскому описанию, до 30 с. Эффект на 10 с — несколько секунд."
+      }
+    }
+  },
+  {
+    "id": "aud-supertonic",
+    "kind": "audio",
+    "name": "Supertonic 3 · speech",
+    "description": "Reads a text aloud in one of 10 voices, in 31 languages including English, Ukrainian and Russian.",
+    "tasks": [
+      "speech"
+    ],
+    "image": "none",
+    "models": {
+      "model": "supertonic-3-f16"
+    },
+    "engine": {
+      "family": "supertonic",
+      "task": "tts"
+    },
+    "defaults": {
+      "voice": "F1",
+      "language": "en",
+      "speed": 1,
+      "quality": {
+        "normal": 8
+      }
+    },
+    "reference": {
+      "fixedSec": 2,
+      "perChar": 0.01
+    },
+    "preview": "none",
+    "i18n": {
+      "uk": {
+        "name": "Supertonic 3 · мовлення",
+        "description": "Читає текст уголос одним із 10 голосів 31 мовою, зокрема англійською, українською й російською."
+      },
+      "ru": {
+        "name": "Supertonic 3 · речь",
+        "description": "Читает текст вслух одним из 10 голосов на 31 языке, в том числе английском, украинском и русском."
+      }
+    }
   }
 ]

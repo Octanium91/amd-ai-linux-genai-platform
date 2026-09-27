@@ -8,7 +8,7 @@ const DATA = '/data/t';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let worker;
 const startWorker = () => {
-  worker = spawn('node', ['/src/worker/index.js'], { env: { ...process.env, DATA_DIR: DATA, WORKER_PORT: '7999', SD_CLI: '/fake/sd-cli', PATH: `/fake/bin:${process.env.PATH}` }, stdio: ['ignore', 'pipe', 'pipe'] });
+  worker = spawn('node', ['/src/worker/index.js'], { env: { ...process.env, DATA_DIR: DATA, WORKER_PORT: '7999', SD_CLI: '/fake/sd-cli', AUDIO_CLI: '/fake/audiocpp-cli', PATH: `/fake/bin:${process.env.PATH}` }, stdio: ['ignore', 'pipe', 'pipe'] });
   worker.stdout.on('data', (d) => process.env.VERBOSE && process.stdout.write('  | ' + d));
   worker.stderr.on('data', (d) => process.stdout.write('  ! ' + d));
 };
@@ -221,6 +221,27 @@ check('no temporary soundtrack file is left', !outputFiles().some((f) => f.inclu
 let mute = (await api('/v1/jobs', 'POST', withSound('2-bbbbbb.mp4'))).body;
 mute = await waitFor(mute.id, (j) => ['done', 'failed'].includes(j.status));
 check('a soundtrack without sound leaves the clip silent with a warning', mute.status === 'done' && /sound could not be added/.test(mute.warning || '') && !probe(mute.files[0]).some((l) => l.startsWith('audio')), `${mute.status} ${mute.warning}`);
+
+// Audio: one audio.cpp run with the mode's engine settings; the result is an MP3 with a waveform
+// thumbnail and its measured length
+fs.mkdirSync(`${DATA}/models/audio`, { recursive: true });
+fs.writeFileSync(`${DATA}/models/audio/m.gguf`, 'x');
+const audioSpec = { kind: 'audio', models: [{ role: 'model', id: 'm', name: 'M', file: 'audio/m.gguf' }], engine: { family: 'ace_step', task: 'gen', route: 'text2music' }, extraArgs: [] };
+const audioJob = () => ({ user: 'test', spec: audioSpec, params: { kind: 'audio', presetId: 'a', task: 'music', prompt: 'lofi piano', negative: '', seed: 5, steps: 8, count: 1, duration: 3, lyrics: '[Instrumental]' } });
+let au = (await api('/v1/jobs', 'POST', audioJob())).body;
+au = await waitFor(au.id, (j) => ['done', 'failed'].includes(j.status));
+const aargs = fs.readFileSync(`${DATA}/audio-args`, 'utf8').split('\n');
+const flag = (f) => aargs[aargs.indexOf(f) + 1];
+check('audio: music job runs audio.cpp with the engine settings', au.status === 'done' && flag('--family') === 'ace_step' && flag('--task-route') === 'text2music'
+  && flag('--duration-seconds') === '3' && flag('--lyrics') === '[Instrumental]' && flag('--backend') === 'vulkan' && flag('--seed') === '5', `${au.status} ${au.error || ''} ${aargs.join(' ')}`);
+check('audio: an mp3 with a waveform thumbnail and its length', au.files?.[0]?.endsWith('.mp3') && !!au.thumb && Math.abs(au.audioSec - 3) < 0.2 && !outputFiles().some((f) => f.includes('_audio')),
+  `${au.files} ${au.thumb} ${au.audioSec}`);
+check('audio: stages follow the engine phases', ['prepare', 'sampling', 'decoding', 'saving'].every((k) => au.progress?.stages?.[k]), Object.keys(au.progress?.stages || {}).join());
+fs.writeFileSync(`${DATA}/audio-fail`, '1');
+let af = (await api('/v1/jobs', 'POST', audioJob())).body;
+af = await waitFor(af.id, (j) => ['done', 'failed'].includes(j.status));
+fs.rmSync(`${DATA}/audio-fail`);
+check('audio: an engine error fails the job with its message', af.status === 'failed' && /out of memory/.test(af.error || ''), `${af.status} ${af.error}`);
 
 worker.kill();
 console.log(failed ? `${failed} FAILED` : 'ALL PASSED');

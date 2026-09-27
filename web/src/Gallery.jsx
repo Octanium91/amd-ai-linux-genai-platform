@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { clipSeconds, fileUrl, fmtDate, fmtDuration, jobKind, STATUS_LABEL } from './util.js';
+import { audioSeconds, clipSeconds, fileUrl, fmtDate, fmtDuration, jobKind, STATUS_LABEL } from './util.js';
 import { t, tError } from './i18n.js';
 import { LogView, ParamChips } from './Jobs.jsx';
 
@@ -12,6 +12,17 @@ export function confirmDelete(job, onDelete) {
 
 const isVideoFile = (f) => /\.(mp4|webm)$/i.test(f);
 const isImageFile = (f) => /\.(png|jpe?g|webp)$/i.test(f);
+const isAudioFile = (f) => /\.(mp3|wav|ogg|flac|m4a)$/i.test(f);
+
+// An audio result: its waveform picture over the player
+function AudioView({ job, file, autoPlay = false }) {
+  return (
+    <div className="audio-view">
+      {job.thumb && <img src={`/files/thumbs/${job.thumb}?v=${job.finishedAt || 0}`} alt="" />}
+      <audio key={file} src={fileUrl(file)} controls autoPlay={autoPlay} preload="metadata" />
+    </div>
+  );
+}
 
 // What can be done with a finished result. An image can go on as the photo of another task;
 // every job can be edited and run again. `acts` carries the handlers from App.
@@ -19,6 +30,7 @@ export function NextActions({ job, index = 0, acts, onDone, primaryDownload = tr
   const [msg, setMsg] = useState(null);
   const file = job.files?.[index];
   const image = file && isImageFile(file);
+  const audio = file && isAudioFile(file);
   const run = async (fn, okText) => {
     setMsg({ busy: true });
     try {
@@ -44,6 +56,9 @@ export function NextActions({ job, index = 0, acts, onDone, primaryDownload = tr
             <button className="btn" onClick={() => run(() => acts.onFollowUp(job, index, 'video', 'animate'))}>🎬 {t('Animate')}</button>
             <button className="btn" onClick={() => run(() => acts.onFollowUp(job, index, 'image', 'cutout'))}>✂ {t('Remove background')}</button>
           </>
+        )}
+        {audio && acts.onSoundtrack && (
+          <button className="btn" onClick={() => run(() => acts.onSoundtrack(job, index))}>🎬 {t('Use as the sound of a video')}</button>
         )}
         <button className="btn ghost" onClick={() => { acts.onReuse(job); onDone?.(); }}>↻ {t('Edit and run again')}</button>
       </div>
@@ -89,6 +104,8 @@ export function Modal({ job, onClose, canManage, onDelete, ...acts }) {
         <button className="btn-icon modal-x" onClick={onClose} title={t('Close')}>×</button>
         {file && isVideoFile(file) ? (
           <video key={file} src={fileUrl(file)} controls autoPlay loop playsInline />
+        ) : file && isAudioFile(file) ? (
+          <AudioView job={job} file={file} autoPlay />
         ) : file && isImageFile(file) ? (
           <img className="modal-img" key={file} src={fileUrl(file)} alt="" />
         ) : file ? (
@@ -137,18 +154,24 @@ export function Modal({ job, onClose, canManage, onDelete, ...acts }) {
 
 // One result tile; used by the recent results and by the library
 export function Tile({ job: j, onOpen, onDelete, onReuse, onRetry, canManage, showKind = false }) {
-  const video = jobKind(j) === 'video';
+  const kind = jobKind(j);
+  const video = kind === 'video';
+  const audio = kind === 'audio';
+  const kindLabel = { video: t('Video'), image: t('Image'), audio: t('Audio') }[kind];
+  const size = video ? t('{s} s', { s: clipSeconds(j.params).toFixed(1) })
+    : audio ? (audioSeconds(j) ? fmtDuration(audioSeconds(j)) : '')
+      : `${j.params.width}×${j.params.height}`;
   return (
     <div className={`tile ${j.status}`}>
-      <button className={`thumb ${video ? '' : 'thumb-img'}`} onClick={() => onOpen(j)} title={t('Open')}>
+      <button className={`thumb ${video || audio ? '' : 'thumb-img'}`} onClick={() => onOpen(j)} title={t('Open')}>
         {/* Thumbnails are cached for days: the version changes when a restarted job finishes again */}
         {j.thumb ? <img src={`/files/thumbs/${j.thumb}?v=${j.finishedAt || 0}`} alt="" loading="lazy" />
           : <div className="thumb-empty">{j.status === 'failed' && j.error ? tError(j.error) : t(STATUS_LABEL[j.status])}</div>}
-        {j.status === 'done' && video && <span className="play">▶</span>}
+        {j.status === 'done' && (video || audio) && <span className="play">{audio ? '♪' : '▶'}</span>}
         <span className="badge">
-          {showKind ? `${video ? t('Video') : t('Image')} · ` : ''}
-          {video ? t('{s} s', { s: clipSeconds(j.params).toFixed(1) }) : `${j.params.width}×${j.params.height}`}
-          {!video && j.files?.length > 1 ? ` · ${t('{n} pcs', { n: j.files.length })}` : ''}
+          {showKind ? `${kindLabel}${size ? ' · ' : ''}` : ''}
+          {size}
+          {kind === 'image' && j.files?.length > 1 ? ` · ${t('{n} pcs', { n: j.files.length })}` : ''}
         </span>
         {j.status !== 'done' && <span className={`badge st ${j.status}`}>{t(STATUS_LABEL[j.status])}</span>}
       </button>
@@ -176,6 +199,7 @@ export function ResultHero({ job, acts, onOpen }) {
       <div className="hero">
         <div className="hero-media" onClick={() => onOpen(job)} title={t('Open')}>
           {file && isVideoFile(file) ? <video src={fileUrl(file)} autoPlay loop muted playsInline />
+            : file && isAudioFile(file) ? <div onClick={(e) => e.stopPropagation()}><AudioView job={job} file={file} /></div>
             : file && isImageFile(file) ? <img src={fileUrl(file)} alt="" />
               : <div className="thumb-empty" style={{ aspectRatio: '16 / 9' }}>{job.error ? tError(job.error) : t(STATUS_LABEL[job.status])}</div>}
         </div>
@@ -199,6 +223,7 @@ export default function Gallery({ kind, jobs, onOpenAll, ...acts }) {
   const shown = jobs.slice(0, RECENT);
   const open = jobs.find((j) => j.id === openId);
   const video = kind === 'video';
+  const wide = video || kind === 'audio';
 
   return (
     <div className="card">
@@ -209,9 +234,9 @@ export default function Gallery({ kind, jobs, onOpenAll, ...acts }) {
         )}
       </div>
       {!shown.length ? (
-        <div className="muted empty">{video ? t('Finished videos will appear here.') : t('Finished images will appear here.')}</div>
+        <div className="muted empty">{video ? t('Finished videos will appear here.') : kind === 'audio' ? t('Finished music, sounds and speech will appear here.') : t('Finished images will appear here.')}</div>
       ) : (
-        <div className={`grid ${video ? '' : 'grid-img'}`}>
+        <div className={`grid ${wide ? '' : 'grid-img'}`}>
           {shown.map((j) => <Tile key={j.id} job={j} onOpen={(x) => setOpenId(x.id)} {...acts} />)}
         </div>
       )}

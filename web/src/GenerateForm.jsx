@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, CSRF, estimate, fmtBytes, fmtDuration } from './util.js';
-import { loc, t, tError } from './i18n.js';
+import { api, CSRF, estimate, fmtBytes, fmtDuration, langName, SPEECH_LANGS, SPEECH_VOICES, voiceName } from './util.js';
+import { getLang, loc, t, tError } from './i18n.js';
 
 const FALLBACK_RES = [[512, 512], [768, 512], [512, 768]];
 const OUT_FPS = [24, 30, 50, 60, 120];
@@ -27,6 +27,11 @@ const TASKS = {
     { key: 'animate', label: 'Animate a photo', title: 'Your photo becomes the first frame and comes alive', image: true },
     { key: 'reference', label: 'Put a person in', title: 'A person or object from a photo in a new video', image: true },
     { key: 'restyle', label: 'Change a video', title: 'The motion of your video with a new look', video: true, imageOptional: true },
+  ],
+  audio: [
+    { key: 'music', label: 'Music', title: 'A song with vocals or an instrumental from a description' },
+    { key: 'sfx', label: 'Sound effect', title: 'A sound or an ambience from a description' },
+    { key: 'speech', label: 'Speech', title: 'A text read aloud in a chosen voice' },
   ],
 };
 const fitsTask = (p, task) => (p.tasks || ['create']).includes(task.key);
@@ -93,7 +98,72 @@ function fromPreset(p) {
     seed: -1,
     // Frames per model pass; empty means the length the model was trained on
     segmentFrames: null,
+    // Audio: lyrics (the model writes them, yours, or none) and the speech voice
+    lyricsMode: 'auto',
+    lyrics: '',
+    voice: d.voice ?? 'F1',
+    language: SPEECH_LANGS.includes(getLang()) ? getLang() : d.language ?? 'en',
+    speed: d.speed ?? 1,
   };
+}
+
+// Audio settings: lyrics and length for music, length for sound effects, voice, language and speed
+// for speech
+function AudioFields({ task, form, set, preset }) {
+  const d = preset?.defaults || {};
+  if (task === 'speech') {
+    return (
+      <>
+        <div className="field">
+          <span className="field-label">{t('Voice')}</span>
+          <div className="chips">
+            {SPEECH_VOICES.map((v) => (
+              <button key={v} type="button" className={`chip ${form.voice === v ? 'on' : ''}`} onClick={() => set('voice')(v)}>{voiceName(v)}</button>
+            ))}
+          </div>
+        </div>
+        <label className="field">
+          <span className="field-label">{t('Language of the text')} <Info text={t('The language the text is written in; the voice reads it with that pronunciation.')} /></span>
+          <select value={form.language} onChange={(e) => set('language')(e.target.value)}>
+            {SPEECH_LANGS.map((c) => <option key={c} value={c}>{langName(c)}</option>)}
+          </select>
+        </label>
+        <label className="field">
+          <span className="field-label field-label-row"><span>{t('Speed')}</span><b>×{Number(form.speed).toFixed(2)}</b></span>
+          <input type="range" min={0.7} max={1.5} step={0.05} value={form.speed} onChange={(e) => set('speed')(Number(e.target.value))} />
+          <div className="field-label-row small muted"><span>{t('Slower')}</span><span>{t('Faster')}</span></div>
+        </label>
+      </>
+    );
+  }
+  const min = d.minDuration ?? 1;
+  const max = d.maxDuration ?? 30;
+  const step = task === 'music' ? 5 : 1;
+  return (
+    <>
+      {task === 'music' && (
+        <div className="field">
+          <span className="field-label">{t('Lyrics')} <Info text={t('Mark parts with [verse], [chorus], [bridge]. The model sings in the language of the lyrics.')} /></span>
+          <div className="seg" role="radiogroup" aria-label={t('Lyrics')}>
+            {[['auto', t('The model writes them')], ['mine', t('My lyrics')], ['instrumental', t('No vocals')]].map(([k, label]) => (
+              <button key={k} type="button" role="radio" aria-checked={form.lyricsMode === k} className={`seg-item ${form.lyricsMode === k ? 'on' : ''}`}
+                style={{ flex: 1, justifyContent: 'center' }} onClick={() => set('lyricsMode')(k)}>{label}</button>
+            ))}
+          </div>
+          {form.lyricsMode === 'mine' && (
+            <textarea rows={6} value={form.lyrics} placeholder={'[verse]\nMorning light on the empty street\n[chorus]\nWe are running, we are free'}
+              onChange={(e) => set('lyrics')(e.target.value)} />
+          )}
+          {form.lyricsMode === 'auto' && <span className="field-hint">{t('The model writes lyrics that fit the description.')}</span>}
+        </div>
+      )}
+      <label className="field">
+        <span className="field-label field-label-row"><span>{t('Length')}</span><b>{fmtDuration(form.duration)}</b></span>
+        <input type="range" min={min} max={max} step={step} value={Math.min(max, Math.max(min, form.duration))} onChange={(e) => set('duration')(Number(e.target.value))} />
+        <div className="field-label-row small muted"><span>{fmtDuration(min)}</span><span>{fmtDuration(max)}</span></div>
+      </label>
+    </>
+  );
 }
 
 // Same function as on the server (server/src/web/params.js): frames per model pass and the number
@@ -150,6 +220,9 @@ const TASK_ICONS = {
   reference: 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-3.3 0-7 1.7-7 4.5V20h11.1a6 6 0 0 1 3.9-6.2C15.4 13.3 12.4 13 9 13zm10 1v3h3v2h-3v3h-2v-3h-3v-2h3v-3h2z',
   restyle: 'M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm0 2v12h16V6H4zm2 2h2v2H6V8zm0 6h2v2H6v-2zm10-6h2v2h-2V8zm0 6h2v2h-2v-2zm-5.5-5 4 3-4 3V9z',
 };
+TASK_ICONS.music = 'M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z';
+TASK_ICONS.sfx = 'M3 10h2v4H3v-4zm4-3h2v10H7V7zm4-4h2v18h-2V3zm4 4h2v10h-2V7zm4 3h2v4h-2v-4z';
+TASK_ICONS.speech = 'M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-3.1A7 7 0 0 0 19 11h-2z';
 const TaskIcon = ({ name }) => (
   <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d={TASK_ICONS[name] || TASK_ICONS.create} fill="currentColor" /></svg>
 );
@@ -487,7 +560,13 @@ function CutoutEditor({ src, file, imageRef }) {
 // The prompt field with the "To prompt" assistant: an Ollama model (connected by an administrator
 // in Settings) rewrites the description into a detailed English prompt for the selected mode.
 // The previous text can be restored with one click.
-function PromptField({ form, set, preset, isVideo, hasImage, duration, task, user }) {
+const AUDIO_PROMPT = {
+  music: { label: 'Describe the music', placeholder: 'upbeat indie pop, bright electric guitars, punchy drums, warm female vocal' },
+  sfx: { label: 'Describe the sound', placeholder: 'heavy rain on a tin roof with distant rolling thunder' },
+  speech: { label: 'Text to read aloud', placeholder: null },
+};
+
+function PromptField({ form, set, preset, isVideo, hasImage, duration, task, user, audio = false }) {
   const [status, setStatus] = useState(null);
   const [busy, setBusy] = useState(false);
   const [undo, setUndo] = useState(null);
@@ -529,13 +608,14 @@ function PromptField({ form, set, preset, isVideo, hasImage, duration, task, use
 
   const admin = user?.role === 'admin';
   // Not set up: users do not see the button at all, administrators get a hint where to set it up
-  const showButton = ready || status?.enabled || admin;
+  const showButton = !audio && (ready || status?.enabled || admin);
+  const ap = audio ? AUDIO_PROMPT[task] : null;
   return (
     <div className="field">
-      <label className="field-label" htmlFor="prompt-text">{isVideo ? t('Describe the video') : t('Describe the picture')}</label>
+      <label className="field-label" htmlFor="prompt-text">{ap ? t(ap.label) : isVideo ? t('Describe the video') : t('Describe the picture')}</label>
       <div className="prompt-box">
-        <textarea id="prompt-text" rows={4} value={form.prompt} required disabled={busy}
-          placeholder={ready
+        <textarea id="prompt-text" rows={task === 'speech' ? 6 : 4} value={form.prompt} required disabled={busy}
+          placeholder={ap ? ap.placeholder || t('Hello! This text will be read aloud.') : ready
             ? t('Describe your idea in any language — ✦ turns it into a detailed prompt')
             : isVideo ? 'a red fox running through fresh snow, cinematic lighting, slow motion' : 'portrait photo of an old fisherman, golden hour, 85mm, detailed skin'}
           onChange={(e) => {
@@ -560,7 +640,8 @@ function PromptField({ form, set, preset, isVideo, hasImage, duration, task, use
         </div>
       </div>
       {error && <div className="note warn">⚠ {error}</div>}
-      {!ready && admin && !status?.enabled && <div className="note">{t('Connect an Ollama model in Settings to turn a short description into a detailed prompt.')}</div>}
+      {task === 'sfx' && <span className="field-hint">{t('Describe it in English: the sound model understands only English.')}</span>}
+      {!audio && !ready && admin && !status?.enabled && <div className="note">{t('Connect an Ollama model in Settings to turn a short description into a detailed prompt.')}</div>}
     </div>
   );
 }
@@ -634,7 +715,7 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [drag, setDrag] = useState(false);
-  const [taskKey, setTaskKey] = useState('create');
+  const [taskKey, setTaskKey] = useState(() => (TASKS[kind] || TASKS.image)[0].key);
   const [allSizes, setAllSizes] = useState(false);
   const [maskBlob, setMaskBlob] = useState(null); // a promise of the mask PNG
   const [photoSize, setPhotoSize] = useState(null); // [width, height] of the current photo
@@ -644,6 +725,7 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
   const fileInput = useRef(null);
   const videoInput = useRef(null);
   const isVideo = kind === 'video';
+  const isAudio = kind === 'audio';
   const tasks = TASKS[kind] || TASKS.image;
   const task = tasks.find((x) => x.key === taskKey) || tasks[0];
 
@@ -663,8 +745,15 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
 
   useEffect(() => {
     if (!reuse || (reuse.kind || 'video') !== kind) return;
+    // An audio result as the sound of the video being made: nothing else in the form changes
+    if (reuse.soundOnly) {
+      setSound({ ...NO_SOUND, source: 'file', ref: reuse.audio });
+      onReuseApplied?.();
+      return;
+    }
     const { _t, image: img, video: _v, mask: _m, audio, audioStart, audioFade, task: _task, presetName, frames, steps, fps, segments, kind: _k, ...params } = reuse;
     params.quality ??= 'normal';
+    if (kind === 'audio') params.lyricsMode = params.lyrics === '[Instrumental]' ? 'instrumental' : params.lyrics ? 'mine' : 'auto';
     setForm((f) => ({ ...(f || {}), ...params }));
     setImage(null);
     setImageRef(img || null);
@@ -674,7 +763,7 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
       : audio === reuse.video ? { ...NO_SOUND, source: 'video' }
         : { ...NO_SOUND, source: 'file', ref: audio, start: audioStart || 0, fade: audioFade !== false });
     setMaskBlob(null);
-    setTaskKey(reuse.task || (img ? (kind === 'video' ? 'animate' : 'rework') : 'create'));
+    setTaskKey(reuse.task || (img ? (kind === 'video' ? 'animate' : 'rework') : (TASKS[kind] || TASKS.image)[0].key));
     // Applied once: coming back to the tab later must not overwrite what the user typed since
     onReuseApplied?.();
   }, [reuse, kind]);
@@ -747,11 +836,13 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
   const offSize = !!recommended && !recommended.some(([w, h]) => w === Number(form.width) && h === Number(form.height));
   const steps = qualitySteps(d, form.quality) ?? 20;
   const extraDuration = isVideo && plan.segments > 1;
-  const eta = estimate(jobs, isVideo ? { ...form, frames: plan.frames * plan.segments, steps } : { ...form, frames: form.count, steps }, preset, system?.gpuPower);
+  const eta = estimate(jobs, isVideo ? { ...form, frames: plan.frames * plan.segments, steps }
+    : isAudio ? { ...form, task: task.key } : { ...form, frames: form.count, steps }, preset, system?.gpuPower);
   // The time per result of every mode card, at its own default size and the chosen quality
   const modeEta = (p) => {
     if (p.id === form.presetId) return eta;
     const pd = p.defaults || {};
+    if (isAudio) return estimate(jobs, { presetId: p.id, task: task.key, prompt: form.prompt, duration: pd.duration }, p);
     const pSteps = qualitySteps(pd, form.quality) ?? pd.steps ?? 20;
     const pPlan = videoPlan(p, form.duration);
     const params = { presetId: p.id, width: pd.width, height: pd.height, cfg: pd.cfg, steps: pSteps, frames: isVideo ? pPlan.frames * pPlan.segments : form.count };
@@ -829,6 +920,7 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
   };
 
   const summary = upscale ? t('4× larger')
+    : isAudio ? (task.key === 'speech' ? t('{n} characters', { n: form.prompt.length }) : fmtDuration(form.duration))
     : isVideo
       ? [t('{s} s video', { s: plan.duration.toFixed(1) }), plan.segments > 1 ? t('from {n} parts', { n: plan.segments }) : null, `${form.outFps} fps`, `${form.width}×${form.height}`].filter(Boolean).join(' · ')
       : [form.count > 1 ? t('{n} images', { n: form.count }) : t('1 image'), `${form.width}×${form.height}`].join(' · ');
@@ -838,7 +930,8 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
       : task.image && !image && !imageRef ? t('Add a photo')
         : task.mask && !maskBlob ? t('Paint the part to change')
           : task.video && !video && !videoRef ? t('Add a video')
-            : !upscale && !form.prompt.trim() ? t('Describe what to create') : null;
+            : !upscale && !form.prompt.trim() ? (task.key === 'speech' ? t('Enter the text to read') : t('Describe what to create'))
+              : task.key === 'music' && form.lyricsMode === 'mine' && !form.lyrics.trim() ? t('Write the lyrics or choose who writes them') : null;
   const tested = (w, h) => recommended?.some(([a, b]) => a === w && b === h);
   const shownSizes = recommended && !allSizes ? resolutions.filter(([w, h]) => tested(w, h) || (w === Number(form.width) && h === Number(form.height))) : resolutions;
 
@@ -941,8 +1034,10 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
       )}
 
       {!upscale && (
-        <PromptField form={form} set={set} preset={preset} isVideo={isVideo} hasImage={!!(acceptsImage && (image || imageRef))} duration={plan.duration} task={task.key} user={user} />
+        <PromptField form={form} set={set} preset={preset} isVideo={isVideo} hasImage={!!(acceptsImage && (image || imageRef))} duration={plan.duration} task={task.key} user={user} audio={isAudio} />
       )}
+
+      {isAudio && <AudioFields task={task.key} form={form} set={set} preset={preset} />}
 
       {task.strength != null && (
         <label className="field">
@@ -988,7 +1083,22 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
         <MissingModels preset={preset} user={user} goModels={goModels} reloadPresets={reloadPresets} />
       )}
 
-      {!upscale && (<>
+      {isAudio && (<>
+      <button type="button" className="more-toggle" onClick={() => setAdvanced((a) => !a)} aria-expanded={advanced}>{advanced ? '▾' : '▸'} {t('More settings')}</button>
+      {advanced && (
+        <div className="advanced">
+          <label className="field">
+            <span className="field-label">{t('Variation number')} <Info text={t('Random gives a new variant every time. The same number with the same settings gives the same result: handy for changing one detail and comparing.')} /></span>
+            <div className="row">
+              <input type="number" value={form.seed} placeholder={t('Random')} onChange={(e) => set('seed')(e.target.value === '' ? -1 : Number(e.target.value))} />
+              <button type="button" className="btn" title={t('Random')} onClick={() => set('seed')(-1)}>🎲</button>
+            </div>
+          </label>
+        </div>
+      )}
+      </>)}
+
+      {!upscale && !isAudio && (<>
       <div className="field">
         <span className="field-label field-label-row">
           <span>{t('Shape and size')} {recommended && <Info text={t('✓ — sizes this mode was tested at and follows the prompt best.')} />}</span>

@@ -1,10 +1,12 @@
-// Generation queue on top of sd-cli: strictly one job on the GPU, progress parsed from its output,
+// Generation queue on top of sd-cli (images, video) and audio.cpp (music, sound effects, speech):
+// strictly one job on the GPU, progress parsed from the engine's output,
 // history kept in /data/state/jobs.json so it survives container re-creation.
 // Jobs arrive from the web container already validated, with a snapshot of the mode (`spec`):
 // the worker does not read the catalog, so catalog and UI updates never require restarting it.
 import { spawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { config } from '../common/config.js';
 import { debouncedWriter, readJson, statePath } from '../common/store.js';
@@ -32,10 +34,10 @@ if (interrupted.length) save(true);
 closeInterrupted(interrupted);
 
 // Temporary files of jobs interrupted by a restart (.<job id>_s<n>… segments, _ctrl control frame
-// directories, _ref prepared references) are useless: remove them
+// directories, _ref prepared references, _snd soundtracks, _audio.wav engine output) are useless: remove them
 try {
   for (const f of fs.readdirSync(dirs.output)) {
-    if (/^\.[0-9a-f]{12}_(s\d+|ctrl|ref|snd)/.test(f)) fs.rmSync(path.join(dirs.output, f), { recursive: true, force: true });
+    if (/^\.[0-9a-f]{12}_(s\d+|ctrl|ref|snd|audio)/.test(f)) fs.rmSync(path.join(dirs.output, f), { recursive: true, force: true });
   }
 } catch {}
 
@@ -57,6 +59,25 @@ function setStage(job, stage) {
   pr.stages[stage] = { startedAt: now };
   pr.loading = null;
   if (current?.job === job) current.tel?.phase(stage, { segment: pr.segment, ...(pr.image ? { image: pr.image } : {}) });
+}
+
+// audio.cpp with --log prints one timing or trace line per phase ("ace_step.planner.…",
+// "stable_audio.…"), not per step: the stage follows the phase, the time comes from the estimate
+function parseAudioLine(job, line) {
+  if (!line.trim()) return;
+  if (/failed|error/i.test(line) && !/^\[(TIMING|TRACE)/.test(line)) {
+    job.lastErrors = [...(job.lastErrors || []).slice(-4), line.trim()];
+    return;
+  }
+  const m = line.match(/^\[(?:TIMING|TRACE)[^\]]*\]\s+(\S+)/);
+  if (m) {
+    const key = m[1];
+    if (/\.weights\.|\.load|runtime\.model/.test(key)) return;
+    if (/(^|\.)(vae|autoencoder|vocoder|codec)\.(decode|run|compute|total)|decode_ms|vae_decode/.test(key)) return setStage(job, 'decoding');
+    if (/(planner|diffusion|dit|sampl|flow|generate|encode|synth|acoustic|duration|text)/.test(key) && job.progress.stage === 'prepare') return setStage(job, 'sampling');
+    return;
+  }
+  if (/^audio_out=/.test(line)) setStage(job, 'saving');
 }
 
 function parseLine(job, line) {
@@ -103,19 +124,21 @@ function parseLine(job, line) {
 // ---------- helpers ----------
 
 // Helper commands (ffmpeg); with telemetry on, each one is a phase of its own and is recorded
-function runCmd(cmd, args, phase, timeoutMs = 30 * 60 * 1000) {
+function runCmd(cmd, args, phase, timeoutMs = 30 * 60 * 1000, withOut = false) {
   const tel = current?.tel;
   if (tel && phase) tel.phase(phase, { segment: current.job.progress?.segment });
   const startedAt = Date.now();
   return new Promise((resolve) => {
-    const p = spawn(cmd, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    const p = spawn(cmd, args, { stdio: ['ignore', withOut ? 'pipe' : 'ignore', 'pipe'] });
     // A cancel kills the job's current process: during ffmpeg that is this one
     const owner = current;
     if (owner) owner.proc = p;
     const timer = setTimeout(() => p.kill('SIGKILL'), timeoutMs);
     if (tel) tel.pid = p.pid;
     let err = '';
+    let out = '';
     p.stderr.on('data', (d) => (err += d));
+    if (withOut) p.stdout.on('data', (d) => (out += d));
     const done = (r) => {
       clearTimeout(timer);
       if (owner?.proc === p) owner.proc = null;
@@ -126,7 +149,7 @@ function runCmd(cmd, args, phase, timeoutMs = 30 * 60 * 1000) {
       resolve(r);
     };
     p.on('error', (e) => done({ code: -1, err: e.message }));
-    p.on('close', (code) => done({ code, err }));
+    p.on('close', (code) => done({ code, err, out }));
   });
 }
 
@@ -335,10 +358,10 @@ function buildArgs(job, preset, outBase, initImage, controlDir, refImage) {
 // ---------- execution ----------
 
 // One sd-cli run: output goes to the log and is parsed into progress
-function runSd(job, args, log) {
+function runSd(job, args, log, program = config.sdCli, parse = parseLine) {
   return new Promise((resolve) => {
-    log.write('$ ' + [config.sdCli, ...args].map((a) => (/[\s"']/.test(a) ? JSON.stringify(a) : a)).join(' ') + '\n');
-    const proc = spawn(config.sdCli, args, { env: process.env });
+    log.write('$ ' + [program, ...args].map((a) => (/[\s"']/.test(a) ? JSON.stringify(a) : a)).join(' ') + '\n');
+    const proc = spawn(program, args, { env: process.env });
     current.proc = proc;
     const tel = current.tel;
     const startedAt = Date.now();
@@ -350,9 +373,9 @@ function runSd(job, args, log) {
       buf += s;
       const parts = buf.split(/[\r\n]+/);
       buf = parts.pop();
-      for (const line of parts) parseLine(job, line.replace(ANSI, ''));
+      for (const line of parts) parse(job, line.replace(ANSI, ''));
       const tail = buf.replace(ANSI, '');
-      if (STEP_BAR.test(tail) || LOAD_BAR.test(tail)) parseLine(job, tail);
+      if (STEP_BAR.test(tail) || LOAD_BAR.test(tail)) parse(job, tail);
       save();
     };
     proc.stdout.on('data', onData);
@@ -360,10 +383,10 @@ function runSd(job, args, log) {
     let spawnError = null;
     proc.on('error', (e) => (spawnError = e));
     proc.on('close', (code, signal) => {
-      if (buf) parseLine(job, buf.replace(ANSI, ''));
+      if (buf) parse(job, buf.replace(ANSI, ''));
       if (tel) {
         tel.pid = null;
-        tel.command({ program: 'sd-cli', segment: job.progress?.segment, args, exitCode: code, signal, startedAt, endedAt: Date.now(),
+        tel.command({ program: path.basename(program), segment: job.progress?.segment, args, exitCode: code, signal, startedAt, endedAt: Date.now(),
           error: code ? spawnError?.message || job.lastErrors?.at(-1) || null : null });
       }
       resolve({ code, signal, spawnError });
@@ -402,6 +425,55 @@ async function controlFrames(job, tmpBase) {
 
 // The reference photo for VACE, prepared the way VACE itself does it: scaled to fit the frame and
 // centred on a white canvas. sd-cli would crop it to the frame and could cut off a head or legs.
+// audio.cpp arguments: the mode names the engine family and task (spec.engine), the job the text,
+// the length, the lyrics or the voice. The model is one self-contained GGUF file.
+function buildAudioArgs(job, spec, outWav) {
+  const p = job.params;
+  const e = spec.engine || {};
+  const model = spec.models.find((m) => m.role === 'model') || spec.models[0];
+  const full = model && path.join(dirs.models, model.file);
+  if (!full || !fs.existsSync(full)) throw new Error(`Model not downloaded: ${model?.name || 'audio model'}`);
+  const threads = Math.max(2, Math.min(8, os.availableParallelism?.() || os.cpus().length));
+  const args = ['--log', '--threads', String(threads), '--task', e.task || 'gen', '--family', e.family, '--model', full,
+    '--backend', 'vulkan', '--text', p.prompt, '--seed', String(p.seed), '--out', outWav];
+  if (e.route) args.push('--task-route', e.route);
+  if ((e.task || 'gen') === 'gen' && p.duration) args.push('--duration-seconds', String(p.duration));
+  if (p.steps && e.steps !== false) args.push('--num-inference-steps', String(p.steps));
+  if (p.task === 'music') args.push('--lyrics', p.lyrics ?? '');
+  if (p.task === 'speech') {
+    if (p.language) args.push('--language', p.language);
+    if (p.voice) args.push('--voice-id', p.voice);
+    if (p.speed) args.push('--request-option', `speed=${p.speed}`);
+  }
+  return [...args, ...(spec.extraArgs || [])];
+}
+
+// The engine writes a WAV; the library keeps an MP3 (a tenth of the size, plays everywhere) and a
+// waveform picture as the thumbnail
+async function finalizeAudio(job, wav) {
+  const base = baseName(job);
+  const mp3 = path.join(dirs.output, base + '.mp3');
+  const conv = await runCmd('ffmpeg', ['-loglevel', 'error', '-y', '-i', wav, '-c:a', 'libmp3lame', '-b:a', '256k', mp3], 'ffmpeg.encode');
+  if (conv.code === 0) {
+    fs.rmSync(wav, { force: true });
+    job.files = [base + '.mp3'];
+  } else {
+    fs.rmSync(mp3, { force: true });
+    fs.renameSync(wav, path.join(dirs.output, base + '.wav'));
+    job.files = [base + '.wav'];
+    job.warning = 'Could not build the mp3: ' + conv.err.trim().slice(0, 300);
+  }
+  const src = path.join(dirs.output, job.files[0]);
+  const probe = await runCmd('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', src], null, 30000, true);
+  const sec = Number(probe.out?.trim());
+  if (Number.isFinite(sec) && sec > 0) job.audioSec = Math.round(sec * 10) / 10;
+  const thumb = path.join(dirs.thumbs, job.id + '.jpg');
+  const t = await runCmd('ffmpeg', ['-loglevel', 'error', '-y', '-i', src, '-filter_complex',
+    'color=c=0x17181f:s=640x360[bg];[0:a]aformat=channel_layouts=mono,showwavespic=s=640x220:colors=0x8b7cf6[w];[bg][w]overlay=0:70,format=yuvj420p',
+    '-frames:v', '1', '-q:v', '4', thumb], 'ffmpeg.thumbnail');
+  if (t.code === 0) job.thumb = job.id + '.jpg';
+}
+
 async function referenceImage(job, tmpBase) {
   const p = job.params;
   const out = `${tmpBase}_ref.png`;
@@ -437,6 +509,7 @@ async function run(job) {
     delete job._saved;
     fs.rmSync(`${tmpBase}_ctrl`, { recursive: true, force: true });
     fs.rmSync(`${tmpBase}_ref.png`, { force: true });
+    fs.rmSync(`${tmpBase}_audio.wav`, { force: true });
   };
 
   try {
@@ -448,7 +521,19 @@ async function run(job) {
     if (!preset) throw new Error('Queued by an older version of the platform, submit it again');
     job.status = 'running';
     save(true);
-    for (let i = 0; i < segments && job.status === 'running'; i++) {
+    // Audio: one run of audio.cpp, no segments
+    if (preset.kind === 'audio') {
+      const wav = `${tmpBase}_audio.wav`;
+      const args = buildAudioArgs(job, preset, wav);
+      job.cmd = [config.audioCli, ...args].join(' ');
+      const { code, signal, spawnError } = await runSd(job, args, log, config.audioCli, parseAudioLine);
+      if (job.status === 'running' && code !== 0) {
+        throw new Error(spawnError?.message || job.lastErrors?.at(-1) || `audio.cpp exited with code ${code}${signal ? ` (${signal})` : ''}`);
+      }
+      if (job.status === 'running' && !fs.existsSync(wav)) throw new Error('The engine did not save the audio');
+      outputs.push(wav);
+    }
+    for (let i = 0; i < segments && job.status === 'running' && preset.kind !== 'audio'; i++) {
       let init = null;
       if (i > 0) {
         // Continuation: the last frame of the previous segment becomes the init image of the next one
@@ -489,6 +574,7 @@ async function run(job) {
     } else {
       setStage(job, 'saving');
       if (preset.kind === 'image') await finalizeImages(job);
+      else if (preset.kind === 'audio') await finalizeAudio(job, outputs[0]);
       else await finalizeVideo(job, outputs);
       cleanup();
       if (job.status === 'running' && jobs.includes(job)) {

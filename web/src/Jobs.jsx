@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { api, clipSeconds, fmtDuration, jobKind, QUALITY_LABEL, STAGES } from './util.js';
+import { api, clipSeconds, fmtDuration, jobKind, langName, QUALITY_LABEL, STAGES, voiceName } from './util.js';
 import { t } from './i18n.js';
 
 // The task of a job that is not plain generation, as a chip
@@ -10,12 +10,29 @@ const TASK_CHIP = {
   upscale: () => `⤢ ${t('Upscale')}`,
   reference: () => `👤 ${t('Put a person in')}`,
   restyle: () => `🎞 ${t('Change a video')}`,
+  music: () => `♪ ${t('Music')}`,
+  sfx: () => `🔊 ${t('Sound effect')}`,
+  speech: () => `🗣 ${t('Speech')}`,
 };
 
 // A job's settings as small chips. The everyday view shows what matters to people (mode, size,
 // length, quality, task); `detailed` adds the technical ones (prompt strictness, variation number).
 export function ParamChips({ p, user, detailed = false }) {
   const video = (p.kind || 'video') === 'video';
+  if (p.kind === 'audio') {
+    return (
+      <div className="pchips">
+        <span>{p.presetName || p.presetId}</span>
+        {TASK_CHIP[p.task] && <span>{TASK_CHIP[p.task]()}</span>}
+        {p.task === 'speech'
+          ? <><span>{voiceName(p.voice)}</span><span>{langName(p.language)}</span>{p.speed && p.speed !== 1 ? <span>×{p.speed}</span> : null}</>
+          : p.duration ? <span>{fmtDuration(p.duration)}</span> : null}
+        {p.task === 'music' && <span>{p.lyrics === '[Instrumental]' ? t('instrumental') : p.lyrics ? t('your lyrics') : t('lyrics by the model')}</span>}
+        {detailed && <span>{t('Variation number')} {p.seed}</span>}
+        {user && <span>👤 {user}</span>}
+      </div>
+    );
+  }
   // An upscale has no generation settings: the mode, the result size and the task
   if (p.task === 'upscale') {
     return (
@@ -89,6 +106,7 @@ export function jobProgress(job, now) {
     const pct = Math.round(((segDone + st.cur / st.total) / segs) * 100);
     return { label: t('Drawing · step {cur} of {total}', { cur: st.cur, total: st.total }), cur: st.cur, total: st.total, pct, left: segs > 1 ? null : left };
   }
+  if (pr.stage === 'sampling' && jobKind(job) === 'audio') return { label: t('Composing…'), pct: null, left: null };
   if (pr.stage === 'decoding') {
     return { label: t('Finishing…'), cur: st.cur || 0, total: st.total || 0, pct: null, left: st.total && st.sit ? (st.total - st.cur) * st.sit : null };
   }
@@ -117,13 +135,14 @@ export function ActiveJob({ job, skew, onCancel, mine = true }) {
   const total = job.startedAt ? (now - job.startedAt) / 1000 : 0;
   const p = jobProgress(job, now);
   const video = jobKind(job) === 'video';
+  const audio = jobKind(job) === 'audio';
   const aspect = job.params?.width && job.params?.height ? `${job.params.width} / ${job.params.height}` : '16 / 9';
 
   return (
     <div className="card active">
       <div className="active-head">
         <div className="eyebrow">
-          <span className="dot live" /> {video ? t('Generating a video') : t('Generating an image')}
+          <span className="dot live" /> {video ? t('Generating a video') : audio ? t('Generating audio') : t('Generating an image')}
           {pr.segments > 1 ? ` · ${t('part {n} of {total}', { n: pr.segment, total: pr.segments })}` : ''} · {fmtDuration(total)}
           {!mine && job.user ? ` · 👤 ${job.user}` : ''}
         </div>
@@ -132,8 +151,10 @@ export function ActiveJob({ job, skew, onCancel, mine = true }) {
 
       <div className="hero">
         {/* The frame keeps the job's proportions; the small latent preview is scaled up to fill it */}
-        <div className="hero-media live-preview" style={{ aspectRatio: aspect }}>
-          {job.previewAt ? (
+        <div className={`hero-media live-preview ${audio ? 'audio-live' : ''}`} style={{ aspectRatio: aspect }}>
+          {audio ? (
+            <span className="eq" aria-hidden="true"><i /><i /><i /><i /><i /><i /><i /></span>
+          ) : job.previewAt ? (
             <img src={`/files/previews/${job.id}${job.previewExt || '.webp'}?t=${Math.floor(job.previewAt)}`} alt="" />
           ) : (
             <span className="muted small">{t('A rough preview appears once drawing starts')}</span>

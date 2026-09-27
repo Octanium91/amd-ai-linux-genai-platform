@@ -16,7 +16,7 @@ import { QueueDrawer, StatusPill } from './Jobs.jsx';
 
 // Two places to be in: Create (images and video, chosen inside the workspace) and the Library of
 // everything generated. Administration lives behind one "Admin" menu.
-const CREATE_TABS = ['image', 'video'];
+const CREATE_TABS = ['image', 'video', 'audio'];
 const ADMIN_TABS = [
   { key: 'models', label: 'Models', icon: 'models' },
   { key: 'users', label: 'Users', icon: 'users' },
@@ -228,6 +228,13 @@ export default function App() {
       } catch (e) {
         alert(e.message);
       }
+    },
+    // An audio result becomes the soundtrack of the video form
+    onSoundtrack: async (job, index) => {
+      const { audio } = await api(`/api/jobs/${job.id}/as-input`, { method: 'POST', json: { index } });
+      setReuse({ kind: 'video', soundOnly: true, audio, _t: Date.now() });
+      if (tab !== 'video') go('video');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     },
     onUpscale: async (job, index) => {
       await api(`/api/jobs/${job.id}/upscale`, { method: 'POST', json: { index } });

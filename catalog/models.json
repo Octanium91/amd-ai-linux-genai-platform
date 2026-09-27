@@ -361,5 +361,62 @@
         "description": "Находит главный объект на фото для удаления фона. Работает на процессоре за несколько секунд."
       }
     }
+  },
+  {
+    "id": "ace-step-15-turbo-q8",
+    "name": "ACE-Step 1.5 turbo (Q8_0)",
+    "category": "audio",
+    "description": "Music: songs with vocals and lyrics in 19+ languages, or instrumentals, up to 4 minutes. Planner LM, text encoder, DiT and VAE in one file.",
+    "file": "audio/ace-step-1.5-turbo-q8_0.gguf",
+    "url": "https://huggingface.co/audio-cpp/audio.cpp-gguf/resolve/main/ACE-Step1.5-GGUF/turbo/ace-step-1.5-turbo-q8_0.gguf",
+    "size": 6185460032,
+    "license": "MIT",
+    "homepage": "https://huggingface.co/ACE-Step/Ace-Step1.5",
+    "i18n": {
+      "uk": {
+        "description": "Музика: пісні з вокалом і текстом 19+ мовами або інструментал, до 4 хвилин. Планувальник, текстовий енкодер, DiT і VAE в одному файлі."
+      },
+      "ru": {
+        "description": "Музыка: песни с вокалом и текстом на 19+ языках или инструментал, до 4 минут. Планировщик, текстовый энкодер, DiT и VAE в одном файле."
+      }
+    }
+  },
+  {
+    "id": "stable-audio-3-small-sfx-q8",
+    "name": "Stable Audio 3 Small SFX (Q8_0)",
+    "category": "audio",
+    "description": "Sound effects from an English description: rain, footsteps, engines, crowds, UI sounds. Stereo 44.1 kHz. Stability AI Community License: free under USD 1M yearly revenue.",
+    "file": "audio/stable-audio-3-small-sfx-q8_0.gguf",
+    "url": "https://huggingface.co/audio-cpp/audio.cpp-gguf/resolve/main/Stable-Audio-3-Small-SFX-GGUF/stable-audio-3-small-sfx-q8_0.gguf",
+    "size": 1683570688,
+    "license": "Stability AI Community License",
+    "homepage": "https://huggingface.co/stabilityai/stable-audio-3-small-sfx",
+    "i18n": {
+      "uk": {
+        "description": "Звукові ефекти за англійським описом: дощ, кроки, двигуни, натовп, звуки інтерфейсу. Стерео 44,1 кГц. Stability AI Community License: безкоштовно за річного доходу до 1 млн доларів."
+      },
+      "ru": {
+        "description": "Звуковые эффекты по английскому описанию: дождь, шаги, двигатели, толпа, звуки интерфейса. Стерео 44,1 кГц. Stability AI Community License: бесплатно при годовой выручке до 1 млн долларов."
+      }
+    }
+  },
+  {
+    "id": "supertonic-3-f16",
+    "name": "Supertonic 3 (F16)",
+    "category": "audio",
+    "description": "Speech from text in 31 languages, including English, Ukrainian and Russian; 10 built-in voices. Faster than real time.",
+    "file": "audio/supertonic-3-f16.gguf",
+    "url": "https://huggingface.co/audio-cpp/audio.cpp-gguf/resolve/main/Supertonic-3-GGUF/supertonic-3-f16.gguf",
+    "size": 312784196,
+    "license": "OpenRAIL-M",
+    "homepage": "https://huggingface.co/Supertone/supertonic-3",
+    "i18n": {
+      "uk": {
+        "description": "Мовлення з тексту 31 мовою, зокрема англійською, українською й російською; 10 вбудованих голосів. Швидше за реальний час."
+      },
+      "ru": {
+        "description": "Речь из текста на 31 языке, в том числе английском, украинском и русском; 10 встроенных голосов. Быстрее реального времени."
+      }
+    }
   }
 ]

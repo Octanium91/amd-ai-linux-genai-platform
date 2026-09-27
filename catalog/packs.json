@@ -236,5 +236,69 @@
         "description": "Человек или предмет с фото в новом видео либо движение вашего видео с новым видом. Экспериментально; использует VAE Wan 2.1 и энкодер UMT5."
       }
     }
+  },
+  {
+    "id": "audio-music",
+    "name": "Audio · music (ACE-Step 1.5)",
+    "description": "Songs with vocals and lyrics or instrumentals, about as long to make as to listen to. 6.2 GB.",
+    "models": [
+      "ace-step-15-turbo-q8"
+    ],
+    "presets": [
+      "aud-ace-step"
+    ],
+    "i18n": {
+      "uk": {
+        "name": "Аудіо · музика (ACE-Step 1.5)",
+        "description": "Пісні з вокалом і текстом або інструментал, створюються приблизно за час звучання. 6,2 ГБ."
+      },
+      "ru": {
+        "name": "Аудио · музыка (ACE-Step 1.5)",
+        "description": "Песни с вокалом и текстом или инструментал, создаются примерно за время звучания. 6,2 ГБ."
+      }
+    }
+  },
+  {
+    "id": "audio-sfx",
+    "name": "Audio · sound effects (Stable Audio 3 Small)",
+    "description": "Sound effects and ambiences in seconds. Stability AI Community License. 1.7 GB.",
+    "models": [
+      "stable-audio-3-small-sfx-q8"
+    ],
+    "presets": [
+      "aud-stable-audio-sfx"
+    ],
+    "i18n": {
+      "uk": {
+        "name": "Аудіо · звукові ефекти (Stable Audio 3 Small)",
+        "description": "Звукові ефекти й атмосфера за секунди. Stability AI Community License. 1,7 ГБ."
+      },
+      "ru": {
+        "name": "Аудио · звуковые эффекты (Stable Audio 3 Small)",
+        "description": "Звуковые эффекты и атмосфера за секунды. Stability AI Community License. 1,7 ГБ."
+      }
+    }
+  },
+  {
+    "id": "audio-speech",
+    "name": "Audio · speech (Supertonic 3)",
+    "description": "Text to speech in 31 languages, including English, Ukrainian and Russian. 313 MB.",
+    "recommended": true,
+    "models": [
+      "supertonic-3-f16"
+    ],
+    "presets": [
+      "aud-supertonic"
+    ],
+    "i18n": {
+      "uk": {
+        "name": "Аудіо · мовлення (Supertonic 3)",
+        "description": "Озвучення тексту 31 мовою, зокрема англійською, українською й російською. 313 МБ."
+      },
+      "ru": {
+        "name": "Аудио · речь (Supertonic 3)",
+        "description": "Озвучка текста на 31 языке, в том числе английском, украинском и русском. 313 МБ."
+      }
+    }
   }
 ]

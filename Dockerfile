@@ -1,5 +1,6 @@
 # AMD AI Linux GenAI Platform — two images from one Dockerfile:
-#   worker  stable-diffusion.cpp (Vulkan/RADV) + ffmpeg + the job queue; owns the GPU, updated rarely
+#   worker  stable-diffusion.cpp and audio.cpp (Vulkan/RADV) + ffmpeg + the job queue; owns the GPU,
+#           updated rarely
 #   web     UI + API + auth + model downloads; no GPU, rebuilt and restarted freely
 # The worker image contains only server/src/common and server/src/worker (no npm dependencies),
 # so UI and API changes leave it byte-identical and Docker does not recreate the running worker.
@@ -17,6 +18,20 @@ RUN git clone https://github.com/leejet/stable-diffusion.cpp /src \
 WORKDIR /src
 RUN cmake -B build -DCMAKE_BUILD_TYPE=Release -DSD_VULKAN=ON -DBUILD_SHARED_LIBS=OFF \
  && cmake --build build --config Release -j"$(nproc)"
+
+# ---------- audio.cpp with the Vulkan backend (music, sound effects, speech) ----------
+FROM debian:trixie AS audiocpp
+ARG AUDIOCPP_REF=v0.8.2-audio8-perf-hotfix
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential cmake git ca-certificates pkg-config libvulkan-dev glslc spirv-headers \
+    && rm -rf /var/lib/apt/lists/*
+RUN git clone --depth 1 --branch "${AUDIOCPP_REF}" https://github.com/0xShug0/audio.cpp /src
+WORKDIR /src
+# ggml loads its backends (Vulkan, the CPU variants) from the directory of the executable
+RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DAUDIOCPP_MODEL_SET=full -DENGINE_ENABLE_CPU_ALL_VARIANTS=ON \
+      -DENGINE_ENABLE_VULKAN=ON -DENGINE_ENABLE_OPENMP=ON -DENGINE_BUILD_EXAMPLES=OFF -DENGINE_BUILD_TESTS=OFF -DENGINE_BUILD_WARMBENCH=OFF \
+ && cmake --build build --parallel "$(nproc)" --target audiocpp_cli \
+ && mkdir -p /out && cp build/bin/audiocpp_cli /out/ && find build -name "*.so*" -exec cp -P {} /out/ \;
 
 # ---------- web UI build ----------
 FROM node:22-trixie-slim AS ui
@@ -39,6 +54,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libvulkan1 mesa-vulkan-drivers vulkan-tools libgomp1 ffmpeg ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=sdcpp /src/build/bin/ /usr/local/bin/
+COPY --from=audiocpp /out/ /opt/audiocpp/
+RUN echo /opt/audiocpp > /etc/ld.so.conf.d/audiocpp.conf && ldconfig && ln -s /opt/audiocpp/audiocpp_cli /usr/local/bin/audiocpp_cli
 COPY --from=deps /usr/local/bin/node /usr/local/bin/node
 RUN mkdir -p /app/server && echo '{"type":"module"}' > /app/server/package.json
 COPY server/src/common /app/server/src/common

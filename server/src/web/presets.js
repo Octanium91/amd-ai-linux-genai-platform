@@ -29,6 +29,7 @@ export function presetModels(preset, catalog = loadCatalog()) {
 //          container, no job)
 //   video: create (text → video), animate (the photo is the first frame),
 //          reference (a person or object from a photo in a new video), restyle (video → video)
+//   audio: music (a song or an instrumental, optional lyrics), sfx (a sound effect), speech (text → voice)
 export const TASK_INPUTS = {
   create: {},
   rework: { image: true },
@@ -38,6 +39,9 @@ export const TASK_INPUTS = {
   animate: { image: true },
   reference: { image: true },
   restyle: { video: true, imageOptional: true },
+  music: {},
+  sfx: {},
+  speech: {},
 };
 
 export function presetTasks(p) {
@@ -72,7 +76,7 @@ export function loadTemplates() {
   const t = readJson(path.join(config.catalogDir, 'templates.json'), {});
   const neg = t.negatives || {};
   const out = {};
-  for (const kind of ['image', 'video']) {
+  for (const kind of ['image', 'video', 'audio']) {
     const d = t.defaults?.[kind] || {};
     out[kind] = (t[kind] || []).map(({ negative, preset, ...x }) => {
       const n = negative ?? d.negative;

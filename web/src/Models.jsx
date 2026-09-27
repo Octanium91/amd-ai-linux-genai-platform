@@ -11,6 +11,7 @@ const CATEGORY = {
   text_encoder: 'Text encoders',
   upscaler: 'Upscalers',
   segmenter: 'Background removal',
+  audio: 'Audio: music, sound effects, speech',
 };
 const STATUS = {
   installed: 'Installed',

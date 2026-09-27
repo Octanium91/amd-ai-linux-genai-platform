@@ -3,12 +3,13 @@ import { jobKind } from './util.js';
 import { t } from './i18n.js';
 import { Modal, Tile } from './Gallery.jsx';
 
-// Everything generated so far, videos and images together, with filters and search.
+// Everything generated so far, videos, images and audio together, with filters and search.
 // Actions are the same as in the studio; "repeat" opens the matching studio with the form filled in.
 const KINDS = [
   { key: 'all', label: 'All' },
   { key: 'video', label: 'Videos' },
   { key: 'image', label: 'Images' },
+  { key: 'audio', label: 'Audio' },
 ];
 const STATUSES = [
   { key: 'done', label: 'Done' },
@@ -38,7 +39,7 @@ export default function GalleryPage({ user, jobs, ...acts }) {
   useEffect(() => setLimit(PAGE), [kind, status, mine, query]);
   const open = jobs.find((j) => j.id === openId);
   const counts = useMemo(() => {
-    const c = { all: 0, video: 0, image: 0 };
+    const c = { all: 0, video: 0, image: 0, audio: 0 };
     for (const j of finished) if (j.status === 'done') { c.all++; c[jobKind(j)] = (c[jobKind(j)] || 0) + 1; }
     return c;
   }, [finished]);

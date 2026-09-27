@@ -163,6 +163,38 @@
       "duration": 2,
       "outFps": 24,
       "negative": "video"
+    },
+    "audio": {
+      "preset": "aud-ace-step",
+      "quality": "normal",
+      "duration": 30,
+      "lyricsMode": "instrumental"
     }
-  }
+  },
+  "audio": [
+    {
+      "category": "lofi",
+      "prompt": "calm lo-fi hip hop, soft rhodes piano, vinyl crackle, mellow drums, warm bass, late night mood"
+    },
+    {
+      "category": "cinematic",
+      "prompt": "epic cinematic orchestral score, soaring strings, french horns, big taiko drums, heroic and uplifting"
+    },
+    {
+      "category": "synthwave",
+      "prompt": "retro synthwave, pulsing analog bass, gated reverb drums, shimmering pads, driving at night through neon city"
+    },
+    {
+      "category": "acoustic",
+      "prompt": "gentle acoustic folk, fingerpicked guitar, soft piano, light percussion, warm and nostalgic"
+    },
+    {
+      "category": "jazz",
+      "prompt": "smooth jazz trio, brushed drums, upright bass, relaxed piano solo, cozy evening cafe"
+    },
+    {
+      "category": "ambient",
+      "prompt": "slow ambient soundscape, evolving pads, distant piano notes, soft field recordings, peaceful and spacious"
+    }
+  ]
 }

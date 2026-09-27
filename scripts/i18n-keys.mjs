@@ -54,6 +54,7 @@ const EXTRA = [
   'Internal error',
   'Not found',
   'Could not build the mp4:',
+  'Could not build the mp3:',
   'Only PNG, JPEG and WebP images are accepted',
   'Only MP4, MOV and WebM videos are accepted',
   'Only MP3, WAV, OGG, FLAC and M4A audio or a video with sound are accepted',

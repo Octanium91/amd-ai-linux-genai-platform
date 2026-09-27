@@ -704,3 +704,17 @@ input[type="range"].extra { accent-color: var(--warn); }
 }
 .cutout-view { width: 100%; height: auto; display: block; touch-action: none; cursor: crosshair; }
 .cutout-wait { position: absolute; inset: 0; display: grid; place-items: center; grid-auto-flow: column; gap: 8px; line-height: 1.4; color: #16181f; background: rgba(255, 255, 255, 0.6); font-size: 13px; }
+
+/* Audio results: the waveform picture over the player; a running audio job shows an equalizer */
+.audio-view { display: flex; flex-direction: column; gap: 10px; width: 100%; padding: 12px; background: var(--media-bg); cursor: default; }
+.audio-view img { width: 100%; max-height: 220px; object-fit: cover; border-radius: var(--r-md); display: block; }
+.audio-view audio { width: 100%; }
+.hero-media .audio-view img { max-height: 200px; }
+.modal .audio-view { border-radius: var(--r-lg) var(--r-lg) 0 0; padding: 16px; }
+.hero-media.audio-live { place-items: center; }
+.eq { display: flex; align-items: flex-end; gap: 6px; height: 64px; }
+.eq i { display: block; width: 8px; height: 100%; border-radius: 4px; background: var(--accent); transform-origin: bottom; animation: eq 1.1s ease-in-out infinite; }
+.eq i:nth-child(2) { animation-delay: -0.2s; } .eq i:nth-child(3) { animation-delay: -0.5s; } .eq i:nth-child(4) { animation-delay: -0.1s; }
+.eq i:nth-child(5) { animation-delay: -0.7s; } .eq i:nth-child(6) { animation-delay: -0.35s; } .eq i:nth-child(7) { animation-delay: -0.85s; }
+@keyframes eq { 0%, 100% { transform: scaleY(0.2); } 50% { transform: scaleY(1); } }
+@media (prefers-reduced-motion: reduce) { .eq i { animation: none; transform: scaleY(0.5); } }
