@@ -287,15 +287,15 @@ input[type="range"] { padding: 0; border: 0; background: none; accent-color: var
 .subhead { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 650; }
 
 /* an ⓘ that shows its explanation on hover or focus */
-.info { position: relative; display: inline-grid; place-items: center; width: 17px; height: 17px; border-radius: 50%; border: 1px solid var(--line-control); color: var(--muted); font-size: 11px; font-weight: 650; cursor: help; background: none; padding: 0; vertical-align: middle; font-style: normal; flex: none; }
-.info:hover, .info:focus-visible { color: var(--text); border-color: var(--text-2); }
-.info .info-pop {
+.hint-i { position: relative; display: inline-grid; place-items: center; width: 17px; height: 17px; border-radius: 50%; border: 1px solid var(--line-control); color: var(--muted); font-size: 11px; font-weight: 650; cursor: help; background: none; padding: 0; vertical-align: middle; font-style: normal; flex: none; }
+.hint-i:hover, .hint-i:focus-visible { color: var(--text); border-color: var(--text-2); }
+.hint-i .info-pop {
   display: none; position: absolute; z-index: 30; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%); width: max-content; max-width: 280px;
   background: var(--overlay); color: var(--text-2); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--shadow-2);
   padding: 8px 10px; font-size: 12px; font-weight: 400; line-height: 1.45; text-align: left; white-space: normal; cursor: default;
 }
-.info:hover .info-pop, .info:focus .info-pop { display: block; }
-.info-left .info-pop { left: 0; transform: none; }
+.hint-i:hover .info-pop, .hint-i:focus .info-pop { display: block; }
+.hint-i.left .info-pop { left: 0; transform: none; }
 
 /* a quiet one-line notice inside a form */
 .note { display: flex; gap: 6px; align-items: flex-start; font-size: 12px; line-height: 1.4; color: var(--muted); }

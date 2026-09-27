@@ -134,7 +134,7 @@ function videoPlan(preset, duration, segmentFrames) {
 export function Info({ text }) {
   if (!text) return null;
   return (
-    <span className="info" tabIndex={0} role="note" aria-label={text} onClick={(e) => e.preventDefault()}>
+    <span className="hint-i" tabIndex={0} role="note" aria-label={text} onClick={(e) => e.preventDefault()}>
       i<span className="info-pop">{text}</span>
     </span>
   );
