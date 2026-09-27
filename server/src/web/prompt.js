@@ -387,91 +387,140 @@ export async function enhancePrompt(s, preset, input, signal = null) {
   return { prompt, style, model: s.model, seconds: Math.round((Date.now() - started) / 100) / 10 };
 }
 
-// A storyboard for a long video: the video is rendered in parts, each continuing from the last
-// frame of the previous one. The model writes one subject block and one style block that stay the
-// same in every part (so the person and the look do not change) and one action per part; the
-// server assembles each part's prompt from them.
-const STORY_EXAMPLE = {
-  idea: 'девушка гуляет по осеннему парку и кормит уток',
-  parts: 3,
+// A storyboard for a long video, written in two steps the way a director would. The video is
+// rendered in parts, each continuing from the last frame of the previous one.
+//   1. The outline: the idea grows into a simple continuous story of a few steps (about one per 12 s)
+//      that fills the whole length, plus a subject block and a style block that stay word for word the
+//      same in every part, so the character and the place do not change.
+//   2. Each step is written out into its parts, knowing how the previous step ended and what comes next.
+// A small model asked for 64 actions at once writes ten and stops; a few short requests keep it on track.
+const BEAT_SECONDS = 12;
+
+const OUTLINE_EXAMPLE = {
+  ask: '4 steps, 48 seconds\nIdea: девушка кормит уток в осеннем парке',
   answer: {
-    idea_en: 'a girl walks through an autumn park and feeds ducks',
+    idea_en: 'a girl feeds ducks in an autumn park',
     subject: 'a young woman with long auburn hair, beige wool coat, red scarf',
     style: 'autumn park with golden trees and a small pond, soft afternoon light, realistic, cinematic',
-    actions: [
-      'walks slowly along a path covered with fallen leaves, looking around',
-      'stops at the edge of the pond and takes bread out of her pocket',
-      'crouches and throws crumbs to the ducks swimming towards her, smiling',
+    steps: [
+      'she walks slowly along a leaf-covered path towards the pond, looking around',
+      'she stops at the water, takes a paper bag out of her pocket and ducks swim closer',
+      'she crouches and throws crumbs, the ducks gather and she laughs',
+      'she stands up, brushes off her hands and watches the ducks swim away',
     ],
   },
 };
 
-function storyboardSystem(style, parts, partSeconds) {
+const EXPAND_EXAMPLE = {
+  ask: '3 parts\nStep: she stops at the water, takes a paper bag out of her pocket and ducks swim closer\nBefore: she walks slowly along a leaf-covered path towards the pond\nAfter: she crouches and throws crumbs',
+  answer: {
+    actions: [
+      'slows down and stops at the edge of the pond, looking at the water',
+      'reaches into her coat pocket and pulls out a small paper bag',
+      'opens the bag as two ducks turn and swim towards her',
+    ],
+  },
+};
+
+function outlineSystem(steps, seconds) {
   return [
-    `You are a film director writing a storyboard for an AI video model. The video is rendered in ${parts} consecutive parts of about ${partSeconds} seconds each; every part starts from the last frame of the previous one.`,
+    `You are a film director planning one continuous shot of about ${seconds} seconds for an AI video model. It is rendered in parts, each continuing from the last frame of the previous one.`,
     'First write idea_en: an exact English translation of the idea, nothing added.',
-    '- subject: the main character or object with fixed visual details (age, hair, clothing, colors, materials). It is repeated word for word in every part, so the character never changes.',
-    '- style: the place, lighting, look and camera style, the same for every part.',
-    `- actions: exactly ${parts} entries in order, one per part: what the subject does in that part, a small continuous step from the previous part, in the same place unless the idea asks for a change. No new characters, no cuts, no jumps.`,
-    'Spread the steps of the idea over all parts from the first to the last. Every action must be different from all the others: never repeat an action or add "again". If the idea has fewer steps than parts, fill the gaps with small natural moments that lead to the next step (looking around, turning the head, a pause, a slow step, the camera slowly moving closer).',
-    'The actions describe only what happens, never how the subject looks or the place: those are in subject and style.',
-    style === 'tags'
-      ? 'Write subject, style and every action as short comma-separated English phrases, only things that can be seen; each action at most 12 words.'
-      : 'Write subject and style as English phrases and every action as one English sentence of 8 to 25 words, only things that can be seen.',
+    '- subject: the main character or object with fixed visual details (age, hair, clothing, colors, materials); repeated word for word in every part.',
+    '- style: the place, lighting, look and camera style, the same for the whole shot.',
+    `- steps: exactly ${steps} steps of a simple, believable story that fills the whole length, about ${Math.round(seconds / steps)} seconds each, in order. Grow the idea into a small story: the subject notices something, reacts, moves, does something, settles. Every step is different and follows from the previous one; the same place, no new main characters, no cuts, no jumps in time. One sentence each, only what can be seen.`,
     'The idea may be in any language; always answer in English. The first exchange is only an example of the format: never reuse its content.',
-    'Answer with JSON with the fields idea_en, subject, style, actions.',
+    'Answer with JSON with the fields idea_en, subject, style, steps.',
   ].join('\n');
 }
 
-export async function storyboard(s, preset, input, signal = null) {
-  const parts = Math.max(2, Math.min(64, Math.round(Number(input.parts) || 2)));
-  const partSeconds = Math.round((Number(input.partSeconds) || 2) * 10) / 10;
-  const style = promptStyle(preset);
-  const format = {
-    type: 'object',
-    properties: { idea_en: { type: 'string' }, subject: { type: 'string' }, style: { type: 'string' }, actions: { type: 'array', items: { type: 'string' } } },
-    required: ['idea_en', 'subject', 'style', 'actions'],
-  };
-  const ask = (idea, n) => `${n} parts\n${input.hasImage ? 'The first part starts from a photo the user uploaded: keep its subject.\n' : ''}Idea: ${idea}`;
-  const started = Date.now();
+function expandSystem(style, n, partSeconds) {
+  return [
+    `You are a film director. Write exactly ${n} consecutive actions, one per part of about ${partSeconds} seconds, that play out the given story step from its beginning to its end.`,
+    'The first action continues directly from "Before"; the last one leads into "After". Every action is a small continuous step, different from the others: never repeat an action or write "again".',
+    'Describe only what the subject does and how the camera moves, never how the subject looks or the place.',
+    style === 'tags'
+      ? 'Each action is a short English phrase of at most 12 words, only things that can be seen.'
+      : 'Each action is one English sentence of 8 to 25 words, only things that can be seen.',
+    'The first exchange is only an example of the format: never reuse its content.',
+    'Answer with JSON: {"actions": ["...", "..."]}.',
+  ].join('\n');
+}
+
+async function chatJson(s, system, example, ask, format, numPredict, signal) {
   const out = await ollama(s.url, '/api/chat', {
     model: s.model,
     stream: false,
     keep_alive: '1m',
     think: false,
     format,
-    options: { temperature: 0.4, repeat_penalty: 1.08, num_predict: Math.min(4000, 300 + parts * 45) },
+    options: { temperature: 0.4, repeat_penalty: 1.08, num_predict: numPredict },
     messages: [
-      { role: 'system', content: storyboardSystem(style, parts, partSeconds) },
-      { role: 'user', content: ask(STORY_EXAMPLE.idea, STORY_EXAMPLE.parts) },
-      { role: 'assistant', content: JSON.stringify(STORY_EXAMPLE.answer) },
-      { role: 'user', content: ask(input.idea, parts) },
+      { role: 'system', content: system },
+      { role: 'user', content: example.ask },
+      { role: 'assistant', content: JSON.stringify(example.answer) },
+      { role: 'user', content: ask },
     ],
-  }, 240000, signal);
+  }, 120000, signal);
   if (out?.done_reason === 'length') return { truncated: true };
-  let data = {};
   try {
-    data = JSON.parse(out?.message?.content || '{}');
+    return { data: JSON.parse(out?.message?.content || '{}') };
   } catch {
-    return {};
+    return { data: {} };
   }
-  const clean = (x) => String(x || '').replace(/\s+/g, ' ').replace(/^["'\s]+|["'\s.]+$/g, '').trim();
-  const subject = clean(data.subject) || clean(data.idea_en);
-  const look = clean(data.style);
-  let actions = (Array.isArray(data.actions) ? data.actions : []).map(clean).filter(Boolean);
-  if (!subject || !actions.length) return {};
-  // A small model may write too few or too many parts: the last action continues, extras are dropped
-  actions = actions.slice(0, parts);
-  // A repeated action (a small model's habit) or a missing one becomes a quiet in-between moment, so
-  // no two parts ask for the same thing
-  const GAP = ['holds still for a moment, breathing calmly', 'the camera slowly moves closer', 'turns the head slightly', 'the camera slowly pulls back'];
+}
+
+const cleanText = (x) => String(x || '').replace(/\s+/g, ' ').replace(/^["'\s]+|["'\s.]+$/g, '').trim();
+const actionKey = (x) => String(x || '').toLowerCase().replace(/\bagain\b/g, '').replace(/\W+/g, ' ').trim();
+
+export async function storyboard(s, preset, input, signal = null) {
+  const parts = Math.max(2, Math.min(64, Math.round(Number(input.parts) || 2)));
+  const partSeconds = Math.round((Number(input.partSeconds) || 2) * 10) / 10;
+  const seconds = Math.round(parts * partSeconds);
+  const style = promptStyle(preset);
+  const started = Date.now();
+  const nSteps = Math.max(1, Math.min(12, Math.round(seconds / BEAT_SECONDS), parts));
+
+  // 1. The outline
+  const outline = await chatJson(s, outlineSystem(nSteps, seconds), OUTLINE_EXAMPLE,
+    `${nSteps} steps, ${seconds} seconds\n${input.hasImage ? 'The shot starts from a photo the user uploaded: keep its subject.\n' : ''}Idea: ${input.idea}`,
+    {
+      type: 'object',
+      properties: { idea_en: { type: 'string' }, subject: { type: 'string' }, style: { type: 'string' }, steps: { type: 'array', items: { type: 'string' } } },
+      required: ['idea_en', 'subject', 'style', 'steps'],
+    }, 300 + nSteps * 70, signal);
+  if (outline.truncated) return { truncated: true };
+  const o = outline.data || {};
+  const subject = cleanText(o.subject) || cleanText(o.idea_en);
+  const look = cleanText(o.style);
+  let steps = (Array.isArray(o.steps) ? o.steps : []).map(cleanText).filter(Boolean);
+  if (!subject) return {};
+  if (!steps.length) steps = [cleanText(o.idea_en) || input.idea];
+  steps = steps.slice(0, nSteps);
+
+  // 2. Each step written out into its share of the parts
+  const counts = steps.map((_, i) => Math.floor(((i + 1) * parts) / steps.length) - Math.floor((i * parts) / steps.length));
+  const actions = [];
   const seen = new Set();
-  let gap = 0;
-  for (let i = 0; i < parts; i++) {
-    const key = (actions[i] || '').toLowerCase().replace(/\bagain\b/g, '').replace(/\W+/g, ' ').trim();
-    if (!key || seen.has(key)) actions[i] = GAP[gap++ % GAP.length];
-    seen.add(key);
+  for (let i = 0; i < steps.length; i++) {
+    const n = counts[i];
+    if (!n) continue;
+    const r = await chatJson(s, expandSystem(style, n, partSeconds), EXPAND_EXAMPLE,
+      `${n} parts\nStep: ${steps[i]}\nBefore: ${actions.at(-1) || (i ? steps[i - 1] : 'the shot begins')}\nAfter: ${steps[i + 1] || 'the shot ends calmly'}`,
+      { type: 'object', properties: { actions: { type: 'array', items: { type: 'string' } } }, required: ['actions'] },
+      150 + n * 60, signal);
+    let list = r.truncated ? [] : (Array.isArray(r.data?.actions) ? r.data.actions : []).map(cleanText).filter(Boolean);
+    // Missing or repeated actions: the step itself, then its moments with "slowly" and "still"
+    const fill = [steps[i], `slowly continues: ${steps[i]}`, `pauses for a moment, then ${steps[i]}`];
+    list = list.filter((a) => !seen.has(actionKey(a)));
+    for (const f of fill) if (list.length < n && !seen.has(actionKey(f)) && !list.some((a) => actionKey(a) === actionKey(f))) list.push(f);
+    while (list.length < n) list.push(list.at(-1) || steps[i]);
+    for (const a of list.slice(0, n)) {
+      seen.add(actionKey(a));
+      actions.push(a);
+    }
   }
+
   const quality = preset.promptQuality || {};
   const prompts = actions.map((action) => {
     if (style === 'tags') {
@@ -485,7 +534,7 @@ export async function storyboard(s, preset, input, signal = null) {
     const text = [cap(`${trim(subject)} ${trim(action)}`), look && cap(trim(look))].filter(Boolean).join('. ') + '.';
     return quality.suffix && !text.includes(quality.suffix) ? `${text} ${quality.suffix}` : text;
   });
-  return { prompts, subject, style: look, actions, model: s.model, seconds: Math.round((Date.now() - started) / 100) / 10 };
+  return { prompts, subject, style: look, steps, actions, model: s.model, seconds: Math.round((Date.now() - started) / 100) / 10 };
 }
 
 // One request per user at a time and two in total: each can hold the Ollama model (and GPU
