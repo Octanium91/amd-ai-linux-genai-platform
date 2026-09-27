@@ -628,6 +628,11 @@ input[type="range"].extra { accent-color: var(--warn); }
 .mask-brush input { flex: 1; }
 .video-pick { position: relative; border-radius: var(--r-md); overflow: hidden; background: var(--media-bg); line-height: 0; }
 .video-pick video { width: 100%; max-height: 320px; display: block; }
+.sound-pick { display: flex; flex-direction: column; gap: 10px; }
+.sound-player { display: flex; align-items: center; gap: 8px; }
+.sound-player audio { flex: 1; min-width: 0; height: 40px; }
+.drop.drop-small { min-height: 0; padding: 14px; }
+.drop.drop-small .drop-icon { font-size: 18px; }
 .photo-bar { display: flex; gap: 8px; justify-content: flex-end; }
 .drawer .hero { grid-template-columns: 1fr; }
 .drawer .hero-media:empty { display: none; }

@@ -45,19 +45,24 @@ api.use(requireAuth);
 // Uploads are named by the server; the extension comes from the file's content, not from the
 // client, and only PNG, JPEG and WebP images and MP4, MOV and WebM videos are kept (an SVG or
 // HTML "image" would run scripts in the platform's origin when opened). A job may carry a photo,
-// a mask (white = repaint) and a video, depending on its task.
+// a mask (white = repaint) and a video, depending on its task, and a video job a soundtrack (MP3,
+// WAV, OGG, FLAC, M4A or the sound of a video).
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
 const MAX_VIDEO_BYTES = 300 * 1024 * 1024;
+const MAX_AUDIO_BYTES = 100 * 1024 * 1024;
 const upload = multer({
   storage: multer.diskStorage({
     destination: dirs.uploads,
     filename: (req, file, cb) => cb(null, `${Date.now()}-${crypto.randomBytes(3).toString('hex')}.upload`),
   }),
-  limits: { fileSize: MAX_VIDEO_BYTES, files: 3, fields: 40, fieldSize: 64 * 1024, parts: 44 },
-  fileFilter: (req, file, cb) => cb(null, file.fieldname === 'video' ? /^video\//.test(file.mimetype) : /^image\//.test(file.mimetype)),
+  limits: { fileSize: MAX_VIDEO_BYTES, files: 4, fields: 40, fieldSize: 64 * 1024, parts: 45 },
+  fileFilter: (req, file, cb) => cb(null, {
+    video: /^video\//,
+    audio: /^(audio|video)\/|^application\/octet-stream$/,
+  }[file.fieldname]?.test(file.mimetype) ?? /^image\//.test(file.mimetype)),
 });
-const jobFiles = upload.fields([{ name: 'image', maxCount: 1 }, { name: 'mask', maxCount: 1 }, { name: 'video', maxCount: 1 }]);
-const UPLOAD_NAME = /^\d+-[0-9a-f]{6}\.(png|jpg|webp|mp4|mov|webm)$/;
+const jobFiles = upload.fields([{ name: 'image', maxCount: 1 }, { name: 'mask', maxCount: 1 }, { name: 'video', maxCount: 1 }, { name: 'audio', maxCount: 1 }]);
+const UPLOAD_NAME = /^\d+-[0-9a-f]{6}\.(png|jpg|webp|mp4|mov|webm|mp3|wav|ogg|flac|m4a)$/;
 
 function imageType(file) {
   const b = Buffer.alloc(12);
@@ -89,6 +94,25 @@ function videoType(file) {
   }
   if (b.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]))) return 'webm';
   return null;
+}
+
+// A soundtrack: an audio file, or a video whose sound is used
+function audioType(file) {
+  const b = Buffer.alloc(12);
+  const fd = fs.openSync(file, 'r');
+  try {
+    fs.readSync(fd, b, 0, 12, 0);
+  } finally {
+    fs.closeSync(fd);
+  }
+  if (b.toString('latin1', 0, 4) === 'RIFF' && b.toString('latin1', 8, 12) === 'WAVE') return 'wav';
+  if (b.toString('latin1', 0, 3) === 'ID3') return 'mp3';
+  // An MPEG audio frame header (11 sync bits, a layer other than the reserved 00, which ADTS uses)
+  if (b[0] === 0xff && (b[1] & 0xe0) === 0xe0 && (b[1] & 0x06) !== 0) return 'mp3';
+  if (b.toString('latin1', 0, 4) === 'OggS') return 'ogg';
+  if (b.toString('latin1', 0, 4) === 'fLaC') return 'flac';
+  if (b.toString('latin1', 4, 8) === 'ftyp' && /^M4[ABP] $/.test(b.toString('latin1', 8, 12))) return 'm4a';
+  return videoType(file);
 }
 
 // Width and height from the image header (PNG IHDR, JPEG SOF, WebP VP8/VP8L/VP8X), or null
@@ -168,7 +192,7 @@ api.get('/templates', (req, res) => res.json(loadTemplates()));
 
 async function beforeUpload(req, res, next) {
   const length = Number(req.headers['content-length'] || 0);
-  if (length > MAX_VIDEO_BYTES + 2 * MAX_IMAGE_BYTES + 1024 * 1024) return res.status(413).json({ error: 'The file is too large' });
+  if (length > MAX_VIDEO_BYTES + MAX_AUDIO_BYTES + 2 * MAX_IMAGE_BYTES + 1024 * 1024) return res.status(413).json({ error: 'The file is too large' });
   const { jobs } = await workerState();
   if (jobs.filter((j) => j.status === 'queued' && j.user === req.user.username).length >= MAX_QUEUED_PER_USER) {
     return res.status(400).json({ error: 'Too many jobs in the queue (at most 20 per user)' });
@@ -218,15 +242,17 @@ api.post('/jobs', beforeUpload, jobFiles, async (req, res) => {
   let img;
   let mask;
   let vid;
+  let aud;
   try {
     img = take('image', imageType, MAX_IMAGE_BYTES, 'Only PNG, JPEG and WebP images are accepted');
     mask = take('mask', imageType, MAX_IMAGE_BYTES, 'Only PNG, JPEG and WebP images are accepted');
     vid = take('video', videoType, MAX_VIDEO_BYTES, 'Only MP4, MOV and WebM videos are accepted');
+    aud = take('audio', audioType, MAX_AUDIO_BYTES, 'Only MP3, WAV, OGG, FLAC and M4A audio or a video with sound are accepted');
   } catch (e) {
     console.error(`[jobs] upload: ${e.message}`);
     return reject('The file could not be saved');
   }
-  const error = img.error || mask.error || vid.error;
+  const error = img.error || mask.error || vid.error || aud.error;
   if (error) return reject(error);
   let size = null;
   if (img.name) {
@@ -240,7 +266,10 @@ api.post('/jobs', beforeUpload, jobFiles, async (req, res) => {
     image: needs.image || needs.imageOptional ? img.name : (drop(img.name), null),
     mask: needs.mask ? mask.name : (drop(mask.name), null),
     video: needs.video ? vid.name : (drop(vid.name), null),
+    audio: preset.kind === 'video' ? aud.name : (drop(aud.name), null),
   };
+  // An engine of an older version would drop the soundtrack
+  if ((inputs.audio || b.audioSource === 'video') && !(await workerState()).worker?.compatible) return reject('The generation engine is being updated, try again in a minute');
   if (needs.image && !inputs.image) return reject('This task needs a photo');
   if (needs.mask && !inputs.mask) return reject('Paint the part of the photo to change');
   if (needs.video && !inputs.video) return reject('This task needs a video');
@@ -350,7 +379,7 @@ api.post('/jobs/:id/retry', async (req, res) => {
   const preset = presetsWithAvailability().find((p) => p.id === job.params?.presetId);
   if (!preset) return res.status(400).json({ error: 'The mode of this job no longer exists' });
   if (!preset.available) return res.status(400).json({ error: 'Models not downloaded: ' + preset.missing.map((m) => m.name).join(', ') });
-  for (const k of ['image', 'mask', 'video']) {
+  for (const k of ['image', 'mask', 'video', 'audio']) {
     if (job.params[k] && !fs.existsSync(path.join(dirs.uploads, path.basename(job.params[k])))) {
       return res.status(400).json({ error: 'The source file of this job has been deleted' });
     }

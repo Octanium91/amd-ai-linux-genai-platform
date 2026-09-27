@@ -35,7 +35,7 @@ closeInterrupted(interrupted);
 // directories, _ref prepared references) are useless: remove them
 try {
   for (const f of fs.readdirSync(dirs.output)) {
-    if (/^\.[0-9a-f]{12}_(s\d+|ctrl|ref)/.test(f)) fs.rmSync(path.join(dirs.output, f), { recursive: true, force: true });
+    if (/^\.[0-9a-f]{12}_(s\d+|ctrl|ref|snd)/.test(f)) fs.rmSync(path.join(dirs.output, f), { recursive: true, force: true });
   }
 } catch {}
 
@@ -195,6 +195,7 @@ async function finalizeVideo(job, segments) {
   }
   if (conv.code === 0) {
     for (const f of segments) fs.rmSync(f, { force: true });
+    if (job.params.audio) await addSoundtrack(job, mp4, seconds);
     job.files = [base + '.mp4'];
   } else {
     // Without an mp4 keep every segment as is: they may be hours of GPU work
@@ -207,6 +208,24 @@ async function finalizeVideo(job, segments) {
     job.warning = 'Could not build the mp4: ' + conv.err.trim().slice(0, 300);
   }
   await makeThumb(job, path.join(dirs.output, job.files[0]));
+}
+
+// The soundtrack: the chosen audio (or the sound of a video) from audioStart, cut or padded with
+// silence to the clip's exact length, with a short fade-in against a click and, unless turned off,
+// a fade-out at the end. If it fails, the clip stays silent: the GPU work is not lost over the sound.
+async function addSoundtrack(job, mp4, seconds) {
+  const p = job.params;
+  const tmp = path.join(dirs.output, `.${job.id}_snd.mp4`);
+  const fadeOut = Math.min(1.5, seconds / 4);
+  const filters = ['asetpts=PTS-STARTPTS', 'apad', `atrim=end=${seconds.toFixed(3)}`, 'afade=t=in:d=0.05'];
+  if (p.audioFade !== false) filters.push(`afade=t=out:st=${(seconds - fadeOut).toFixed(3)}:d=${fadeOut.toFixed(3)}`);
+  const r = await runCmd('ffmpeg', ['-loglevel', 'error', '-y', '-i', mp4, '-ss', String(p.audioStart || 0), '-i', path.join(dirs.uploads, p.audio),
+    '-filter_complex', `[1:a:0]${filters.join(',')}[a]`, '-map', '0:v', '-map', '[a]', '-c:v', 'copy',
+    '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-movflags', '+faststart', tmp], 'ffmpeg.soundtrack');
+  if (r.code === 0) return fs.renameSync(tmp, mp4);
+  fs.rmSync(tmp, { force: true });
+  console.error(`[worker] ${job.id}: soundtrack: ${r.err.trim().slice(-300)}`);
+  job.warning = 'The sound could not be added; the video was saved without it';
 }
 
 // Inpainting repaints the masked part, but sd-cli returns the whole image through the VAE, which
@@ -527,8 +546,8 @@ export function nextJob() {
 // ---------- create, cancel, delete ----------
 
 // Uploaded files a job refers to: plain names inside the uploads directory, nothing else
-const UPLOAD_FIELDS = ['image', 'mask', 'video'];
-const UPLOAD_NAME = /^[\w.-]+\.(png|jpg|webp|mp4|mov|webm)$/;
+const UPLOAD_FIELDS = ['image', 'mask', 'video', 'audio'];
+const UPLOAD_NAME = /^[\w.-]+\.(png|jpg|webp|mp4|mov|webm|mp3|wav|ogg|flac|m4a)$/;
 export function validUploads(params) {
   return UPLOAD_FIELDS.every((k) => params?.[k] == null || (UPLOAD_NAME.test(params[k]) && !params[k].startsWith('.')));
 }

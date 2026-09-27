@@ -1,0 +1,9 @@
+Videos can get a soundtrack
+
+A video job may carry an audio file (MP3, WAV, OGG, FLAC, M4A or a video
+with sound) with a start point and an optional fade-out, or, for "Change a
+video", the sound of the uploaded video. The worker muxes it into the
+finished clip, cut or padded with silence to its exact length; if that
+fails the clip is kept silent with a warning. WORKER_API 3.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

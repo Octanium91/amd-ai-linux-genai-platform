@@ -565,6 +565,66 @@ function PromptField({ form, set, preset, isVideo, hasImage, duration, task, use
   );
 }
 
+// The soundtrack of a video: none, an audio file (or a video whose sound is taken), or for "Change a
+// video" the sound of the uploaded video. The worker cuts it to the clip's length.
+function SoundField({ sound, setSound, duration, canUseVideo }) {
+  const input = useRef(null);
+  const [length, setLength] = useState(null); // seconds of the chosen file
+  const { source, file, ref, start, fade } = sound;
+  const url = useMemo(() => (file ? URL.createObjectURL(file) : ref ? `/files/uploads/${ref}` : null), [file, ref]);
+  useEffect(() => () => file && url && URL.revokeObjectURL(url), [file, url]);
+  useEffect(() => setLength(null), [url]);
+  const upd = (patch) => setSound((s) => ({ ...s, ...patch }));
+  const onFile = (f) => {
+    if (f && (!f.type || /^(audio|video)\//.test(f.type))) upd({ file: f, ref: null, start: 0 });
+  };
+  const maxStart = length ? Math.max(0, Math.floor((length - 0.5) * 2) / 2) : 0;
+  const choices = [['none', t('No sound')], ['file', t('Your track')], ...(canUseVideo ? [['video', t('From the video')]] : [])];
+  return (
+    <div className="field">
+      <span className="field-label">{t('Sound')} <Info text={t('The track is cut to the length of the video, or padded with silence if it is shorter.')} /></span>
+      <div className="seg" role="radiogroup" aria-label={t('Sound')}>
+        {choices.map(([k, label]) => (
+          <button key={k} type="button" role="radio" aria-checked={source === k} className={`seg-item ${source === k ? 'on' : ''}`}
+            style={{ flex: 1, justifyContent: 'center' }} onClick={() => upd({ source: k })}>{label}</button>
+        ))}
+      </div>
+      {source === 'video' && <span className="field-hint">{t('The sound of the uploaded video, from its start.')}</span>}
+      {source === 'file' && (url ? (
+        <div className="sound-pick">
+          <div className="sound-player">
+            <audio src={url} controls preload="metadata" onLoadedMetadata={(e) => setLength(Number.isFinite(e.currentTarget.duration) ? e.currentTarget.duration : null)} />
+            <button type="button" className="btn-icon" title={t('Remove')} onClick={() => upd({ file: null, ref: null, start: 0 })}>×</button>
+          </div>
+          {length > 1 && (
+            <label className="field">
+              <span className="field-label field-label-row">
+                <span>{t('Start at')}</span>
+                <b>{t('{a}–{b} s of {total} s', { a: Number(start).toFixed(1), b: Math.min(length, Number(start) + duration).toFixed(1), total: length.toFixed(1) })}</b>
+              </span>
+              <input type="range" min={0} max={maxStart} step={0.5} value={Math.min(start, maxStart)} onChange={(e) => upd({ start: Number(e.target.value) })} />
+            </label>
+          )}
+          {length != null && length - start < duration && <span className="field-hint">{t('The track is shorter than the video: the rest will be silent.')}</span>}
+          <label className="checkbox checkbox-sm"><input type="checkbox" checked={fade} onChange={(e) => upd({ fade: e.target.checked })} /> {t('Fade out at the end')}</label>
+        </div>
+      ) : (
+        <div className="drop drop-small" role="button" tabIndex={0} onClick={() => input.current?.click()}
+          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), input.current?.click())}
+          onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); onFile(e.dataTransfer.files[0]); }}>
+          <span>
+            <div className="drop-icon">♪</div>
+            <div>{t('Drop an audio file here or click (MP3, WAV, OGG, FLAC, M4A or a video)')}</div>
+          </span>
+        </div>
+      ))}
+      <input ref={input} type="file" accept="audio/*,.mp3,.wav,.ogg,.flac,.m4a,video/mp4,video/quicktime,video/webm" hidden onChange={(e) => { onFile(e.target.files[0]); e.target.value = ''; }} />
+    </div>
+  );
+}
+
+const NO_SOUND = { source: 'none', file: null, ref: null, start: 0, fade: true };
+
 export default function GenerateForm({ kind, user, presets, templates, system, jobs, reuse, onReuseApplied, queueSize, onCreated, reloadPresets, goModels }) {
   const submitting = useRef(false);
   const [form, setForm] = useState(null);
@@ -580,6 +640,7 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
   const [photoSize, setPhotoSize] = useState(null); // [width, height] of the current photo
   const [video, setVideo] = useState(null); // File
   const [videoRef, setVideoRef] = useState(null); // name of an already uploaded video
+  const [sound, setSound] = useState(NO_SOUND);
   const fileInput = useRef(null);
   const videoInput = useRef(null);
   const isVideo = kind === 'video';
@@ -602,13 +663,16 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
 
   useEffect(() => {
     if (!reuse || (reuse.kind || 'video') !== kind) return;
-    const { _t, image: img, video: _v, mask: _m, task: _task, presetName, frames, steps, fps, segments, kind: _k, ...params } = reuse;
+    const { _t, image: img, video: _v, mask: _m, audio, audioStart, audioFade, task: _task, presetName, frames, steps, fps, segments, kind: _k, ...params } = reuse;
     params.quality ??= 'normal';
     setForm((f) => ({ ...(f || {}), ...params }));
     setImage(null);
     setImageRef(img || null);
     setVideo(null);
     setVideoRef(reuse.video || null);
+    setSound(!audio ? NO_SOUND
+      : audio === reuse.video ? { ...NO_SOUND, source: 'video' }
+        : { ...NO_SOUND, source: 'file', ref: audio, start: audioStart || 0, fade: audioFade !== false });
     setMaskBlob(null);
     setTaskKey(reuse.task || (img ? (kind === 'video' ? 'animate' : 'rework') : 'create'));
     // Applied once: coming back to the tab later must not overwrite what the user typed since
@@ -662,6 +726,7 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
     if (!next.video) {
       setVideo(null);
       setVideoRef(null);
+      setSound((s) => (s.source === 'video' ? { ...s, source: 'none' } : s));
     }
     setForm((f) => ({ ...f, strength: next.strength ?? null }));
     // Keep the mode when it fits the task, otherwise the first fitting one that is ready
@@ -729,6 +794,7 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
     if (task.image && !image && !imageRef) return setError(t('Add a photo for this task.'));
     if (task.mask && !maskBlob) return setError(t('Paint the part of the photo to change.'));
     if (task.video && !video && !videoRef) return setError(t('Add a video for this task.'));
+    if (isVideo && sound.source === 'file' && !sound.file && !sound.ref) return setError(t('Add an audio file or choose No sound.'));
     submitting.current = true;
     setError('');
     setBusy(true);
@@ -745,6 +811,13 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
       if (maskPng) fd.append('mask', maskPng, 'mask.png');
       if (task.video && video) fd.append('video', video);
       else if (task.video && videoRef) fd.append('videoRef', videoRef);
+      if (isVideo && sound.source === 'file') {
+        if (sound.file) fd.append('audio', sound.file);
+        else fd.append('audioRef', sound.ref);
+        fd.append('audioStart', String(sound.start));
+        fd.append('audioFade', String(sound.fade));
+      }
+      if (isVideo && sound.source === 'video' && task.video) fd.append('audioSource', 'video');
       await api('/api/jobs', { method: 'POST', body: fd });
       onCreated();
     } catch (err) {
@@ -961,6 +1034,8 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
           <Chips items={COUNTS} value={form.count} onChange={set('count')} />
         </div>
       )}
+
+      {isVideo && <SoundField sound={sound} setSound={setSound} duration={plan.duration} canUseVideo={!!task.video} />}
 
       <div className="field">
         <span className="field-label">{t('Quality')} <Info text={t('More model passes ({steps}) give a cleaner picture but take longer. Draft is good for trying an idea.', { steps })} /></span>

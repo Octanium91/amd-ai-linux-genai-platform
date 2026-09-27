@@ -89,6 +89,14 @@ export function jobParams(preset, body, image, inputs = {}) {
     // What the control video keeps: contours (motion and shapes) or grayscale (more of the original)
     params.control = body.control === 'gray' ? 'gray' : 'edges';
   }
+  // The soundtrack: an uploaded audio file from audioStart seconds, or the sound of the uploaded video
+  // (from its start, like the control frames)
+  const audio = inputs.audio || (inputs.video && body.audioSource === 'video' ? inputs.video : null);
+  if (preset.kind === 'video' && audio) {
+    params.audio = audio;
+    params.audioStart = audio === inputs.video ? 0 : Math.round(clamp(body.audioStart, 0, 3600, 0) * 10) / 10;
+    params.audioFade = body.audioFade !== 'false' && body.audioFade !== false;
+  }
   // How far the result may move from the photo (rework, inpaint): the mode's own value when unset
   if (image && ['rework', 'inpaint'].includes(inputs.task) && body.strength != null && body.strength !== '') {
     params.strength = clamp(body.strength, 0.05, 1, null);

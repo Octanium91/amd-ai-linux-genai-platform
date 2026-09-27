@@ -205,6 +205,23 @@ check('gpu_metrics v3.0: temperatures, clocks, limits and throttle counters',
   && gm.activeReasons(d, gm.THERMAL_REASONS).join() === 'thm_gfx' && gm.parseGpuMetrics(Buffer.from('08010200', 'hex')) === null,
   JSON.stringify(m && { t: m.tempGfx, clk: m.gfxclkMhz, lim: m.gfxMaxMhz, uclk: m.uclkMhz, thm: m.throttle.thm_gfx }));
 
+// A soundtrack: a 1 s tone from 0.5 s into a 2 s clip is padded with silence to the clip's length;
+// a file without sound leaves the clip silent with a warning
+fs.mkdirSync(`${DATA}/input/uploads`, { recursive: true });
+execFileSync('ffmpeg', ['-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=f=440:d=1.5', `${DATA}/input/uploads/1-aaaaaa.wav`]);
+execFileSync('ffmpeg', ['-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=red:s=64x64:d=1', `${DATA}/input/uploads/2-bbbbbb.mp4`]);
+const withSound = (audio) => ({ ...video(2), params: { ...video(2).params, audio, audioStart: 0.5, audioFade: true } });
+let snd = (await api('/v1/jobs', 'POST', withSound('1-aaaaaa.wav'))).body;
+snd = await waitFor(snd.id, (j) => ['done', 'failed'].includes(j.status));
+const probe = (f) => execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_type,duration', '-of', 'csv=p=0', `${DATA}/output/${f}`]).toString().trim().split('\n');
+const streams = snd.files ? probe(snd.files[0]) : [];
+const aDur = Number(streams.find((l) => l.startsWith('audio'))?.split(',')[1]);
+check('the soundtrack is added, padded to the clip length', snd.status === 'done' && !snd.warning && Math.abs(aDur - 17 / 8) < 0.06, `${snd.status} ${snd.warning || ''} ${streams.join(' | ')}`);
+check('no temporary soundtrack file is left', !outputFiles().some((f) => f.includes('_snd')));
+let mute = (await api('/v1/jobs', 'POST', withSound('2-bbbbbb.mp4'))).body;
+mute = await waitFor(mute.id, (j) => ['done', 'failed'].includes(j.status));
+check('a soundtrack without sound leaves the clip silent with a warning', mute.status === 'done' && /sound could not be added/.test(mute.warning || '') && !probe(mute.files[0]).some((l) => l.startsWith('audio')), `${mute.status} ${mute.warning}`);
+
 worker.kill();
 console.log(failed ? `${failed} FAILED` : 'ALL PASSED');
 process.exit(failed ? 1 : 0);

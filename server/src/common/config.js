@@ -36,7 +36,8 @@ export const config = {
 
 // Version of the web ↔ worker API; both sides refuse to work with a different major version
 // 2: jobs carry a task and may carry a mask, a video, a control type and a strength
-export const WORKER_API = 2;
+// 3: video jobs may carry a soundtrack (audio, audioStart, audioFade)
+export const WORKER_API = 3;
 
 // Some directories are mounted read-only in one of the containers (output in web, models in worker)
 for (const d of Object.values(config.dirs)) {

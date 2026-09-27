@@ -102,7 +102,7 @@ Every route except sign-in requires a session. Mutating requests require the `X-
 | GET | `/api/templates` | user | hidden start templates |
 | GET | `/api/packs` | user | model packs for first-run setup |
 | GET | `/api/diagnostics` | user | system check results (`?refresh=1` re-runs) |
-| POST | `/api/jobs` | user | a new job (multipart, optional `image`) |
+| POST | `/api/jobs` | user | a new job (multipart: `image`, `mask`, `video` by the task, or `imageRef`/`videoRef` for earlier uploads; a video job may add a soundtrack: `audio` or `audioRef` with `audioStart` and `audioFade`, or `audioSource=video` for the sound of the uploaded video) |
 | POST/DELETE | `/api/jobs/:id/cancel` · `/api/jobs/:id` | owner or admin | cancel / delete together with files |
 | POST | `/api/jobs/:id/retry` | owner or admin | restart a failed or cancelled job with the same parameters and seed; it joins the end of the queue |
 | GET | `/api/jobs/:id/log` · `/api/jobs/:id/download/:n` | user | sd-cli log, download a result |

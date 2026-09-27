@@ -36,6 +36,7 @@ export function ParamChips({ p, user, detailed = false }) {
       <span>{QUALITY_LABEL[p.quality] ? t(QUALITY_LABEL[p.quality]) : t('{n} steps', { n: p.steps })}</span>
       {p.segments > 1 && <span>{t('long video ({n} parts)', { n: p.segments })}</span>}
       {task && <span>{task}</span>}
+      {video && p.audio && <span>♪ {p.audio === p.video ? t('sound of the video') : t('with sound')}</span>}
       {detailed && <span>{t('Prompt strictness')} {p.cfg}</span>}
       {detailed && <span>{t('Variation number')} {p.seed}</span>}
       {user && <span>👤 {user}</span>}

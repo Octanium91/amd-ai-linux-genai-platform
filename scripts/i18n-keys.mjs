@@ -56,8 +56,10 @@ const EXTRA = [
   'Could not build the mp4:',
   'Only PNG, JPEG and WebP images are accepted',
   'Only MP4, MOV and WebM videos are accepted',
+  'Only MP3, WAV, OGG, FLAC and M4A audio or a video with sound are accepted',
   'Background removal failed',
   // job.warning texts set by the worker
+  'The sound could not be added; the video was saved without it',
   'The video could not be read to the end; its readable part was used',
   'The repainted part could not be blended into the original photo; the whole image is from the model',
 ];
