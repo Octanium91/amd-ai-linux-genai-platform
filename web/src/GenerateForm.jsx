@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { api, estimate, fmtBytes, fmtDuration } from './util.js';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { api, CSRF, estimate, fmtBytes, fmtDuration } from './util.js';
 import { loc, t, tError } from './i18n.js';
 
 const FALLBACK_RES = [[512, 512], [768, 512], [512, 768]];
@@ -19,6 +19,7 @@ const TASKS = {
     { key: 'create', label: 'Create', title: 'An image from a description' },
     { key: 'rework', label: 'Rework a photo', title: 'Your photo changed by the description', image: true, strength: 0.6 },
     { key: 'inpaint', label: 'Change a part', title: 'Paint a part of the photo and describe what goes there', image: true, mask: true, strength: 0.9 },
+    { key: 'cutout', label: 'Remove background', title: 'Keep the subject, make the background transparent (PNG)', image: true, noPrompt: true, cutout: true },
     { key: 'upscale', label: 'Upscale', title: 'A photo 4× larger with restored detail', image: true, noPrompt: true },
   ],
   video: [
@@ -33,6 +34,7 @@ const photoLabel = (task) => ({
   rework: t('Photo to rework'),
   inpaint: t('Photo'),
   upscale: t('Photo to upscale'),
+  cutout: t('Photo'),
   animate: t('Start frame'),
   reference: t('Photo of the person or object'),
   restyle: t('Reference photo (optional)'),
@@ -143,6 +145,7 @@ const TASK_ICONS = {
   rework: 'M4 5h11a2 2 0 0 1 2 2v3h-2V7H4v10h6v2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zm15.6 7.6 1.8 1.8-6.6 6.6H13v-1.8l6.6-6.6zM6 15l2.5-3.2 1.8 2.2 1.2-1.5L14 15H6z',
   inpaint: 'M20.7 5.6 18.4 3.3a1 1 0 0 0-1.4 0L9 11.3 12.7 15l8-8a1 1 0 0 0 0-1.4zM7.5 13c-1.9 0-3.5 1.6-3.5 3.5 0 1.2-.8 2.2-2 2.5.9 1.2 2.4 2 4 2 2.8 0 5-2.2 5-5 0-1.7-1.6-3-3.5-3z',
   upscale: 'M4 4h6v2H7.4l4.3 4.3-1.4 1.4L6 7.4V10H4V4zm16 16h-6v-2h2.6l-4.3-4.3 1.4-1.4 4.3 4.3V14h2v6z',
+  cutout: 'M9.6 7.6A3.5 3.5 0 1 0 6 11a3.4 3.4 0 0 0 1.5-.4L10 13l-2.5 2.4A3.5 3.5 0 1 0 9.6 17l2.4-2.4 7 7H22L9.6 7.6zM6 9a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm0 11a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm6-8.5 1.5 1.5L22 5.5V3h-2.5L12 11.5z',
   animate: 'M4 5h12a2 2 0 0 1 2 2v2.5l4-2.5v10l-4-2.5V17a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zm4 3.5v7l5.5-3.5L8 8.5z',
   reference: 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-3.3 0-7 1.7-7 4.5V20h11.1a6 6 0 0 1 3.9-6.2C15.4 13.3 12.4 13 9 13zm10 1v3h3v2h-3v3h-2v-3h-3v-2h3v-3h2z',
   restyle: 'M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm0 2v12h16V6H4zm2 2h2v2H6V8zm0 6h2v2H6v-2zm10-6h2v2h-2V8zm0 6h2v2h-2v-2zm-5.5-5 4 3-4 3V9z',
@@ -297,6 +300,186 @@ function MaskEditor({ src, onChange }) {
         <button type="button" className="btn btn-small" disabled={!painted} onClick={clear}>{t('Clear')}</button>
       </div>
       <span className="field-hint">{painted ? t('Only the painted part changes; the rest of the photo stays as it is.') : t('Paint over the part of the photo to change.')}</span>
+    </div>
+  );
+}
+
+// Background removal. The server's model returns a soft mask of the main subject; here it becomes
+// the alpha channel of the photo, shown over a checkerboard. "Keep" and "remove" brushes paint on
+// that alpha channel, and the result is exported as a PNG with transparency in the browser.
+function CutoutEditor({ src, file, imageRef }) {
+  const view = useRef(null);
+  const alpha = useRef(null);
+  const photo = useRef(null);
+  const auto = useRef(null); // the model's mask, for "Reset"
+  const drawing = useRef(null);
+  const [state, setState] = useState('loading');
+  const [error, setError] = useState('');
+  const [mode, setMode] = useState('keep');
+  const [brush, setBrush] = useState(4); // % of the photo width
+  const [ghost, setGhost] = useState(false);
+
+  const render = useCallback(() => {
+    const v = view.current;
+    const img = photo.current;
+    if (!v || !img || !alpha.current) return;
+    const g = v.getContext('2d');
+    g.clearRect(0, 0, v.width, v.height);
+    if (ghost) {
+      g.globalAlpha = 0.25;
+      g.drawImage(img, 0, 0, v.width, v.height);
+      g.globalAlpha = 1;
+    }
+    // The cut-out subject: the photo where the alpha canvas is opaque
+    const tmp = document.createElement('canvas');
+    tmp.width = v.width;
+    tmp.height = v.height;
+    const tg = tmp.getContext('2d');
+    tg.drawImage(img, 0, 0, v.width, v.height);
+    tg.globalCompositeOperation = 'destination-in';
+    tg.drawImage(alpha.current, 0, 0);
+    g.drawImage(tmp, 0, 0);
+  }, [ghost]);
+
+  // Ask the server for the subject mask, then turn it into the alpha canvas
+  useEffect(() => {
+    let alive = true;
+    setState('loading');
+    setError('');
+    (async () => {
+      try {
+        const fd = new FormData();
+        if (file) fd.append('image', file);
+        else fd.append('imageRef', imageRef);
+        const r = await fetch('/api/cutout', { method: 'POST', body: fd, headers: CSRF });
+        if (!r.ok) throw new Error(tError((await r.json().catch(() => ({}))).error) || `HTTP ${r.status}`);
+        const mask = await createImageBitmap(await r.blob());
+        const img = new Image();
+        img.src = src;
+        await img.decode();
+        if (!alive) return;
+        photo.current = img;
+        const w = img.naturalWidth;
+        const h = img.naturalHeight;
+        view.current.width = w;
+        view.current.height = h;
+        const a = document.createElement('canvas');
+        a.width = w;
+        a.height = h;
+        const ag = a.getContext('2d');
+        ag.drawImage(mask, 0, 0, w, h);
+        const d = ag.getImageData(0, 0, w, h);
+        for (let i = 0; i < d.data.length; i += 4) {
+          d.data[i + 3] = d.data[i];
+          d.data[i] = d.data[i + 1] = d.data[i + 2] = 255;
+        }
+        ag.putImageData(d, 0, 0);
+        auto.current = d;
+        alpha.current = a;
+        setState('ready');
+      } catch (e) {
+        if (alive) {
+          setError(e.message);
+          setState('error');
+        }
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [src, file, imageRef]);
+
+  useEffect(() => {
+    if (state === 'ready') render();
+  }, [state, render]);
+
+  const point = (e) => {
+    const r = view.current.getBoundingClientRect();
+    return [((e.clientX - r.left) / r.width) * view.current.width, ((e.clientY - r.top) / r.height) * view.current.height];
+  };
+  const stroke = (from, to) => {
+    const g = alpha.current.getContext('2d');
+    g.globalCompositeOperation = mode === 'keep' ? 'source-over' : 'destination-out';
+    g.strokeStyle = '#fff';
+    g.lineWidth = (brush / 100) * alpha.current.width;
+    g.lineCap = 'round';
+    g.lineJoin = 'round';
+    g.beginPath();
+    g.moveTo(...from);
+    g.lineTo(...to);
+    g.stroke();
+    g.globalCompositeOperation = 'source-over';
+    render();
+  };
+  const down = (e) => {
+    if (state !== 'ready' || drawing.current) return;
+    e.preventDefault();
+    view.current.setPointerCapture(e.pointerId);
+    const p = point(e);
+    drawing.current = { id: e.pointerId, p };
+    stroke(p, p);
+  };
+  const move = (e) => {
+    if (drawing.current?.id !== e.pointerId) return;
+    const p = point(e);
+    stroke(drawing.current.p, p);
+    drawing.current.p = p;
+  };
+  const up = (e) => {
+    if (drawing.current?.id === e.pointerId) drawing.current = null;
+  };
+  const reset = () => {
+    alpha.current.getContext('2d').putImageData(auto.current, 0, 0);
+    render();
+  };
+  // The PNG is made without the faint original, whatever the view shows
+  const download = () => {
+    const out = document.createElement('canvas');
+    out.width = view.current.width;
+    out.height = view.current.height;
+    const g = out.getContext('2d');
+    g.drawImage(photo.current, 0, 0);
+    g.globalCompositeOperation = 'destination-in';
+    g.drawImage(alpha.current, 0, 0);
+    out.toBlob((b) => {
+      const url = URL.createObjectURL(b);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'cutout.png';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }, 'image/png');
+  };
+
+  return (
+    <div className="mask-editor">
+      <div className="mask-stage cutout-stage">
+        <canvas ref={view} className="cutout-view" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} />
+        {state === 'loading' && <div className="cutout-wait"><span className="dot live" /> {t('Finding the subject…')}</div>}
+      </div>
+      {state === 'error' && <div className="error">{error}</div>}
+      {state === 'ready' && (
+        <>
+          <div className="mask-tools">
+            <div className="seg" role="radiogroup" aria-label={t('Brush')}>
+              <button type="button" className={`seg-item ${mode === 'keep' ? 'on' : ''}`} onClick={() => setMode('keep')}>＋ {t('Keep')}</button>
+              <button type="button" className={`seg-item ${mode === 'remove' ? 'on' : ''}`} onClick={() => setMode('remove')}>− {t('Remove')}</button>
+            </div>
+            <label className="mask-brush">
+              <span className="muted small">{t('Brush')}</span>
+              <input type="range" min={1} max={15} value={brush} onChange={(e) => setBrush(Number(e.target.value))} />
+            </label>
+          </div>
+          <div className="mask-tools">
+            <label className="checkbox checkbox-sm"><input type="checkbox" checked={ghost} onChange={(e) => setGhost(e.target.checked)} /> {t('Show the removed part faintly')}</label>
+            <button type="button" className="btn btn-small ghost" onClick={reset}>{t('Reset')}</button>
+          </div>
+          <span className="field-hint">{t('Paint with "Keep" over what the model missed and with "Remove" over what should go.')}</span>
+          <button type="button" className="btn primary" onClick={download}>⬇ {t('Download PNG')}</button>
+        </>
+      )}
     </div>
   );
 }
@@ -542,7 +725,7 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
   const submit = async (e) => {
     e.preventDefault();
     // Ctrl+Enter bypasses the disabled button, and a held key repeats: one job per submit
-    if (submitting.current) return;
+    if (submitting.current || task.cutout) return;
     if (task.image && !image && !imageRef) return setError(t('Add a photo for this task.'));
     if (task.mask && !maskBlob) return setError(t('Paint the part of the photo to change.'));
     if (task.video && !video && !videoRef) return setError(t('Add a video for this task.'));
@@ -603,7 +786,14 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
       {acceptsImage && (
         <div className="field">
           <span className="field-label">{photoLabel(task.key)}</span>
-          {previewUrl && task.mask ? (
+          {previewUrl && task.cutout ? (
+            <>
+              <CutoutEditor key={previewUrl} src={previewUrl} file={image} imageRef={imageRef} />
+              <div className="photo-bar">
+                <button type="button" className="btn btn-small" onClick={() => fileInput.current?.click()}>{t('Replace the photo')}</button>
+              </div>
+            </>
+          ) : previewUrl && task.mask ? (
             <>
               <img src={previewUrl} alt="" hidden onLoad={onPhotoLoad} />
               <MaskEditor key={previewUrl} src={previewUrl} onChange={setMaskBlob} />
@@ -692,7 +882,7 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
         </label>
       )}
 
-      {upscale && <div className="muted small">{t('The photo becomes 4 times larger. No other settings are needed.')}</div>}
+      {task.key === 'upscale' && <div className="muted small">{t('The photo becomes 4 times larger. No other settings are needed.')}</div>}
 
       <div className="field">
         <span className="field-label">{t('Model')}</span>
@@ -842,7 +1032,7 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
 
       {error && <div className="error">{error}</div>}
 
-      <div className="form-foot">
+      {!task.cutout && <div className="form-foot">
         <div className="submit-row">
           <div className="eta">
             <span className="eta-time">
@@ -858,7 +1048,7 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
           </button>
           {why && !busy && <span className="submit-why">{why}</span>}
         </div>
-      </div>
+      </div>}
     </form>
   );
 }

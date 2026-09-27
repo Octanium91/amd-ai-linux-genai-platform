@@ -16,6 +16,7 @@ import { jobParams, jobSpec } from './params.js';
 import { loadPresets, loadTemplates, presetsWithAvailability, TASK_INPUTS } from './presets.js';
 import { readJson } from '../common/store.js';
 import { promptAdminRoutes, promptRoutes } from './prompt.js';
+import { segmenterEntry, subjectMask } from './cutout.js';
 import { settingsRoutes } from './settings.js';
 import { callWorker, workerState } from './worker.js';
 
@@ -190,6 +191,7 @@ api.post('/jobs', beforeUpload, jobFiles, async (req, res) => {
   if (task !== 'create' && !(await workerState()).worker?.compatible) return reject('The generation engine is being updated, try again in a minute');
   if (!preset.tasks.includes(task)) return reject('This mode cannot do this task');
   const needs = TASK_INPUTS[task];
+  if (needs.instant) return reject('This task runs without the queue');
   if (!needs.noPrompt && !String(b.prompt || '').trim()) return reject('Enter a prompt');
   if (String(b.prompt || '').length > MAX_PROMPT || String(b.negative ?? '').length > MAX_PROMPT) {
     return reject('The prompt is too long (at most 4000 characters)');
@@ -253,6 +255,38 @@ api.post('/jobs', beforeUpload, jobFiles, async (req, res) => {
   } catch (e) {
     for (const f of uploaded) fs.rmSync(f.path, { force: true });
     throw e;
+  }
+});
+
+// Background removal: the subject mask of a photo as a grayscale PNG (white = keep). The photo is
+// an upload in this request, an earlier upload by name, or an image of a finished job. One at a
+// time: the model takes a few seconds of CPU and about 300 MB of memory.
+let cutoutBusy = Promise.resolve();
+api.post('/cutout', upload.single('image'), async (req, res) => {
+  const tmp = req.file?.path;
+  try {
+    const entry = segmenterEntry();
+    if (!entry) return res.status(409).json({ error: 'The background removal model is not downloaded: an administrator can download it in Models' });
+    let file = null;
+    if (tmp) file = tmp;
+    else if (UPLOAD_NAME.test(String(req.body?.imageRef || ''))) file = path.join(dirs.uploads, req.body.imageRef);
+    else if (req.body?.jobId) {
+      const job = await findJob(String(req.body.jobId));
+      const f = job.files?.[Number(req.body.index) || 0];
+      if (f) file = path.join(dirs.output, path.basename(f));
+    }
+    if (!file || !fs.existsSync(file) || !imageType(file)) return res.status(400).json({ error: 'This task needs a photo' });
+    const size = imageSize(file);
+    if (size && size[0] * size[1] > MAX_PIXELS) return res.status(400).json({ error: 'The photo is too large (at most 50 megapixels)' });
+    const run = cutoutBusy.then(() => subjectMask(fs.readFileSync(file), path.join(dirs.models, entry.file)));
+    cutoutBusy = run.catch(() => {});
+    const { png } = await run;
+    res.set('Content-Type', 'image/png').set('Cache-Control', 'no-store').send(png);
+  } catch (e) {
+    console.error(`[cutout] ${e.message}`);
+    res.status(e.status || 500).json({ error: e.status ? e.message : 'Background removal failed' });
+  } finally {
+    if (tmp) fs.rmSync(tmp, { force: true });
   }
 });
 

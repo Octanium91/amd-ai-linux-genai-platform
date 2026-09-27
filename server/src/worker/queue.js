@@ -447,6 +447,8 @@ async function run(job) {
       const controlDir = job.params.video && i === 0 ? await controlFrames(job, tmpBase) : null;
       const refImage = job.params.image && ['reference', 'restyle'].includes(job.params.task) && i === 0 ? await referenceImage(job, tmpBase) : null;
       if (job.status !== 'running') break;
+      // Loading the models after the helper commands is preparation again, not ffmpeg
+      if (controlDir || refImage) current.tel?.phase('prepare', { segment: i + 1 });
       const args = buildArgs(job, preset, outBase, init, controlDir, refImage);
       if (i === 0) job.cmd = [config.sdCli, ...args].join(' ');
       const { code, signal, spawnError } = await runSd(job, args, log);

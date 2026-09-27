@@ -10,6 +10,7 @@ const CATEGORY = {
   vae: 'VAE',
   text_encoder: 'Text encoders',
   upscaler: 'Upscalers',
+  segmenter: 'Background removal',
 };
 const STATUS = {
   installed: 'Installed',

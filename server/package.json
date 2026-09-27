@@ -12,6 +12,9 @@
   },
   "dependencies": {
     "express": "^5.1.0",
-    "multer": "^2.0.2"
+    "jpeg-js": "^0.4.4",
+    "multer": "^2.0.2",
+    "onnxruntime-node": "^1.30.0",
+    "pngjs": "^7.0.0"
   }
 }

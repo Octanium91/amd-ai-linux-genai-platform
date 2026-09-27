@@ -690,3 +690,12 @@ input[type="range"].extra { accent-color: var(--warn); }
 /* the running job's preview: the job's own aspect ratio, the tiny latent image scaled to fill it */
 .hero-media.live-preview { cursor: default; align-self: start; width: 100%; max-height: 60vh; }
 .hero-media.live-preview img { width: 100%; height: 100%; max-height: none; object-fit: contain; filter: blur(0.6px); }
+
+/* background removal: the cut-out over a checkerboard, brushes paint on its transparency */
+.task-tabs { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+.cutout-stage {
+  position: relative; line-height: 0; min-height: 160px;
+  background: repeating-conic-gradient(#d6d9e0 0 25%, #fff 0 50%) 0 0 / 18px 18px;
+}
+.cutout-view { width: 100%; height: auto; display: block; touch-action: none; cursor: crosshair; }
+.cutout-wait { position: absolute; inset: 0; display: grid; place-items: center; grid-auto-flow: column; gap: 8px; line-height: 1.4; color: #16181f; background: rgba(255, 255, 255, 0.6); font-size: 13px; }

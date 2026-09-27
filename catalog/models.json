@@ -342,5 +342,24 @@
         "description": "Wan 2.1 с VACE: видео по референсному фото (человек или предмет) или по движению другого видео."
       }
     }
+  },
+  {
+    "id": "birefnet-lite",
+    "name": "BiRefNet lite (ONNX)",
+    "category": "segmenter",
+    "description": "Finds the main subject of a photo for background removal. Runs on the CPU in seconds.",
+    "file": "segmenters/BiRefNet_lite.onnx",
+    "url": "https://huggingface.co/onnx-community/BiRefNet_lite-ONNX/resolve/main/onnx/model.onnx",
+    "size": 224005088,
+    "license": "MIT",
+    "homepage": "https://huggingface.co/ZhengPeng7/BiRefNet_lite",
+    "i18n": {
+      "uk": {
+        "description": "Знаходить головний об'єкт на фото для видалення фону. Працює на процесорі за кілька секунд."
+      },
+      "ru": {
+        "description": "Находит главный объект на фото для удаления фона. Работает на процессоре за несколько секунд."
+      }
+    }
   }
 ]

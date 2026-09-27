@@ -42,6 +42,7 @@ export function NextActions({ job, index = 0, acts, onDone, primaryDownload = tr
             <button className="btn" onClick={() => run(() => acts.onFollowUp(job, index, 'image', 'inpaint'))}>🖌 {t('Change a part')}</button>
             <button className="btn" onClick={() => run(() => acts.onFollowUp(job, index, 'image', 'rework'))}>🖼 {t('Rework')}</button>
             <button className="btn" onClick={() => run(() => acts.onFollowUp(job, index, 'video', 'animate'))}>🎬 {t('Animate')}</button>
+            <button className="btn" onClick={() => run(() => acts.onFollowUp(job, index, 'image', 'cutout'))}>✂ {t('Remove background')}</button>
           </>
         )}
         <button className="btn ghost" onClick={() => { acts.onReuse(job); onDone?.(); }}>↻ {t('Edit and run again')}</button>

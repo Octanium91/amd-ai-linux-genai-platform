@@ -25,7 +25,8 @@ export function presetModels(preset, catalog = loadCatalog()) {
 // What a mode can be used for. A mode may list its tasks in catalog/presets.json (`tasks`);
 // otherwise they follow from whether it takes an image (`image`: none, optional, required).
 //   image: create (text → image), rework (image → image), inpaint (repaint a masked part),
-//          upscale (a dedicated upscaler mode)
+//          upscale (a dedicated upscaler mode), cutout (background removal, in the browser and the web
+//          container, no job)
 //   video: create (text → video), animate (the photo is the first frame),
 //          reference (a person or object from a photo in a new video), restyle (video → video)
 export const TASK_INPUTS = {
@@ -33,6 +34,7 @@ export const TASK_INPUTS = {
   rework: { image: true },
   inpaint: { image: true, mask: true },
   upscale: { image: true, noPrompt: true },
+  cutout: { image: true, noPrompt: true, instant: true },
   animate: { image: true },
   reference: { image: true },
   restyle: { video: true, imageOptional: true },

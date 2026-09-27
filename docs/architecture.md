@@ -109,6 +109,7 @@ Every route except sign-in requires a session. Mutating requests require the `X-
 | GET | `/api/models` | user | catalog, statuses, download progress, disk space |
 | POST | `/api/models/download` `{ids}` · `/api/models/:id/cancel` | admin | download / cancel |
 | DELETE | `/api/models/:id` | admin | delete (refused while the model is in use) |
+| POST | `/api/cutout` | user | multipart `image`, or `imageRef`, or `jobId` + `index`: the subject mask as a grayscale PNG (BiRefNet lite via ONNX Runtime on the CPU; one at a time) |
 | POST | `/api/jobs/:id/as-input` | user | `{index}`: copies one image of a finished job into the uploads and returns its name, for a follow-up task |
 | POST | `/api/jobs/:id/upscale` | user | `{index}`: upscales one image of a finished job ×4 as a new job (at most 2048 px on the long side) |
 | GET/PUT | `/api/settings` | admin | platform settings (telemetry on/off and size limit; the prompt assistant's Ollama address, model, on/off) |

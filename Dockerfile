@@ -29,8 +29,9 @@ RUN npm run build
 # ---------- server dependencies (web only) ----------
 FROM node:22-trixie-slim AS deps
 WORKDIR /app/server
-COPY server/package.json server/package-lock.json ./
-RUN npm ci --omit=dev --no-audit --no-fund
+COPY server/package.json server/package-lock.json server/.npmrc ./
+# onnxruntime-node (background removal on the CPU) ships binaries for every platform: keep linux/x64
+RUN npm ci --omit=dev --no-audit --no-fund  && find node_modules/onnxruntime-node/bin -mindepth 3 -maxdepth 3 -type d ! -path '*/linux/x64' -exec rm -rf {} +
 
 # ---------- worker: the same Debian 13 as the host (same Mesa/RADV version) ----------
 FROM debian:trixie AS worker

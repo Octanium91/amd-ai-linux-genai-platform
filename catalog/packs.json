@@ -193,6 +193,28 @@
     }
   },
   {
+    "id": "image-cutout",
+    "name": "Images · background removal (BiRefNet lite)",
+    "description": "Cuts the main subject out of a photo into a PNG with transparency. Runs on the CPU. 224 MB.",
+    "recommended": true,
+    "models": [
+      "birefnet-lite"
+    ],
+    "presets": [
+      "img-cutout"
+    ],
+    "i18n": {
+      "uk": {
+        "name": "Зображення · видалення фону (BiRefNet lite)",
+        "description": "Вирізає головний об'єкт із фото в PNG із прозорістю. Працює на процесорі. 224 МБ."
+      },
+      "ru": {
+        "name": "Изображения · удаление фона (BiRefNet lite)",
+        "description": "Вырезает главный объект из фото в PNG с прозрачностью. Работает на процессоре. 224 МБ."
+      }
+    }
+  },
+  {
     "id": "video-vace",
     "name": "Video · Wan 2.1 VACE — put a person in, change a video",
     "description": "A person or object from a photo in a new video, or the motion of your video with a new look. Experimental; uses the Wan 2.1 VAE and the UMT5 encoder.",

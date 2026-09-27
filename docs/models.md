@@ -26,6 +26,7 @@ Only administrators can download and delete models. On first start, while no mod
 | `wan21-t2v-1.3b` | [Wan 2.1 T2V 1.3B](https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B) | lightweight Wan (experimental) | 2.6 GB | Apache-2.0 |
 | `wan21-vae` | Wan 2.1 VAE | Wan 2.1 | 0.2 GB | Apache-2.0 |
 | `wan21-vace-1.3b` | [Wan 2.1 VACE 1.3B](https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged), fp16 (the GGUF from calcuis/wan-1.3b-gguf does not load in sd-cli: its 5-dimensional patch embedding is rejected by ggml) | putting a person into a video, video → video | 4.0 GB | Apache-2.0 |
+| `birefnet-lite` | [BiRefNet lite](https://huggingface.co/ZhengPeng7/BiRefNet_lite), ONNX ([onnx-community](https://huggingface.co/onnx-community/BiRefNet_lite-ONNX)) | background removal | 214 MB | MIT |
 | `realesrgan-x4plus` | [Real-ESRGAN x4plus](https://github.com/xinntao/Real-ESRGAN) | upscaling ×4 | 64 MB | BSD-3-Clause |
 
 Licenses are taken from the Hugging Face model cards. Check them yourself before using results commercially.
@@ -58,6 +59,7 @@ The form starts with the task, and the mode list shows only the modes that fit i
 | **Create** | image, video | a description | text → image or video |
 | **Rework a photo** | image | a photo, "how much to change" | image → image (`-i`, `--strength`); the size follows the photo's aspect ratio |
 | **Change a part** | image | a photo, a part painted over it with the brush, "how much to change" | inpainting: `--mask` (white is repainted, black kept); afterwards ffmpeg pastes the original photo back outside the widened, feathered mask, so the rest keeps its sharpness and no seam of the 8 px latent grid shows |
+| **Remove background** | image | a photo | BiRefNet lite (ONNX) on the CPU in the web container, no job and no GPU queue: `POST /api/cutout` returns the subject mask, the browser shows the cut-out over a checkerboard, "keep" and "remove" brushes paint on its transparency, and the PNG is exported in the browser (~3–7 s per photo) |
 | **Upscale** | image | a photo up to 2048 px on the long side | Real-ESRGAN x4plus in sd-cli's `upscale` mode: 4× the size, no prompt; also a button in the viewer |
 | **Animate a photo** | video | a photo | the photo is the first frame (image → video) |
 | **Put a person in** | video | a photo of a person or object, a description | Wan 2.1 VACE: the photo is a reference (`-i`), fitted and centred on a white canvas the way VACE prepares references (sd-cli alone would crop it) |

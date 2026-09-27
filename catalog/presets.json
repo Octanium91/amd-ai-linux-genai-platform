@@ -468,6 +468,40 @@
     }
   },
   {
+    "id": "img-cutout",
+    "kind": "image",
+    "name": "BiRefNet · remove background",
+    "description": "Keeps the main subject and makes the background transparent; brushes fix what the model missed. Runs on the CPU in seconds, without the GPU queue.",
+    "tasks": [
+      "cutout"
+    ],
+    "image": "required",
+    "models": {
+      "segmenter": "birefnet-lite"
+    },
+    "defaults": {
+      "width": 512,
+      "height": 512,
+      "cfg": 1,
+      "sampler": "euler",
+      "negative": "",
+      "quality": {
+        "normal": 1
+      }
+    },
+    "preview": "none",
+    "i18n": {
+      "uk": {
+        "name": "BiRefNet · прибрати фон",
+        "description": "Залишає головний об'єкт і робить фон прозорим; пензлі виправляють те, що модель пропустила. Працює на процесорі за секунди, без черги GPU."
+      },
+      "ru": {
+        "name": "BiRefNet · убрать фон",
+        "description": "Оставляет главный объект и делает фон прозрачным; кисти исправляют то, что модель пропустила. Работает на процессоре за секунды, без очереди GPU."
+      }
+    }
+  },
+  {
     "id": "vid-animatelcm",
     "kind": "video",
     "name": "AnimateLCM · Realistic Vision (fast)",
