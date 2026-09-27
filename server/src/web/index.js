@@ -15,7 +15,7 @@ import {
 import { jobParams, jobSpec } from './params.js';
 import { loadPresets, loadTemplates, presetsWithAvailability, TASK_INPUTS } from './presets.js';
 import { readJson } from '../common/store.js';
-import { promptAdminRoutes, promptRoutes } from './prompt.js';
+import { promptAdminRoutes, promptRoutes, storyboardRoutes } from './prompt.js';
 import { segmenterEntry, subjectMask } from './cutout.js';
 import { settingsRoutes } from './settings.js';
 import { callWorker, workerState } from './worker.js';
@@ -55,7 +55,7 @@ const upload = multer({
     destination: dirs.uploads,
     filename: (req, file, cb) => cb(null, `${Date.now()}-${crypto.randomBytes(3).toString('hex')}.upload`),
   }),
-  limits: { fileSize: MAX_VIDEO_BYTES, files: 4, fields: 40, fieldSize: 64 * 1024, parts: 45 },
+  limits: { fileSize: MAX_VIDEO_BYTES, files: 4, fields: 40, fieldSize: 128 * 1024, parts: 45 },
   fileFilter: (req, file, cb) => cb(null, {
     video: /^video\//,
     audio: /^(audio|video)\/|^application\/octet-stream$/,
@@ -489,6 +489,7 @@ api.delete('/models/:id', requireAdmin, async (req, res) => {
 
 settingsRoutes(api, requireAdmin);
 promptRoutes(api);
+storyboardRoutes(api);
 promptAdminRoutes(api, requireAdmin);
 
 app.use('/api', api);

@@ -10,6 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { config } from '../common/config.js';
 import { debouncedWriter, readJson, statePath } from '../common/store.js';
+import { colorMatchFilter, frameStats } from './color.js';
 import { closeInterrupted, startTelemetry } from './telemetry.js';
 
 const { dirs } = config;
@@ -185,7 +186,7 @@ async function makeThumb(job, src) {
 
 // segments are the segment AVIs in order; from the second one on, the first frame of a segment
 // duplicates the last frame of the previous one (it was the init image) and is dropped when joining
-async function finalizeVideo(job, segments) {
+async function finalizeVideo(job, segments, luts = []) {
   const base = baseName(job);
   const mp4 = path.join(dirs.output, base + '.mp4');
   const { fps, outFps } = job.params;
@@ -198,7 +199,7 @@ async function finalizeVideo(job, segments) {
     const inputs = segments.flatMap((f) => ['-i', f]);
     const parts = segments.map((f, i) => (i === 0
       ? '[0:v]setpts=PTS-STARTPTS[s0]'
-      : `[${i}:v]trim=start_frame=1,setpts=PTS-STARTPTS[s${i}]`));
+      : `[${i}:v]trim=start_frame=1,setpts=PTS-STARTPTS${luts[i] ? `,${luts[i]}` : ''}[s${i}]`));
     const chain = segments.length > 1
       ? `${parts.join(';')};${segments.map((f, i) => `[s${i}]`).join('')}concat=n=${segments.length}:v=1:a=0[c]`
       : '[0:v]null[c]';
@@ -320,7 +321,9 @@ function modelArgs(preset) {
   return args;
 }
 
-function buildArgs(job, preset, outBase, initImage, controlDir, refImage) {
+// seg is the part of a long video: each part has its own prompt (a storyboard) and its own seed,
+// since the same seed tends to repeat the same motion
+function buildArgs(job, preset, outBase, initImage, controlDir, refImage, seg = 0) {
   const p = job.params;
   // Upscaling runs the ESRGAN model alone: no prompt, no sampling
   if (p.task === 'upscale') {
@@ -328,10 +331,10 @@ function buildArgs(job, preset, outBase, initImage, controlDir, refImage) {
   }
   const args = ['-M', preset.kind === 'image' ? 'img_gen' : 'vid_gen', ...modelArgs(preset)];
   if (preset.loraDir) args.push('--lora-model-dir', path.join(dirs.models, preset.loraDir));
-  args.push('-p', p.prompt + (preset.promptSuffix || ''));
+  args.push('-p', (p.prompts?.[seg] || p.prompt) + (preset.promptSuffix || ''));
   if (p.negative) args.push('-n', p.negative);
   args.push('-W', String(p.width), '-H', String(p.height), '--steps', String(p.steps),
-    '--cfg-scale', String(p.cfg), '--sampling-method', p.sampler, '-s', String(p.seed));
+    '--cfg-scale', String(p.cfg), '--sampling-method', p.sampler, '-s', String(p.seed + seg));
   if (preset.kind === 'image') {
     if (p.count > 1) args.push('-b', String(p.count));
   } else {
@@ -493,6 +496,7 @@ async function run(job) {
   const segments = job.params.segments || 1;
   const tmpBase = path.join(dirs.output, `.${job.id}`);
   const outputs = [];
+  const luts = [];
   job.startedAt = Date.now();
   job.progress = newProgress(1, segments);
   current = { job, proc: null, tel: null };
@@ -539,7 +543,7 @@ async function run(job) {
         // Continuation: the last frame of the previous segment becomes the init image of the next one
         init = `${tmpBase}_s${i - 1}_last.png`;
         const r = await runCmd('ffmpeg', ['-loglevel', 'error', '-y', '-sseof', '-0.5', '-i', outputs[i - 1],
-          '-update', '1', '-q:v', '1', init], 'ffmpeg.last_frame');
+          ...(luts[i - 1] ? ['-vf', luts[i - 1]] : []), '-update', '1', '-q:v', '1', init], 'ffmpeg.last_frame');
         if (job.status !== 'running') break;
         if (r.code !== 0 || !fs.existsSync(init)) throw new Error('Could not extract the last frame of the segment: ' + r.err.trim());
         const prev = job.progress;
@@ -553,7 +557,7 @@ async function run(job) {
       if (job.status !== 'running') break;
       // Loading the models after the helper commands is preparation again, not ffmpeg
       if (controlDir || refImage) current.tel?.phase('prepare', { segment: i + 1 });
-      const args = buildArgs(job, preset, outBase, init, controlDir, refImage);
+      const args = buildArgs(job, preset, outBase, init, controlDir, refImage, i);
       if (i === 0) job.cmd = [config.sdCli, ...args].join(' ');
       const { code, signal, spawnError } = await runSd(job, args, log);
       if (job.status !== 'running') break;
@@ -564,6 +568,7 @@ async function run(job) {
       if (preset.kind !== 'image') {
         if (!fs.existsSync(`${outBase}.avi`)) throw new Error('sd-cli did not save the video');
         outputs.push(`${outBase}.avi`);
+        if (init) luts[i] = colorMatchFilter(await frameStats(init), await frameStats(`${outBase}.avi`));
       } else if (!job._saved?.length && fs.existsSync(`${outBase}.png`)) {
         // The upscale mode saves its result without the "save result image" line
         job._saved = [`${outBase}.png`];
@@ -575,7 +580,7 @@ async function run(job) {
       setStage(job, 'saving');
       if (preset.kind === 'image') await finalizeImages(job);
       else if (preset.kind === 'audio') await finalizeAudio(job, outputs[0]);
-      else await finalizeVideo(job, outputs);
+      else await finalizeVideo(job, outputs, luts);
       cleanup();
       if (job.status === 'running' && jobs.includes(job)) {
         finish(job, 'done');

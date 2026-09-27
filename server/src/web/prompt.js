@@ -387,6 +387,93 @@ export async function enhancePrompt(s, preset, input, signal = null) {
   return { prompt, style, model: s.model, seconds: Math.round((Date.now() - started) / 100) / 10 };
 }
 
+// A storyboard for a long video: the video is rendered in parts, each continuing from the last
+// frame of the previous one. The model writes one subject block and one style block that stay the
+// same in every part (so the person and the look do not change) and one action per part; the
+// server assembles each part's prompt from them.
+const STORY_EXAMPLE = {
+  idea: 'девушка гуляет по осеннему парку и кормит уток',
+  parts: 3,
+  answer: {
+    idea_en: 'a girl walks through an autumn park and feeds ducks',
+    subject: 'a young woman with long auburn hair, beige wool coat, red scarf',
+    style: 'autumn park with golden trees and a small pond, soft afternoon light, realistic, cinematic',
+    actions: [
+      'walks slowly along a path covered with fallen leaves, looking around',
+      'stops at the edge of the pond and takes bread out of her pocket',
+      'crouches and throws crumbs to the ducks swimming towards her, smiling',
+    ],
+  },
+};
+
+function storyboardSystem(style, parts, partSeconds) {
+  return [
+    `You are a film director writing a storyboard for an AI video model. The video is rendered in ${parts} consecutive parts of about ${partSeconds} seconds each; every part starts from the last frame of the previous one.`,
+    'First write idea_en: an exact English translation of the idea, nothing added.',
+    '- subject: the main character or object with fixed visual details (age, hair, clothing, colors, materials). It is repeated word for word in every part, so the character never changes.',
+    '- style: the place, lighting, look and camera style, the same for every part.',
+    `- actions: exactly ${parts} entries in order, one per part: what the subject does in that part, a small continuous step from the previous part, in the same place unless the idea asks for a change. No new characters, no cuts, no jumps.`,
+    style === 'tags'
+      ? 'Write subject, style and every action as short comma-separated English phrases, only things that can be seen; each action at most 12 words.'
+      : 'Write subject and style as English phrases and every action as one English sentence of 8 to 25 words, only things that can be seen.',
+    'The idea may be in any language; always answer in English. The first exchange is only an example of the format: never reuse its content.',
+    'Answer with JSON with the fields idea_en, subject, style, actions.',
+  ].join('\n');
+}
+
+export async function storyboard(s, preset, input, signal = null) {
+  const parts = Math.max(2, Math.min(64, Math.round(Number(input.parts) || 2)));
+  const partSeconds = Math.round((Number(input.partSeconds) || 2) * 10) / 10;
+  const style = promptStyle(preset);
+  const format = {
+    type: 'object',
+    properties: { idea_en: { type: 'string' }, subject: { type: 'string' }, style: { type: 'string' }, actions: { type: 'array', items: { type: 'string' } } },
+    required: ['idea_en', 'subject', 'style', 'actions'],
+  };
+  const ask = (idea, n) => `${n} parts\n${input.hasImage ? 'The first part starts from a photo the user uploaded: keep its subject.\n' : ''}Idea: ${idea}`;
+  const started = Date.now();
+  const out = await ollama(s.url, '/api/chat', {
+    model: s.model,
+    stream: false,
+    keep_alive: '1m',
+    think: false,
+    format,
+    options: { temperature: 0.5, num_predict: Math.min(4000, 300 + parts * 45) },
+    messages: [
+      { role: 'system', content: storyboardSystem(style, parts, partSeconds) },
+      { role: 'user', content: ask(STORY_EXAMPLE.idea, STORY_EXAMPLE.parts) },
+      { role: 'assistant', content: JSON.stringify(STORY_EXAMPLE.answer) },
+      { role: 'user', content: ask(input.idea, parts) },
+    ],
+  }, 240000, signal);
+  if (out?.done_reason === 'length') return { truncated: true };
+  let data = {};
+  try {
+    data = JSON.parse(out?.message?.content || '{}');
+  } catch {
+    return {};
+  }
+  const clean = (x) => String(x || '').replace(/\s+/g, ' ').replace(/^["'\s]+|["'\s.]+$/g, '').trim();
+  const subject = clean(data.subject) || clean(data.idea_en);
+  const look = clean(data.style);
+  let actions = (Array.isArray(data.actions) ? data.actions : []).map(clean).filter(Boolean);
+  if (!subject || !actions.length) return {};
+  // A small model may write too few or too many parts: the last action continues, extras are dropped
+  while (actions.length < parts) actions.push(actions[actions.length - 1]);
+  actions = actions.slice(0, parts);
+  const quality = preset.promptQuality || {};
+  const prompts = actions.map((action) => {
+    if (style === 'tags') {
+      const budget = CLIP_TOKENS - estTokens(preset.promptSuffix);
+      // The subject keeps at most about 30 tokens, so the part's action always fits
+      return assembleTags({ subject: clipTags(subject, 30), action, setting: look }, quality, budget, ['subject', 'action', 'setting']);
+    }
+    const text = [subject, action, look].map((x) => x.replace(/[.\s]+$/, '')).filter(Boolean).join('. ') + '.';
+    return quality.suffix && !text.includes(quality.suffix) ? `${text} ${quality.suffix}` : text;
+  });
+  return { prompts, subject, style: look, actions, model: s.model, seconds: Math.round((Date.now() - started) / 100) / 10 };
+}
+
 // One request per user at a time and two in total: each can hold the Ollama model (and GPU
 // memory shared with the generations) for up to three minutes
 const running = new Set();
@@ -419,6 +506,37 @@ export function promptRoutes(api) {
     } catch (e) {
       if (abort.signal.aborted) return;
       console.warn(`[prompt] ${s.model} @ ${s.url}: ${e.cause?.code || e.message}`);
+      if (e.name === 'TimeoutError' || e.name === 'AbortError') return res.status(502).json({ error: 'The Ollama model did not answer in time' });
+      if (e.cause) return res.status(502).json({ error: 'The Ollama server is not reachable' });
+      res.status(502).json({ error: 'The Ollama model returned an error' });
+    } finally {
+      running.delete(user);
+    }
+  });
+}
+
+export function storyboardRoutes(api) {
+  api.post('/prompt/storyboard', async (req, res) => {
+    const s = readSettings().promptAssistant;
+    if (!s.enabled) return res.status(409).json({ error: 'The prompt assistant is not connected. An administrator can connect an Ollama model in Settings.' });
+    const idea = String(req.body?.prompt || '').trim();
+    if (!idea) return res.status(400).json({ error: 'Describe what to generate first' });
+    if (idea.length > 2000) return res.status(400).json({ error: 'The description is too long (at most 2000 characters)' });
+    const preset = loadPresets().find((p) => p.id === req.body?.presetId);
+    if (!preset || preset.kind !== 'video') return res.status(400).json({ error: 'Unknown mode' });
+    const user = req.user.username;
+    if (running.has(user) || running.size >= MAX_RUNNING) return res.status(429).json({ error: 'The prompt assistant is busy, try again in a moment' });
+    running.add(user);
+    const abort = new AbortController();
+    res.on('close', () => !res.writableFinished && abort.abort());
+    try {
+      const r = await storyboard(s, preset, { idea, parts: req.body.parts, partSeconds: req.body.partSeconds, hasImage: !!req.body.hasImage }, abort.signal);
+      if (r.truncated) return res.status(502).json({ error: 'The model answer was cut off, try a shorter description' });
+      if (!r.prompts) return res.status(502).json({ error: 'The model returned an empty prompt, try again' });
+      res.json(r);
+    } catch (e) {
+      if (abort.signal.aborted) return;
+      console.warn(`[prompt] storyboard ${s.model} @ ${s.url}: ${e.cause?.code || e.message}`);
       if (e.name === 'TimeoutError' || e.name === 'AbortError') return res.status(502).json({ error: 'The Ollama model did not answer in time' });
       if (e.cause) return res.status(502).json({ error: 'The Ollama server is not reachable' });
       res.status(502).json({ error: 'The Ollama model returned an error' });

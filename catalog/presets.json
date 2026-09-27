@@ -204,7 +204,7 @@
     "id": "img-realvisxl-lightning",
     "kind": "image",
     "name": "RealVisXL V5 Lightning · fast SDXL",
-    "description": "The same RealVisXL distilled for 5–8 steps: SDXL quality in a fraction of the time. The negative prompt is not used at CFG 1.",
+    "description": "The same RealVisXL distilled for 4–8 steps: SDXL quality in a fraction of the time. Prompt strictness 1–2.",
     "promptQuality": {
       "prefix": "RAW photo",
       "suffix": "photorealistic, 8k uhd, dslr, high quality, film grain"
@@ -231,10 +231,10 @@
       "sampler": "dpm++2m",
       "negative": "(octane render, render, drawing, anime, bad photo, bad photography:1.3), (worst quality, low quality, blurry:1.2), (bad teeth, deformed teeth, deformed lips), (bad anatomy, bad proportions:1.1), (deformed iris, deformed pupils), (deformed eyes, bad eyes), (deformed face, ugly face, bad face), (deformed hands, bad hands, fused fingers), morbid, mutilated, mutation, disfigured",
       "quality": {
-        "draft": 5,
-        "normal": 6,
-        "high": 8,
-        "extra": 10
+        "draft": 4,
+        "normal": 5,
+        "high": 6,
+        "extra": 8
       }
     },
     "resolutions": [
@@ -311,11 +311,11 @@
     "i18n": {
       "uk": {
         "name": "RealVisXL V5 Lightning · швидкий SDXL",
-        "description": "Той самий RealVisXL, дистильований під 5–8 кроків: якість SDXL за частку часу."
+        "description": "Той самий RealVisXL, дистильований під 4–8 кроків: якість SDXL за частку часу. Точність промпту 1–2."
       },
       "ru": {
         "name": "RealVisXL V5 Lightning · быстрый SDXL",
-        "description": "Тот же RealVisXL, дистиллированный под 5–8 шагов: качество SDXL за долю времени."
+        "description": "Тот же RealVisXL, дистиллированный под 4–8 шагов: качество SDXL за долю времени. Точность промпта 1–2."
       }
     }
   },
@@ -538,15 +538,20 @@
       "outFps": 24,
       "frameRule": "exact",
       "minFrames": 8,
-      "maxFrames": 32,
+      "maxFrames": 16,
       "segmentFrames": 16,
-      "maxSegments": 4,
+      "maxSegments": 64,
       "duration": 2,
       "quality": {
         "draft": 4,
         "normal": 6,
         "high": 8
-      }
+      },
+      "outFpsOptions": [
+        8,
+        16,
+        24
+      ]
     },
     "resolutions": [
       [
@@ -631,15 +636,20 @@
       "outFps": 24,
       "frameRule": "exact",
       "minFrames": 8,
-      "maxFrames": 32,
+      "maxFrames": 16,
       "segmentFrames": 16,
-      "maxSegments": 4,
+      "maxSegments": 64,
       "duration": 2,
       "quality": {
-        "draft": 12,
-        "normal": 20,
+        "draft": 16,
+        "normal": 25,
         "high": 30
-      }
+      },
+      "outFpsOptions": [
+        8,
+        16,
+        24
+      ]
     },
     "resolutions": [
       [
@@ -658,10 +668,6 @@
     "recommendedResolutions": [
       [
         512,
-        512
-      ],
-      [
-        768,
         512
       ]
     ],
@@ -722,17 +728,21 @@
       "cfg": 5.0,
       "flowShift": 3.0,
       "sampler": "euler",
-      "negative": "blurry, low quality, distorted, deformed, static, overexposed, watermark, text, subtitles",
+      "negative": "vivid oversaturated colors, overexposed, static, still frame, blurry details, subtitles, text, watermark, overall gray, worst quality, low quality, JPEG artifacts, ugly, deformed, extra fingers, poorly drawn hands, poorly drawn face, disfigured, malformed limbs, fused fingers, cluttered background, three legs, many people in the background, walking backwards",
       "nativeFps": 24,
       "maxFrames": 121,
       "segmentFrames": 121,
-      "maxSegments": 2,
+      "maxSegments": 24,
       "duration": 2,
       "quality": {
         "draft": 12,
         "normal": 25,
         "high": 40
-      }
+      },
+      "outFpsOptions": [
+        24,
+        48
+      ]
     },
     "resolutions": [
       [
@@ -742,10 +752,6 @@
       [
         480,
         832
-      ],
-      [
-        640,
-        640
       ],
       [
         1280,
@@ -810,9 +816,9 @@
       "width": 832,
       "height": 480,
       "cfg": 6.0,
-      "flowShift": 3.0,
+      "flowShift": 8,
       "sampler": "euler",
-      "negative": "blurry, low quality, distorted, deformed, static, overexposed, watermark, text, subtitles",
+      "negative": "vivid oversaturated colors, overexposed, static, still frame, blurry details, subtitles, text, watermark, overall gray, worst quality, low quality, JPEG artifacts, ugly, deformed, extra fingers, poorly drawn hands, poorly drawn face, disfigured, malformed limbs, fused fingers, cluttered background, three legs, many people in the background, walking backwards",
       "nativeFps": 16,
       "maxFrames": 81,
       "segmentFrames": 81,
@@ -822,7 +828,12 @@
         "draft": 12,
         "normal": 20,
         "high": 30
-      }
+      },
+      "outFpsOptions": [
+        16,
+        32,
+        48
+      ]
     },
     "resolutions": [
       [
@@ -832,10 +843,6 @@
       [
         480,
         832
-      ],
-      [
-        640,
-        640
       ]
     ],
     "recommendedResolutions": [
@@ -890,7 +897,7 @@
       "cfg": 6,
       "flowShift": 3,
       "sampler": "euler",
-      "negative": "blurry, low quality, distorted, deformed, static, overexposed, watermark, text, subtitles, extra limbs, bad hands",
+      "negative": "vivid oversaturated colors, overexposed, static, still frame, blurry details, subtitles, text, watermark, overall gray, worst quality, low quality, JPEG artifacts, ugly, deformed, extra fingers, poorly drawn hands, poorly drawn face, disfigured, malformed limbs, fused fingers, cluttered background, three legs, many people in the background, walking backwards, extra limbs, bad hands",
       "nativeFps": 16,
       "maxFrames": 81,
       "segmentFrames": 81,
@@ -900,7 +907,12 @@
         "draft": 12,
         "normal": 20,
         "high": 30
-      }
+      },
+      "outFpsOptions": [
+        16,
+        32,
+        48
+      ]
     },
     "resolutions": [
       [
@@ -910,10 +922,6 @@
       [
         480,
         832
-      ],
-      [
-        640,
-        640
       ]
     ],
     "recommendedResolutions": [

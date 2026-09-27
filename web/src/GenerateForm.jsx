@@ -3,7 +3,13 @@ import { api, CSRF, estimate, fmtBytes, fmtDuration, langName, SPEECH_LANGS, SPE
 import { getLang, loc, t, tError } from './i18n.js';
 
 const FALLBACK_RES = [[512, 512], [768, 512], [512, 768]];
-const OUT_FPS = [24, 30, 50, 60, 120];
+// Output frame rates: the mode's own list, or native, 2× and 3× up to 48 (same rule as the server)
+const outFpsOptions = (preset) => {
+  const d = preset?.defaults || {};
+  const fps = d.nativeFps ?? 24;
+  return d.outFpsOptions || [fps, fps * 2, fps * 3].filter((f, i) => i === 0 || f <= 48);
+};
+const fmtLength = (sec) => (sec >= 60 ? fmtDuration(sec) : t('{s} s', { s: sec.toFixed(1) }));
 const COUNTS = [1, 2, 4];
 const QUALITY = [
   { key: 'draft', label: 'Draft' },
@@ -105,6 +111,74 @@ function fromPreset(p) {
     language: SPEECH_LANGS.includes(getLang()) ? getLang() : d.language ?? 'en',
     speed: d.speed ?? 1,
   };
+}
+
+// A long video is made of parts, each continuing from the last frame of the previous one. Each part
+// can have its own scene; the prompt assistant writes them all from the idea (one subject and style
+// block shared by every part, one action per part). Empty parts repeat the main prompt.
+const SHOWN_PARTS = 8;
+function StoryboardField({ form, set, preset, plan, hasImage }) {
+  const [status, setStatus] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [all, setAll] = useState(false);
+  useEffect(() => {
+    api('/api/prompt/status').then(setStatus).catch(() => {});
+  }, []);
+  const n = plan.segments;
+  const prompts = form.prompts || [];
+  const ready = !!status?.ready;
+  // Part i covers its frames minus the first one, which repeats the previous part's last frame
+  const at = (i) => (i === 0 ? 0 : (plan.frames + (i - 1) * (plan.frames - 1)) / plan.fps);
+  const setPart = (i, v) => {
+    const next = Array.from({ length: n }, (_, k) => prompts[k] || '');
+    next[i] = v;
+    set('prompts')(next);
+  };
+  const write = async () => {
+    setError('');
+    setBusy(true);
+    try {
+      const r = await api('/api/prompt/storyboard', {
+        method: 'POST',
+        json: { presetId: preset.id, prompt: form.prompt, parts: n, partSeconds: (plan.frames - 1) / plan.fps, hasImage },
+      });
+      set('prompts')(r.prompts);
+      setAll(false);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const shown = all ? n : Math.min(n, SHOWN_PARTS);
+  return (
+    <div className="field">
+      <span className="field-label field-label-row">
+        <span>{t('Scenes')} <Info text={t('The video is made of {n} parts, each continuing from the last frame of the previous one. Give each part its own action and keep the person and the place the same.', { n })} /></span>
+        {prompts.some(Boolean) && <button type="button" className="link muted small" onClick={() => set('prompts')([])}>{t('Clear')}</button>}
+      </span>
+      {ready ? (
+        <button type="button" className="btn btn-small" disabled={busy || !form.prompt.trim()} onClick={write}>
+          {busy ? t('Writing the scenes…') : `✦ ${t('Write the scenes with AI')}`}
+        </button>
+      ) : (
+        <span className="field-hint">{t('Without the prompt assistant, write a scene for each part yourself: empty parts repeat the main prompt, and the action repeats with it.')}</span>
+      )}
+      {error && <div className="note warn">⚠ {error}</div>}
+      <div className="parts">
+        {Array.from({ length: shown }, (_, i) => (
+          <label key={i} className="part">
+            <span className="part-label">{t('Part {n}', { n: i + 1 })} <span className="muted">· {fmtLength(at(i))}–{fmtLength(at(i + 1))}</span></span>
+            <textarea rows={2} value={prompts[i] || ''} placeholder={form.prompt || t('The main prompt')} onChange={(e) => setPart(i, e.target.value)} />
+          </label>
+        ))}
+      </div>
+      {n > SHOWN_PARTS && (
+        <button type="button" className="link small" onClick={() => setAll((v) => !v)}>{all ? t('Show fewer parts') : t('Show all {n} parts', { n })}</button>
+      )}
+    </div>
+  );
 }
 
 // Audio settings: lyrics and length for music, length for sound effects, voice, language and speed
@@ -892,7 +966,8 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
     setBusy(true);
     try {
       const fd = new FormData();
-      for (const [k, v] of Object.entries(form)) if (v != null && v !== '') fd.append(k, v);
+      for (const [k, v] of Object.entries(form)) if (k !== 'prompts' && v != null && v !== '') fd.append(k, v);
+      if (isVideo && plan.segments > 1 && form.prompts?.some(Boolean)) fd.append('prompts', JSON.stringify(form.prompts.slice(0, plan.segments)));
       fd.set('task', task.key);
       if (task.strength != null) fd.set('strength', String(form.strength ?? task.strength));
       if (upscale && !form.prompt.trim()) fd.set('prompt', '');
@@ -923,7 +998,7 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
   const summary = upscale ? t('4× larger')
     : isAudio ? (task.key === 'speech' ? t('{n} characters', { n: form.prompt.length }) : fmtDuration(form.duration))
     : isVideo
-      ? [t('{s} s video', { s: plan.duration.toFixed(1) }), plan.segments > 1 ? t('from {n} parts', { n: plan.segments }) : null, `${form.outFps} fps`, `${form.width}×${form.height}`].filter(Boolean).join(' · ')
+      ? [plan.duration >= 60 ? fmtDuration(plan.duration) : t('{s} s video', { s: plan.duration.toFixed(1) }), plan.segments > 1 ? t('from {n} parts', { n: plan.segments }) : null, `${form.outFps} fps`, `${form.width}×${form.height}`].filter(Boolean).join(' · ')
       : [form.count > 1 ? t('{n} images', { n: form.count }) : t('1 image'), `${form.width}×${form.height}`].join(' · ');
   // Why the button cannot be pressed yet, said next to it instead of a silently grey button
   const why = !preset ? null
@@ -1117,6 +1192,7 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
       </div>
 
       {isVideo ? (
+        <>
         <label className="field">
           <span className="field-label field-label-row">
             <span>
@@ -1125,20 +1201,23 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
                 ? t('Up to {base} s in one model pass (the length the model was trained on). Longer videos, up to {max} s, are stitched from several parts (the striped zone).', { base: Number(plan.segSeconds.toFixed(2)), max: Number(plan.maxDuration.toFixed(2)) })
                 : t('Up to {max} s per generation — the model limit.', { max: Number(plan.maxDuration.toFixed(2)) })} />
             </span>
-            <b className={extraDuration ? 'extra-text' : ''}>{t('{s} s', { s: plan.duration.toFixed(1) })}</b>
+            <b className={extraDuration ? 'extra-text' : ''}>{fmtLength(plan.duration)}</b>
           </span>
           <div className="range-wrap" style={{ '--base': `${((plan.segSeconds - 0.5) / (plan.maxDuration - 0.5 || 1)) * 100}%` }}>
             <input type="range" className={`${extraDuration ? 'extra' : ''} ${plan.extendable && plan.maxSegments > 1 ? 'has-extra' : ''}`}
-              min={Math.max(0.5, Math.ceil((plan.minFrames / plan.fps) * 2) / 2)} max={plan.maxDuration} step={0.5}
+              min={Math.max(0.5, Math.ceil((plan.minFrames / plan.fps) * 2) / 2)} max={plan.maxDuration} step={plan.maxDuration > 20 ? 1 : 0.5}
               value={Math.min(form.duration, plan.maxDuration)} onChange={(e) => set('duration')(Number(e.target.value))} />
           </div>
           {extraDuration && (
             <div className="note warn">⚠ {t('Stitched from {n} parts: time ×{n}, details may drift at the joins.', { n: plan.segments })}</div>
           )}
+          {eta?.sec > 3600 && <div className="note warn">⚠ {t('About {time} of work: the GPU is busy all that time. Long videos are best left to run overnight.', { time: fmtDuration(eta.sec) })}</div>}
           {plan.beyondTraining && (
             <div className="note warn">⚠ {t('Passes of {frames} frames are longer than the model was trained on ({trained}): the video may lose the subject and turn into a texture. The prompt will suffer.', { frames: plan.frames, trained: plan.trainedFrames })}</div>
           )}
         </label>
+        {plan.segments > 1 && <StoryboardField form={form} set={set} preset={preset} plan={plan} hasImage={!!(acceptsImage && (image || imageRef))} />}
+        </>
       ) : (
         <div className="field">
           <span className="field-label">{t('Variations')} <Info text={t('Each variation is a separate picture; the time grows proportionally.')} /></span>
@@ -1163,7 +1242,7 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
                 {t('Smoothness')}{' '}
                 <Info text={t('The model renders {native} fps; up to {out} fps the frames are interpolated: smoother motion, no extra detail. Barely affects the time.', { native: plan.fps, out: form.outFps })} />
               </span>
-              <Chips items={OUT_FPS} value={form.outFps} onChange={set('outFps')} render={(f) => (f === plan.fps ? `${f} fps · ${t('native')}` : `${f} fps`)} />
+              <Chips items={outFpsOptions(preset)} value={form.outFps} onChange={set('outFps')} render={(f) => (f === plan.fps ? `${f} fps · ${t('native')}` : `${f} fps`)} />
             </div>
           )}
           <label className="field">

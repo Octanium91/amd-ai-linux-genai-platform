@@ -222,6 +222,18 @@ let mute = (await api('/v1/jobs', 'POST', withSound('2-bbbbbb.mp4'))).body;
 mute = await waitFor(mute.id, (j) => ['done', 'failed'].includes(j.status));
 check('a soundtrack without sound leaves the clip silent with a warning', mute.status === 'done' && /sound could not be added/.test(mute.warning || '') && !probe(mute.files[0]).some((l) => l.startsWith('audio')), `${mute.status} ${mute.warning}`);
 
+// A long video: every part has its own prompt and seed, and the parts are colour-matched at the seams
+let lv = (await api('/v1/jobs', 'POST', { ...video(3), params: { ...video(3).params, prompts: ['scene one', 'scene two', 'scene three'] } })).body;
+lv = await waitFor(lv.id, (j) => ['done', 'failed'].includes(j.status));
+const runs = fs.readFileSync(`${DATA}/state/logs/${lv.id}.log`, 'utf8').split('\n').filter((l) => l.startsWith('$ '));
+const argOf = (line, flag) => line.match(new RegExp(`${flag} ("[^"]*"|\\S+)`))?.[1].replace(/"/g, '');
+check('long video: a prompt and a seed per part', lv.status === 'done' && runs.length === 3
+  && runs.map((l) => argOf(l, '-p')).join('|') === 'scene one|scene two|scene three' && runs.map((l) => argOf(l, '-s')).join() === '1,2,3',
+  `${lv.status} ${lv.error || ''} ${runs.map((l) => `${argOf(l, '-p')}/${argOf(l, '-s')}`).join(' ')}`);
+const w = await import('/src/worker/color.js');
+const lut = w.colorMatchFilter([{ mean: 120, std: 40 }, { mean: 110, std: 40 }, { mean: 100, std: 40 }], [{ mean: 100, std: 50 }, { mean: 110, std: 40 }, { mean: 160, std: 20 }]);
+check('colour match: gains and shifts are limited', /^lutrgb=r='clip\(val\*0\.8000\+40\.00/.test(lut) && /b='clip\(val\*1\.2500\+-40\.00/.test(lut), lut);
+
 // Audio: one audio.cpp run with the mode's engine settings; the result is an MP3 with a waveform
 // thumbnail and its measured length
 fs.mkdirSync(`${DATA}/models/audio`, { recursive: true });

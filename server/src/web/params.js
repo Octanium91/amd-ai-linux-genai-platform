@@ -4,7 +4,29 @@ import crypto from 'node:crypto';
 import { loadCatalog } from './models.js';
 import { presetModels } from './presets.js';
 
-const OUT_FPS = [24, 30, 50, 60, 120];
+// Output frame rates: the model's own and 2× / 3× of it by interpolation, at most 48 (more would be
+// mostly invented frames). A mode lists its own in defaults.outFpsOptions.
+export function outFpsOptions(preset) {
+  const d = preset.defaults || {};
+  const fps = d.nativeFps ?? 24;
+  return d.outFpsOptions || [fps, fps * 2, fps * 3].filter((f, i) => i === 0 || f <= 48);
+}
+
+// A long video is a storyboard: one prompt per part. Parts left empty use the main prompt.
+const MAX_PART_PROMPT = 1500;
+function partPrompts(body, segments, prompt) {
+  let list = body.prompts;
+  if (typeof list === 'string') {
+    try {
+      list = JSON.parse(list);
+    } catch {
+      return null;
+    }
+  }
+  if (!Array.isArray(list) || segments < 2) return null;
+  const out = Array.from({ length: segments }, (_, i) => String(list[i] ?? '').trim().slice(0, MAX_PART_PROMPT) || prompt);
+  return out.some((x) => x !== prompt) ? out : null;
+}
 
 const clamp = (v, lo, hi, def) => {
   const n = Number(v);
@@ -112,8 +134,11 @@ export function jobParams(preset, body, image, inputs = {}) {
       segmentFrames: plan.segmentFrames,
       fps: plan.fps,
       duration: plan.duration,
-      outFps: OUT_FPS.includes(Number(body.outFps)) ? Number(body.outFps) : d.outFps ?? plan.fps,
+      outFps: outFpsOptions(preset).includes(Number(body.outFps)) ? Number(body.outFps)
+        : outFpsOptions(preset).includes(d.outFps) ? d.outFps : plan.fps,
     });
+    const prompts = partPrompts(body, plan.segments, params.prompt);
+    if (prompts) params.prompts = prompts;
   }
   return params;
 }

@@ -74,15 +74,15 @@ The images can be rebuilt and updated at will: none of this is stored in them. B
 
 ## Generation
 
-1. `POST /api/jobs` (web) validates the mode and its models, normalizes the parameters and sends the job with its `spec` to the worker. Wan frame counts are rounded to 4n+1; AnimateDiff uses exactly `duration × nativeFps`; sizes are multiples of 16; seed −1 is replaced with a random one. A duration above the model limit becomes two segments.
+1. `POST /api/jobs` (web) validates the mode and its models, normalizes the parameters and sends the job with its `spec` to the worker. Wan frame counts are rounded to 4n+1; AnimateDiff uses exactly `duration × nativeFps`; sizes are multiples of 16; seed −1 is replaced with a random one. A duration above one model pass becomes several parts (up to 2 minutes), with an optional prompt per part (`prompts`).
 2. The queue runs `sd-cli` (images, video) or `audiocpp_cli` (audio) strictly one process at a time: the GPU and GTT are shared.
 3. `sd-cli` output is parsed line by line:
    - stages: `generate_video` / `generating image` → sampling, `sampling completed` / `latent images completed` → decoding, `decode_first_stage completed` → saving;
    - progress lines `i/N - X s/it`;
    - weight loading;
    - saved files.
-4. For extra-length videos, ffmpeg extracts the last frame of a segment, and the next segment is generated from it as image-to-video with the mode's `continueArgs`.
-5. Video: the MJPEG AVI(s) from `sd-cli` → an H.264 mp4 via ffmpeg (segments are concatenated without the duplicated seam frame). If the output FPS is above the native one, `minterpolate` synthesizes the frames. Images: the PNGs are renamed. A thumbnail is made for the library.
+4. For long videos, ffmpeg extracts the last frame of a part, and the next part is generated from it as image-to-video with the mode's `continueArgs`, its own prompt and seed + part. Each new part is colour-matched to the previous one (`server/src/worker/color.js`: per-channel mean and spread → `lutrgb`), and the corrected last frame starts the next part.
+5. Video: the MJPEG AVI(s) from `sd-cli` → an H.264 mp4 via ffmpeg (segments are concatenated without the duplicated seam frame). If the output FPS is above the native one (2× or 3×, at most 48), `minterpolate` synthesizes the frames. Images: the PNGs are renamed. A thumbnail is made for the library.
 6. Audio: [audio.cpp](https://github.com/0xShug0/audio.cpp) (Apache-2.0, ggml, built with Vulkan in the worker image, backends loaded from `/opt/audiocpp`) runs once per job with the mode's `engine` (family, task, route): `--log` prints one line per phase, which sets the stage (planner and diffusion → sampling, VAE → decoding). The WAV becomes a 256 kbit/s MP3, `showwavespic` draws the waveform thumbnail and ffprobe measures the length (`audioSec`).
 7. A soundtrack (`audio`, `audioStart`, `audioFade` on a video job) is muxed into the finished mp4 as AAC, cut or padded with silence to the clip's length.
 8. If the worker is stopped during a generation (a power loss, a plain `docker compose up` over it), the current job is marked as failed and the rest of the queue continues. `update.sh` avoids this by draining first.
@@ -118,6 +118,7 @@ Every route except sign-in requires a session. Mutating requests require the `X-
 | GET | `/api/settings/ollama?url=` | admin | the Ollama server's version and installed models, for choosing one in Settings |
 | GET | `/api/prompt/status` | user | whether the "Improve with AI" button can work (enabled, server reachable, model installed; checked at most every 30 s) |
 | POST | `/api/prompt/enhance` | user | `{presetId, prompt, width, height, duration, hasImage}` → `{prompt}`: the idea rewritten by the Ollama model for the mode |
+| POST | `/api/prompt/storyboard` | user | `{presetId, prompt, parts, partSeconds, hasImage}` → `{prompts, subject, style, actions}`: a scene per part of a long video, with the subject and style the same in every part |
 | GET/DELETE | `/api/telemetry` · `/api/telemetry/export` · `/api/telemetry/:name` | admin | list, download all as one JSON array, download one, delete all |
 | GET | `/files/{output,thumbs,previews,uploads}/…` | user | files (with Range support for video) |
 

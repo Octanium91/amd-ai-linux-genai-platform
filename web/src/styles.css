@@ -718,3 +718,9 @@ input[type="range"].extra { accent-color: var(--warn); }
 .eq i:nth-child(5) { animation-delay: -0.7s; } .eq i:nth-child(6) { animation-delay: -0.35s; } .eq i:nth-child(7) { animation-delay: -0.85s; }
 @keyframes eq { 0%, 100% { transform: scaleY(0.2); } 50% { transform: scaleY(1); } }
 @media (prefers-reduced-motion: reduce) { .eq i { animation: none; transform: scaleY(0.5); } }
+
+/* Scenes of a long video: one short prompt per part */
+.parts { display: flex; flex-direction: column; gap: 8px; }
+.part { display: flex; flex-direction: column; gap: 4px; }
+.part-label { font-size: 12.5px; font-weight: 600; }
+.part textarea { min-height: 0; font-size: 13px; }

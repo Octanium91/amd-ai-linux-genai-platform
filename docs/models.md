@@ -85,18 +85,20 @@ A mode lists its tasks in `tasks`; without it they follow from `image`: `none` m
 Both extra settings are red in the UI: they work, with caveats.
 
 - **Extra quality:** twice the steps of High (or `defaults.quality.extra` if the mode defines it). Time doubles while the quality gain is already small.
-- **Long videos (red part of the duration slider):** a model pass is only as long as the model was trained on — AnimateDiff/AnimateLCM 16 frames (2 s at 8 fps), Wan 2.2 5B 121 frames (5 s at 24 fps), Wan 2.1 1.3B 81 frames (5 s at 16 fps). A longer video is built from up to `maxSegments` passes of that length (AnimateDiff/AnimateLCM 4 → 8 s, Wan 2.2 2 → 10 s):
-  1. the first pass is generated;
-  2. its last frame becomes the init image of the next one (as in image-to-video), with a lower strength (`continueArgs`) so the next pass stays close to it;
-  3. ffmpeg joins the passes, dropping the duplicated frame at each seam, and interpolates the FPS; the clip lasts exactly its frames.
+- **Long videos (red part of the duration slider), up to 2 minutes:** a model pass is only as long as the model was trained on — AnimateDiff/AnimateLCM 16 frames (2 s at 8 fps), Wan 2.2 5B 121 frames (5 s at 24 fps), Wan 2.1 1.3B 81 frames (5 s at 16 fps). A longer video is built from up to `maxSegments` passes of that length (AnimateDiff/AnimateLCM 64, Wan 2.2 24 → 2 minutes):
+  1. **scenes:** each part has its own prompt (`params.prompts`). "✦ Write the scenes with AI" asks the prompt assistant for a storyboard: a subject block and a style block that stay word for word the same in every part, so the person and the place do not change, and one action per part, each a small continuous step from the previous one. The server assembles each part's prompt (for SD 1.5 the subject keeps at most ~30 CLIP tokens so the action always fits). Without the assistant the parts can be written by hand; empty parts repeat the main prompt, and then the action repeats too;
+  2. the first pass is generated; each next one starts from the last frame of the previous one (image-to-video, with `continueArgs` for AnimateDiff) and has its own seed (`seed + part`), since the same seed tends to repeat the same motion;
+  3. **colour matching:** the first frame of each new part is compared with the previous part's last frame, and a `lutrgb` correction brings the mean and spread of each channel to it (Reinhard, limited to ×0.8–1.25 and ±40 levels so a real lighting change stays). The corrected last frame starts the next part, so colour and brightness do not drift from part to part;
+  4. ffmpeg joins the parts, dropping the repeated frame at each seam, and interpolates the frame rate; the clip lasts exactly its frames.
 
-  Time grows with the number of passes, and details may drift at the seams. Only modes with image-to-video support it (Wan 2.1 1.3B does not).
+  Time grows with the number of parts (AnimateLCM about 2.5 min per 2 s part, so 2 minutes take about 2.5 hours; AnimateDiff v3 about 16 min per part; Wan 2.2 hours per part), and the form warns above an hour. The motion restarts slightly at every seam: sd.cpp's AnimateDiff has no sliding context window, and VACE cannot keep overlap frames yet (its control mask is fixed at 1). Only modes with image-to-video can continue (not Wan 2.1 1.3B T2V, and VACE stays one pass).
+- **Frame rate:** the model's own rate, 2× or 3× of it by interpolation, at most 48 fps (`defaults.outFpsOptions`: AnimateDiff 8/16/24, Wan 2.1 and VACE 16/32/48, Wan 2.2 24/48). 50, 60 and 120 fps were removed: at 8 fps native, 60 fps means seven of every eight frames are invented.
 
 ### Staying within what the models were trained on
 
 The defaults follow the models' training so that the result matches the prompt; going beyond is allowed, with a warning in the form:
 
-- **Length of one part** (More settings → Expert): empty means the trained length. Up to `maxFrames` is possible, but beyond the training length the motion module loses the subject. Measured on the reference machine: AnimateDiff v3 with 32-frame passes at 768×512 produced only a sand-and-water texture for "a young woman on a windy beach", while 16 frames at 512×512 gave exactly that scene.
+- **Length of one part** (More settings → Expert): empty means the trained length. Up to `maxFrames` is possible (16 for AnimateDiff and AnimateLCM, whose motion module was trained on 16 frames and goes static beyond that), but beyond the training length the motion module loses the subject. Measured on the reference machine: AnimateDiff v3 with 32-frame passes at 768×512 produced only a sand-and-water texture for "a young woman on a windy beach", while 16 frames at 512×512 gave exactly that scene.
 - **Resolution:** sizes the mode was tested at are marked ✓ (`recommendedResolutions`); other sizes show a warning that the result may not follow the prompt. AnimateDiff v3 was verified at 512×512 and 768×512 with 16-frame passes; an 8 s clip from four 2 s passes kept the same person and scene, with the contrast growing slightly from pass to pass.
 
 ## Prompt assistant

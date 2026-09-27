@@ -39,7 +39,8 @@ export const config = {
 // 2: jobs carry a task and may carry a mask, a video, a control type and a strength
 // 3: video jobs may carry a soundtrack (audio, audioStart, audioFade)
 // 4: audio jobs (music, sound effects, speech) through audio.cpp
-export const WORKER_API = 4;
+// 5: long videos: a prompt per part (prompts), a seed per part, colour-matched seams
+export const WORKER_API = 5;
 
 // Some directories are mounted read-only in one of the containers (output in web, models in worker)
 for (const d of Object.values(config.dirs)) {
