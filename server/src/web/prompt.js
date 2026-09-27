@@ -468,7 +468,10 @@ export async function storyboard(s, preset, input, signal = null) {
       // The subject keeps at most about 30 tokens, so the part's action always fits
       return assembleTags({ subject: clipTags(subject, 30), action, setting: look }, quality, budget, ['subject', 'action', 'setting']);
     }
-    const text = [subject, action, look].map((x) => x.replace(/[.\s]+$/, '')).filter(Boolean).join('. ') + '.';
+    // "A small paper boat with a red sail floats down…. Rainy street, soft light."
+    const trim = (x) => x.replace(/[.\s]+$/, '');
+    const cap = (x) => x.charAt(0).toUpperCase() + x.slice(1);
+    const text = [cap(`${trim(subject)} ${trim(action)}`), look && cap(trim(look))].filter(Boolean).join('. ') + '.';
     return quality.suffix && !text.includes(quality.suffix) ? `${text} ${quality.suffix}` : text;
   });
   return { prompts, subject, style: look, actions, model: s.model, seconds: Math.round((Date.now() - started) / 100) / 10 };
