@@ -61,7 +61,8 @@ COPY server/src/web /app/server/src/web
 COPY catalog /app/catalog
 COPY --from=ui /web/dist /app/server/public
 ENV NODE_ENV=production DATA_DIR=/data CATALOG_DIR=/app/catalog PORT=7860 \
-    WORKER_URL=http://worker:7861 HOME=/tmp
+    WORKER_URL=http://worker:7861 HOME=/tmp \
+    ORT_DISABLE_TELEMETRY=1
 WORKDIR /app/server
 EXPOSE 7860
 HEALTHCHECK --interval=30s --timeout=15s --start-period=30s --retries=4 \

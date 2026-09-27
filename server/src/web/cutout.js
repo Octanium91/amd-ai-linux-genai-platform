@@ -20,6 +20,9 @@ export function segmenterEntry() {
 // One model session, loaded on first use and kept (about 300 MB of RAM)
 let session = null;
 let sessionFile = null;
+// ONNX Runtime can upload usage telemetry; the platform sends nothing anywhere. The variable must be
+// set before the library initializes (the web image sets it too).
+process.env.ORT_DISABLE_TELEMETRY = '1';
 async function getSession(file) {
   if (session && sessionFile === file) return session;
   const ort = await import('onnxruntime-node');
