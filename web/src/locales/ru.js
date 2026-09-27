@@ -331,7 +331,7 @@ export default {
   "{n} CU": "{n} CU",
   "Load": "Загрузка",
   "Used": "Занято",
-  "Adds a \"To prompt\" button to the generation form: a language model on an Ollama server turns a short description in any language into a detailed English prompt written for the selected mode (tags for Stable Diffusion 1.5, sentences with motion and camera for Wan).": "Добавляет в форму генерации кнопку «В промпт»: языковая модель на сервере Ollama превращает короткое описание на любом языке в подробный английский промпт под выбранный режим (теги для Stable Diffusion 1.5, предложения с движением и камерой для Wan).",
+  "Adds an \"Improve with AI\" button to the prompt box: a language model on an Ollama server turns a short description in any language into a detailed English prompt written for the selected mode: tags for Stable Diffusion, sentences with motion and camera for Wan, a style caption for music and a sound description for effects.": "Добавляет в поле промпта кнопку «Улучшить с ИИ»: языковая модель на сервере Ollama превращает короткое описание на любом языке в подробный английский промпт для выбранного режима: теги для Stable Diffusion, предложения с движением и камерой для Wan, описание стиля для музыки и описание звука для эффектов.",
   "An administrator can check it in Settings.": "Администратор может проверить это в настройках.",
   "Check": "Проверить",
   "Connect an Ollama model in Settings to turn a short description into a detailed prompt.": "Подключите модель Ollama в настройках, чтобы превращать короткое описание в подробный промпт.",

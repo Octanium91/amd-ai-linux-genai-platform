@@ -119,7 +119,7 @@ export default function Settings() {
   );
 }
 
-// The "To prompt" assistant: an Ollama server and model that rewrite descriptions into prompts
+// The prompt assistant ("Improve with AI"): an Ollama server and model that rewrite descriptions into prompts
 const RECOMMENDED_MODELS = ['dolphin-llama3', 'huihui_ai/qwen2.5-abliterate:3b'];
 
 function PromptAssistantSettings() {
@@ -171,7 +171,7 @@ function PromptAssistantSettings() {
     <form className="card form" onSubmit={save}>
       <h3>{t('Prompt assistant')}</h3>
       <p className="muted">
-        {t('Adds a "To prompt" button to the generation form: a language model on an Ollama server turns a short description in any language into a detailed English prompt written for the selected mode (tags for Stable Diffusion 1.5, sentences with motion and camera for Wan).')}
+        {t('Adds an "Improve with AI" button to the prompt box: a language model on an Ollama server turns a short description in any language into a detailed English prompt written for the selected mode: tags for Stable Diffusion, sentences with motion and camera for Wan, a style caption for music and a sound description for effects.')}
       </p>
       <p className="muted">
         {t('Recommended: dolphin-llama3 (8B, 4.7 GB, the most accurate, 5–15 s per prompt) or huihui_ai/qwen2.5-abliterate:3b (1.9 GB, fast, 3–7 s, understands other languages, simpler wording). dolphin-phi often loses the meaning of non-English descriptions. Install on the Ollama server with:')}{' '}
