@@ -440,7 +440,7 @@ export async function storyboard(s, preset, input, signal = null) {
     keep_alive: '1m',
     think: false,
     format,
-    options: { temperature: 0.6, repeat_penalty: 1.15, num_predict: Math.min(4000, 300 + parts * 45) },
+    options: { temperature: 0.4, repeat_penalty: 1.08, num_predict: Math.min(4000, 300 + parts * 45) },
     messages: [
       { role: 'system', content: storyboardSystem(style, parts, partSeconds) },
       { role: 'user', content: ask(STORY_EXAMPLE.idea, STORY_EXAMPLE.parts) },
@@ -461,8 +461,17 @@ export async function storyboard(s, preset, input, signal = null) {
   let actions = (Array.isArray(data.actions) ? data.actions : []).map(clean).filter(Boolean);
   if (!subject || !actions.length) return {};
   // A small model may write too few or too many parts: the last action continues, extras are dropped
-  while (actions.length < parts) actions.push(actions[actions.length - 1]);
   actions = actions.slice(0, parts);
+  // A repeated action (a small model's habit) or a missing one becomes a quiet in-between moment, so
+  // no two parts ask for the same thing
+  const GAP = ['holds still for a moment, breathing calmly', 'the camera slowly moves closer', 'turns the head slightly', 'the camera slowly pulls back'];
+  const seen = new Set();
+  let gap = 0;
+  for (let i = 0; i < parts; i++) {
+    const key = (actions[i] || '').toLowerCase().replace(/\bagain\b/g, '').replace(/\W+/g, ' ').trim();
+    if (!key || seen.has(key)) actions[i] = GAP[gap++ % GAP.length];
+    seen.add(key);
+  }
   const quality = preset.promptQuality || {};
   const prompts = actions.map((action) => {
     if (style === 'tags') {
