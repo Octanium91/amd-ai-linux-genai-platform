@@ -105,9 +105,12 @@ export function estimate(jobs, params, preset, gpuPower) {
     .sort((a, b) => b.finishedAt - a.finishedAt)[0];
   const samplingSec = job && stageDuration(job, 'sampling');
   if (samplingSec) {
+    // Progress is kept per pass: the stage times are of the last pass, so a multi-pass video is
+    // measured as one pass (its share of the total time) and scaled from there
+    const segs = job.params.segments || 1;
     const decodeSec = stageDuration(job, 'decoding') || 0;
-    const otherSec = Math.max(0, (job.durationSec || 0) - samplingSec - decodeSec);
-    return { sec: scaleRun({ ...job.params, samplingSec, decodeSec, otherSec }, params), source: 'history' };
+    const otherSec = Math.max(0, (job.durationSec || 0) / segs - samplingSec - decodeSec);
+    return { sec: scaleRun({ ...job.params, segments: 1, samplingSec, decodeSec, otherSec }, params), source: 'history' };
   }
   if (preset?.reference && gpuPower?.score) {
     return { sec: scaleRun(preset.reference, params, 1 / gpuPower.score), source: 'reference', gpu: gpuPower.name };

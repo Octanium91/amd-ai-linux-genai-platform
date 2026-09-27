@@ -33,7 +33,7 @@ A new content type (upscaling, audio, LLM…) is added by:
 - a command-building and finalization branch in `worker/queue.js` (`buildArgs`, `finalize*`);
 - a section in the UI.
 
-The queue, models, users and gallery are shared.
+The queue, models, users and library are shared.
 
 ## Containers and updates
 
@@ -82,7 +82,7 @@ The images can be rebuilt and updated at will: none of this is stored in them. B
    - weight loading;
    - saved files.
 4. For extra-length videos, ffmpeg extracts the last frame of a segment, and the next segment is generated from it as image-to-video with the mode's `continueArgs`.
-5. Video: the MJPEG AVI(s) from `sd-cli` → an H.264 mp4 via ffmpeg (segments are concatenated without the duplicated seam frame). If the output FPS is above the native one, `minterpolate` synthesizes the frames. Images: the PNGs are renamed. A thumbnail is made for the gallery.
+5. Video: the MJPEG AVI(s) from `sd-cli` → an H.264 mp4 via ffmpeg (segments are concatenated without the duplicated seam frame). If the output FPS is above the native one, `minterpolate` synthesizes the frames. Images: the PNGs are renamed. A thumbnail is made for the library.
 6. If the worker is stopped during a generation (a power loss, a plain `docker compose up` over it), the current job is marked as failed and the rest of the queue continues. `update.sh` avoids this by draining first.
 
 ## API
@@ -109,10 +109,11 @@ Every route except sign-in requires a session. Mutating requests require the `X-
 | GET | `/api/models` | user | catalog, statuses, download progress, disk space |
 | POST | `/api/models/download` `{ids}` · `/api/models/:id/cancel` | admin | download / cancel |
 | DELETE | `/api/models/:id` | admin | delete (refused while the model is in use) |
+| POST | `/api/jobs/:id/as-input` | user | `{index}`: copies one image of a finished job into the uploads and returns its name, for a follow-up task |
 | POST | `/api/jobs/:id/upscale` | user | `{index}`: upscales one image of a finished job ×4 as a new job (at most 2048 px on the long side) |
 | GET/PUT | `/api/settings` | admin | platform settings (telemetry on/off and size limit; the prompt assistant's Ollama address, model, on/off) |
 | GET | `/api/settings/ollama?url=` | admin | the Ollama server's version and installed models, for choosing one in Settings |
-| GET | `/api/prompt/status` | user | whether the "To prompt" button can work (enabled, server reachable, model installed; checked at most every 30 s) |
+| GET | `/api/prompt/status` | user | whether the "Improve with AI" button can work (enabled, server reachable, model installed; checked at most every 30 s) |
 | POST | `/api/prompt/enhance` | user | `{presetId, prompt, width, height, duration, hasImage}` → `{prompt}`: the idea rewritten by the Ollama model for the mode |
 | GET/DELETE | `/api/telemetry` · `/api/telemetry/export` · `/api/telemetry/:name` | admin | list, download all as one JSON array, download one, delete all |
 | GET | `/files/{output,thumbs,previews,uploads}/…` | user | files (with Range support for video) |
@@ -137,7 +138,16 @@ Every route except sign-in requires a session. Mutating requests require the `X-
 | `engine`, `ffmpeg` | `sd-cli` or ffmpeg does not run (fail) |
 | `npu` | informational only |
 
-Results are cached for a minute (`GET /api/diagnostics?refresh=1` forces a re-run). `/api/state` carries a short `health` summary for the header badge and the admin banner; modes with `minGtt` show a warning in the form when GTT is smaller.
+Results are cached for a minute (`GET /api/diagnostics?refresh=1` forces a re-run). `/api/state` carries a short `health` summary for the dot on the Admin menu and the admin notice; modes with `minGtt` show a warning in the form when GTT is smaller.
+
+## Web UI
+
+React (Vite) without a component library; plain CSS in `web/src/styles.css`.
+
+- **Structure:** two sections, **Create** (images and video, switched inside the workspace) and **Library**; administration (Models, Users, System, Settings) under one Admin menu. The header carries a GPU status pill (idle, or the running job's progress and time left, the queue length, overheating) that opens the queue as a side panel. One notice slot shows the most important message (no connection, engine unavailable, a failed system check, an engine update pending).
+- **Create:** the form (task, inputs, prompt, model cards, format, More settings, a sticky footer with the time estimate and the Generate button) next to the running job or the latest result with follow-up actions, a one-line queue summary and recent results. Follow-ups copy the result into the uploads (`POST /api/jobs/:id/as-input`) and open the form with it.
+- **Themes:** design tokens as CSS custom properties; dark on `:root`, light under `[data-theme="light"]`. `web/src/theme.js` keeps the choice (dark, light, system) in `localStorage`; an inline script in `index.html` applies it before the first paint. Red is used only for failures, amber for optional extras.
+- **Sizes:** tuned for 13" laptops (1280–1440 × 800–900: a 380 px form column that scrolls on its own, denser cards) and phones (one column, a fixed Generate bar at the bottom, two results per row, the viewer full screen).
 
 ## Internationalization
 

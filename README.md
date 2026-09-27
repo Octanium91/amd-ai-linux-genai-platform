@@ -1,38 +1,50 @@
 # AMD AI Linux GenAI Platform
 
-A self-hosted platform for local generative content (video, images, and more to come) on **AMD Ryzen AI** mini PCs and laptops running **Linux**. Everything runs on the integrated Radeon GPU through **Vulkan (Mesa RADV)** — no ROCm required. It ships a web UI with sign-in, a job queue, live progress, a gallery, and a model manager that downloads and removes models by itself.
+A self-hosted platform for local generative images and video on **AMD Ryzen AI** mini PCs and laptops running **Linux**. Everything runs on the integrated Radeon GPU through **Vulkan (Mesa RADV)** — no ROCm required. It ships a web UI with sign-in, task-based creation (create, rework, change a part, upscale, animate, put a person into a video, change a video), a job queue with live progress, a library of results, an optional AI prompt assistant and a model manager that downloads and removes models by itself.
 
-The UI is available in English (default), Ukrainian and Russian, in a dark (default) or light theme, or following the system.
+The UI is in English (default), Ukrainian and Russian, in a dark (default) or light theme or following the system, and works on laptops and phones.
 
 ## Features
 
-- **Video:** text-to-video and image-to-video. AnimateLCM (the fastest), AnimateDiff v3 (more detailed), Wan 2.2 5B (coherent motion, for Strix Halo). Output FPS of 24/30/50/60/120 via motion interpolation. Every model pass stays within what the model was trained on (AnimateDiff 16 frames, Wan 121); **longer videos** are built from several chained passes (AnimateDiff up to 8 s, Wan 2.2 up to 10 s). Going beyond the trained length or the tested sizes is possible, with a warning. **Extra quality** uses twice the steps of High.
-- **Images:** photorealistic images with Realistic Vision 6 (SD 1.5), RealVisXL V5 (SDXL at 1024 px, also as a 5–8-step Lightning variant) and Z-Image Turbo (a modern 6B model in 8 steps that follows natural-language descriptions and renders text); several variants at once. The form starts with the task: for images **Create**, **Rework a photo**, **Change a part** (paint over it with a brush) and **Upscale** (Real-ESRGAN ×4); for video **Create**, **Animate a photo**, **Put a person in** (a person or object from a photo in a new video) and **Change a video** (the motion of your video with a new look; both on Wan 2.1 VACE, experimental).
-- **Queue and progress:** jobs run strictly one at a time (there is one GPU). Stages, steps, speed, time left, a latent preview and a live log are shown.
-- **Gallery:** everything generated, videos and images together, with filters by kind, status and author and a search by prompt. A failed or cancelled job can be **restarted** as it was (same parameters and seed); "repeat" fills the form with a job's settings.
-- **Time estimates:** before the first run of a mode the form scales a real reference measurement to this GPU (compute units × clock); afterwards it uses this machine's own history.
+**Creating**
+
+- **Task first.** The form starts with what you want to do, and shows only the models that can do it:
+  - images: **Create**, **Rework a photo** ("how much to change" slider, the size follows the photo), **Change a part** (paint over it with a brush; the rest of the photo stays pixel-exact), **Upscale** (Real-ESRGAN ×4);
+  - video: **Create**, **Animate a photo** (the photo is the first frame), **Put a person in** (a person or object from a photo in a new video) and **Change a video** (the motion of your video with a new look, as contours or recoloring; both on Wan 2.1 VACE, experimental).
+- **Image models:** Realistic Vision 6 (SD 1.5, ~40 s), RealVisXL V5 (SDXL at 1024 px, 2 min 40 s; also a 5–8-step Lightning variant, 48 s) and Z-Image Turbo (a 6B model in 8 steps that follows natural-language descriptions and renders text, 2 min 50 s). Times are for one 1024×1024 image on a Radeon 890M.
+- **Video models:** AnimateLCM (the fastest), AnimateDiff v3 (more detailed), Wan 2.2 5B (coherent motion, for Strix Halo), Wan 2.1 VACE 1.3B. Every model pass stays within what the model was trained on (AnimateDiff 16 frames, Wan 121); **longer videos** are stitched from several passes (AnimateDiff up to 7.6 s, Wan 2.2 up to 10 s), with exactly the requested length. Output at 24–120 fps via motion interpolation.
+- **Models as cards** with the time per result on this machine, and badges for experimental modes, downloads needed and memory limits. Before a mode's first run the time comes from a real reference measurement scaled to this GPU (compute units × clock, read from the driver); afterwards from this machine's own history.
+- **Prompt assistant (optional):** "✦ Improve with AI" in the prompt box. A language model on an [Ollama](https://ollama.com) server turns an idea in any language into a prompt written for the selected model: tags within CLIP's 75 tokens plus the model's quality tags for SD 1.5 / SDXL, flowing sentences with motion and camera for Wan and Z-Image. It knows the task (for Change a part it describes only the painted area). See [docs/models.md](docs/models.md#prompt-assistant).
+- **Plain settings:** shape and size (tested sizes first), length or variations, quality; "More settings" holds smoothness, what to avoid and the variation number, and an Expert group the engine's own parameters. The time estimate and the Generate button stay in view.
+
+**Results**
+
+- **The latest result large, with what to do next:** download, upscale ×4, change a part, rework, animate it into a video, or edit and run again. The same actions are in the viewer.
+- **Library:** everything generated, filters by kind, status and author, search by prompt. A failed or cancelled job can be run again as it was.
+- **Queue and progress:** one job at a time (one GPU). A status pill in the header shows the GPU (idle, or progress and time left, the queue, overheating) and opens the queue; the running job shows a rough live preview, one plain progress line, and its stages and engine log under Details.
+
+**Running it**
+
 - **Updates without interruptions:** the UI/API (`web`) and the GPU engine (`worker`) are separate containers; `./scripts/update.sh` restarts the web part at once and the engine only after the current job.
-- **Generation telemetry (optional):** a JSON document per job with the system snapshot (OS, kernel, runtime, CPU, GPU, drivers, clocks), all job parameters and per-phase hardware metrics (utilization, memory, swap, clocks, power, temperatures), with a size limit. Stays on the server. See [docs/telemetry.md](docs/telemetry.md).
-- **Models:** a catalog with sources, sizes and licenses. One-click downloads with resume, conversion into the stable-diffusion.cpp format, deletion. A mode without its models offers to download them.
-- **First-run setup:** while nothing is usable yet, the administrator gets a checklist of model packs with sizes and explanations; the required base is locked, recommendations depend on the hardware.
-- **System check:** the platform checks itself — the link to the engine, GPU via Vulkan, render node access, CPU family and GPU architecture, kernel, GTT size, the unified Vulkan heap, memory for heavy modes, swap, disk, engine, NPU — and shows concrete advice with copyable commands. Critical problems show a banner for administrators and are logged at startup.
+- **Models:** a catalog with sources, sizes and licenses. One-click downloads with resume, conversion into the stable-diffusion.cpp format, deletion. A mode without its models offers to download them; on first start the administrator picks model packs from a checklist.
+- **System check and hardware:** the platform checks itself (engine link, GPU via Vulkan, render node, CPU and GPU generation, kernel, GTT and TTM, the unified Vulkan heap, memory, swap, disk, NPU) and gives concrete advice with copyable commands. The System page shows CPU, GPU, memory and disk with load, clocks, temperatures and the firmware's throttling state.
+- **Generation telemetry (optional):** a JSON document per job with the system snapshot, all parameters and per-phase hardware metrics (utilization, memory, swap, clocks, power, temperatures, throttle counters), with a size limit and an anonymized download. Stays on the server. See [docs/telemetry.md](docs/telemetry.md).
 - **Users:** the first administrator is created on first start, then it is sign-in only (scrypt passwords). The administrator adds users; admin/user roles, everyone owns their jobs.
-- **Prompt assistant (optional):** a "To prompt" button next to the prompt. A language model on an [Ollama](https://ollama.com) server (dolphin-llama3 recommended) turns a short idea in any language into a detailed English prompt written for the selected mode: comma-separated tags within CLIP's 75 tokens for Stable Diffusion 1.5, flowing sentences with motion and camera for Wan. Connected in Settings; the button is active only while the model is available. See [docs/models.md](docs/models.md#prompt-assistant).
-- **Start templates:** on open, the form is filled with one of 10 hidden templates (car, animal, person, architecture, nature…) with settings tuned for maximum quality.
 - **Extensible:** modes and models are described in JSON (`catalog/`); your own are added without a rebuild via `data/state/*.local.json`.
 
 ## Screenshots
 
-Taken on the reference machine (Radeon 890M) at the size of a 13" laptop screen (1440×900, 2× density). All results were generated by the platform itself: Realistic Vision 6 at 768×1024 / 1024×768 with Extra quality (80 steps, 4–6 min per image) and Wan 2.2 5B at 832×480, High quality (4 h 20 min per 2 s clip). See [docs/benchmarks.md](docs/benchmarks.md).
+Taken on the reference machine (Radeon 890M) at the size of a 13" laptop screen (1440×900, 2× density) and a phone (390×844, 3×). All results were generated by the platform itself (RealVisXL V5, Z-Image Turbo, AnimateLCM, AnimateDiff v3, Wan 2.1 VACE, Real-ESRGAN); see [docs/benchmarks.md](docs/benchmarks.md).
 
 > **Note:** the screenshots show the interface at the time of writing (September 2026). The platform is in active development, so the current UI may differ considerably: layout, sections, controls and texts change between versions.
 
 | | |
 |---|---|
-| [![Gallery](docs/screenshots/gallery.png)](docs/screenshots/gallery.png) **Gallery:** videos and images together, filters, search | [![Images](docs/screenshots/image-studio.png)](docs/screenshots/image-studio.png) **Images:** the form and the latest results |
-| [![Video](docs/screenshots/video-studio.png)](docs/screenshots/video-studio.png) **Video:** a Wan 2.2 job with stages, speed, time left, latent preview and the queue | [![Viewer](docs/screenshots/viewer-image.png)](docs/screenshots/viewer-image.png) **Viewer:** the result with its prompt and parameters |
-| [![Video viewer](docs/screenshots/viewer-video.png)](docs/screenshots/viewer-video.png) **Video viewer:** a Wan 2.2 clip | [![System check](docs/screenshots/system.png)](docs/screenshots/system.png) **System check:** GPU, GTT, the unified Vulkan heap, engine |
-| [![Models](docs/screenshots/models.png)](docs/screenshots/models.png) **Models:** catalog, sizes, licenses, what uses what | |
+| [![Create an image](docs/screenshots/create-image.png)](docs/screenshots/create-image.png) **Create:** task, prompt with the AI assistant, models with the time per result; the latest result with what to do next | [![Light theme](docs/screenshots/create-image-light.png)](docs/screenshots/create-image-light.png) **Light theme** |
+| [![Change a part](docs/screenshots/change-part.png)](docs/screenshots/change-part.png) **Change a part:** paint over the hat, describe what goes there | [![Video](docs/screenshots/create-video.png)](docs/screenshots/create-video.png) **Video:** a clip changed with Wan 2.1 VACE (the motion of an uploaded video, a new look) |
+| [![Library](docs/screenshots/library.png)](docs/screenshots/library.png) **Library:** everything generated, filters, search | [![Viewer](docs/screenshots/viewer.png)](docs/screenshots/viewer.png) **Viewer:** the result and its follow-up actions |
+| [![System](docs/screenshots/system.png)](docs/screenshots/system.png) **System:** hardware at a glance and the self-check | [![Models](docs/screenshots/models.png)](docs/screenshots/models.png) **Models:** catalog, sizes, licenses, what uses what |
+| [![Settings](docs/screenshots/settings.png)](docs/screenshots/settings.png) **Settings:** the prompt assistant (Ollama) and telemetry | [![Phone](docs/screenshots/phone-create.png)](docs/screenshots/phone-create.png) [![Phone library](docs/screenshots/phone-library.png)](docs/screenshots/phone-library.png) **On a phone** |
 
 ## Hardware
 
