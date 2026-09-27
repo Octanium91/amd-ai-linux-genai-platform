@@ -2,7 +2,7 @@
 
 A self-hosted platform for local generative content (video, images, and more to come) on **AMD Ryzen AI** mini PCs and laptops running **Linux**. Everything runs on the integrated Radeon GPU through **Vulkan (Mesa RADV)** — no ROCm required. It ships a web UI with sign-in, a job queue, live progress, a gallery, and a model manager that downloads and removes models by itself.
 
-The UI is available in English (default), Ukrainian and Russian.
+The UI is available in English (default), Ukrainian and Russian, in a dark (default) or light theme, or following the system.
 
 ## Features
 

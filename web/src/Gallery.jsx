@@ -1,13 +1,7 @@
 import { useEffect, useState } from 'react';
-import { api, clipSeconds, fileUrl, fmtDate, fmtDuration, jobKind, STATUS_LABEL } from './util.js';
+import { clipSeconds, fileUrl, fmtDate, fmtDuration, jobKind, STATUS_LABEL } from './util.js';
 import { t, tError } from './i18n.js';
 import { LogView, ParamChips } from './Jobs.jsx';
-
-const FILTERS = [
-  { key: 'all', label: 'All' },
-  { key: 'done', label: 'Done' },
-  { key: 'bad', label: 'Failed and cancelled' },
-];
 
 // Failed and cancelled jobs can be put back into the queue as they were
 export const canRetry = (job, canManage) => ['failed', 'cancelled'].includes(job.status) && canManage(job);
@@ -19,23 +13,65 @@ export function confirmDelete(job, onDelete) {
 const isVideoFile = (f) => /\.(mp4|webm)$/i.test(f);
 const isImageFile = (f) => /\.(png|jpe?g|webp)$/i.test(f);
 
-export function Modal({ job, onClose, onDelete, onReuse, onRetry, canManage }) {
-  const [showLog, setShowLog] = useState(job.status === 'failed');
-  const [idx, setIdx] = useState(0);
-  const [upMsg, setUpMsg] = useState(null);
-  const files = job.files || [];
-  const file = files[idx];
-  // A finished image can be upscaled ×4 in one click: a new job with this file as its photo
-  const canUpscale = file && isImageFile(file) && job.params.task !== 'upscale';
-  const upscale = async () => {
-    setUpMsg({ busy: true });
+// What can be done with a finished result. An image can go on as the photo of another task;
+// every job can be edited and run again. `acts` carries the handlers from App.
+export function NextActions({ job, index = 0, acts, onDone, primaryDownload = true }) {
+  const [msg, setMsg] = useState(null);
+  const file = job.files?.[index];
+  const image = file && isImageFile(file);
+  const run = async (fn, okText) => {
+    setMsg({ busy: true });
     try {
-      await api(`/api/jobs/${job.id}/upscale`, { method: 'POST', json: { index: idx } });
-      setUpMsg({ text: t('Queued: the upscaled image appears in the gallery.') });
+      await fn();
+      setMsg(okText ? { text: okText } : null);
+      if (!okText) onDone?.();
     } catch (e) {
-      setUpMsg({ text: e.message, error: true });
+      setMsg({ text: e.message, error: true });
     }
   };
+  return (
+    <>
+      <div className="hero-actions">
+        {file && primaryDownload && <a className="btn primary" href={`/api/jobs/${job.id}/download/${index}`}>{t('Download')}</a>}
+        {canRetry(job, acts.canManage) && <button className="btn primary" onClick={() => { acts.onRetry(job); onDone?.(); }}>{t('Run again')}</button>}
+        {image && job.params.task !== 'upscale' && acts.onUpscale && (
+          <button className="btn" disabled={msg?.busy} onClick={() => run(() => acts.onUpscale(job, index), t('Queued: the upscaled image appears in the gallery.'))}>⤢ {t('Upscale ×4')}</button>
+        )}
+        {image && acts.onFollowUp && (
+          <>
+            <button className="btn" onClick={() => run(() => acts.onFollowUp(job, index, 'image', 'inpaint'))}>🖌 {t('Change a part')}</button>
+            <button className="btn" onClick={() => run(() => acts.onFollowUp(job, index, 'image', 'rework'))}>🖼 {t('Rework')}</button>
+            <button className="btn" onClick={() => run(() => acts.onFollowUp(job, index, 'video', 'animate'))}>🎬 {t('Animate')}</button>
+          </>
+        )}
+        <button className="btn ghost" onClick={() => { acts.onReuse(job); onDone?.(); }}>↻ {t('Edit and run again')}</button>
+      </div>
+      {msg?.text && <div className={`small ${msg.error ? 'warn' : 'muted'}`}>{msg.text}</div>}
+    </>
+  );
+}
+
+// The technical side of a job, folded away: all settings, the negative prompt and the engine log
+function TechDetails({ job }) {
+  return (
+    <details className="more">
+      <summary>{t('Technical details')}</summary>
+      <div className="more-body">
+        <ParamChips p={job.params} user={job.user} detailed />
+        {job.params.negative && <div className="muted small">{t('What to avoid')}: {job.params.negative}</div>}
+        <span className="subhead">{t('Technical log')}</span>
+        <LogView jobId={job.id} />
+      </div>
+    </details>
+  );
+}
+
+export function Modal({ job, onClose, canManage, onDelete, ...acts }) {
+  const [idx, setIdx] = useState(0);
+  const [confirmDel, setConfirmDel] = useState(false);
+  const files = job.files || [];
+  const file = files[idx];
+  const all = { canManage, onDelete, ...acts };
   useEffect(() => {
     const k = (e) => {
       if (e.key === 'Escape') onClose();
@@ -69,63 +105,60 @@ export function Modal({ job, onClose, onDelete, onReuse, onRetry, canManage }) {
           </div>
         )}
         <div className="modal-info">
-          <div className="prompt">{job.params.prompt}</div>
-          {job.params.negative && <div className="muted small">{t('Negative:')} {job.params.negative}</div>}
+          {job.params.prompt && (
+            <div>
+              <div className="prompt" style={{ paddingRight: files.length ? 0 : 44 }}>{job.params.prompt}</div>
+              <button className="link muted small" onClick={() => navigator.clipboard?.writeText(job.params.prompt)}>⧉ {t('Copy the prompt')}</button>
+            </div>
+          )}
           <ParamChips p={job.params} user={job.user} />
           <div className="muted small">
             {fmtDate(job.finishedAt || job.createdAt)}
             {job.durationSec ? ` · ${t('generated in {time}', { time: fmtDuration(job.durationSec) })}` : ''}
           </div>
-          {job.warning && <div className="warn small">{tError(job.warning)}</div>}
-          <div className="modal-actions">
-            {file && <a className="btn primary" href={`/api/jobs/${job.id}/download/${idx}`}>{t('Download')}{files.length > 1 ? ` (${idx + 1}/${files.length})` : ''}</a>}
-            {canRetry(job, canManage) && (
-              <button className="btn primary" onClick={() => { onRetry(job); onClose(); }}>{t('Restart')}</button>
-            )}
-            <button className="btn" onClick={() => { onReuse(job); onClose(); }}>{t('Repeat with these settings')}</button>
-            {canUpscale && <button className="btn" disabled={upMsg?.busy} onClick={upscale}>{t('Upscale ×4')}</button>}
-            {canManage(job) && (
-              <button className="btn ghost danger" onClick={() => confirmDelete(job, (j) => { onDelete(j); onClose(); })}>{t('Delete')}</button>
-            )}
-          </div>
-          {upMsg?.text && <div className={`small ${upMsg.error ? 'warn' : 'muted'}`}>{upMsg.text}</div>}
-          <button className="link" onClick={() => setShowLog((v) => !v)}>{showLog ? '▾' : '▸'} {t('sd-cli log')}</button>
-          {showLog && <LogView jobId={job.id} />}
+          {job.warning && <div className="note warn">⚠ {tError(job.warning)}</div>}
+          <NextActions job={job} index={idx} acts={all} onDone={onClose} />
+          {canManage(job) && (confirmDel ? (
+            <div className="confirm-row">
+              <span>{t('Delete the generation together with its files?')}</span>
+              <button className="btn danger-solid btn-small" onClick={() => { onDelete(job); onClose(); }}>{t('Delete')}</button>
+              <button className="btn ghost btn-small" onClick={() => setConfirmDel(false)}>{t('Keep')}</button>
+            </div>
+          ) : (
+            <button className="link muted" onClick={() => setConfirmDel(true)}>{t('Delete')}</button>
+          ))}
+          <TechDetails job={job} />
         </div>
       </div>
     </div>
   );
 }
 
-// One result tile; used by the studio's recent results and by the gallery page
+// One result tile; used by the recent results and by the library
 export function Tile({ job: j, onOpen, onDelete, onReuse, onRetry, canManage, showKind = false }) {
   const video = jobKind(j) === 'video';
   return (
     <div className={`tile ${j.status}`}>
       <button className={`thumb ${video ? '' : 'thumb-img'}`} onClick={() => onOpen(j)} title={t('Open')}>
         {/* Thumbnails are cached for days: the version changes when a restarted job finishes again */}
-        {j.thumb ? <img src={`/files/thumbs/${j.thumb}?v=${j.finishedAt || 0}`} alt="" loading="lazy" /> : <div className="thumb-empty">{t(STATUS_LABEL[j.status])}</div>}
+        {j.thumb ? <img src={`/files/thumbs/${j.thumb}?v=${j.finishedAt || 0}`} alt="" loading="lazy" />
+          : <div className="thumb-empty">{j.status === 'failed' && j.error ? tError(j.error) : t(STATUS_LABEL[j.status])}</div>}
         {j.status === 'done' && video && <span className="play">▶</span>}
         <span className="badge">
           {showKind ? `${video ? t('Video') : t('Image')} · ` : ''}
-          {j.params.width}×{j.params.height}
-          {video
-            ? ` · ${t('{s} s', { s: clipSeconds(j.params).toFixed(1) })} · ${j.params.outFps ?? j.params.fps} fps`
-            : j.files?.length > 1 ? ` · ${t('{n} pcs', { n: j.files.length })}` : ''}
+          {video ? t('{s} s', { s: clipSeconds(j.params).toFixed(1) }) : `${j.params.width}×${j.params.height}`}
+          {!video && j.files?.length > 1 ? ` · ${t('{n} pcs', { n: j.files.length })}` : ''}
         </span>
         {j.status !== 'done' && <span className={`badge st ${j.status}`}>{t(STATUS_LABEL[j.status])}</span>}
       </button>
       <div className="tile-body">
-        <div className="tile-prompt" title={j.params.prompt}>{j.params.prompt}</div>
-        {j.status === 'failed' && j.error && <div className="tile-err" title={tError(j.error)}>{tError(j.error)}</div>}
+        <div className="tile-prompt" title={j.params.prompt}>{j.params.prompt || j.params.presetName}</div>
         <div className="tile-meta">
           <span className="muted small">{fmtDate(j.finishedAt || j.createdAt)}{j.durationSec ? ` · ${fmtDuration(j.durationSec)}` : ''}</span>
           <span className="tile-actions">
             {j.files?.length > 0 && <a className="btn-icon" href={`/api/jobs/${j.id}/download/0`} title={t('Download')}>⤓</a>}
-            {canRetry(j, canManage) && (
-              <button className="btn-icon" title={t('Restart: the same job again, with the same seed')} onClick={() => onRetry(j)}>⟲</button>
-            )}
-            <button className="btn-icon" title={t('Repeat')} onClick={() => onReuse(j)}>↻</button>
+            {canRetry(j, canManage) && <button className="btn-icon" title={t('Run again: the same job with the same settings')} onClick={() => onRetry(j)}>⟲</button>}
+            <button className="btn-icon" title={t('Edit and run again')} onClick={() => onReuse(j)}>✎</button>
             {canManage(j) && <button className="btn-icon danger" title={t('Delete')} onClick={() => confirmDelete(j, onDelete)}>🗑</button>}
           </span>
         </div>
@@ -134,44 +167,54 @@ export function Tile({ job: j, onOpen, onDelete, onReuse, onRetry, canManage, sh
   );
 }
 
-// Recent results of one content kind in the studio; the full history lives on the gallery page
+// The latest result, large, with what to do next
+export function ResultHero({ job, acts, onOpen }) {
+  const file = job.files?.[0];
+  return (
+    <div className="card">
+      <div className="hero">
+        <div className="hero-media" onClick={() => onOpen(job)} title={t('Open')}>
+          {file && isVideoFile(file) ? <video src={fileUrl(file)} autoPlay loop muted playsInline />
+            : file && isImageFile(file) ? <img src={fileUrl(file)} alt="" />
+              : <div className="thumb-empty" style={{ aspectRatio: '16 / 9' }}>{job.error ? tError(job.error) : t(STATUS_LABEL[job.status])}</div>}
+        </div>
+        <div className="hero-info">
+          <div className="eyebrow">{job.status === 'done' ? `✓ ${t('Ready')}` : t(STATUS_LABEL[job.status])} · {fmtDate(job.finishedAt || job.createdAt)}{job.durationSec ? ` · ${fmtDuration(job.durationSec)}` : ''}</div>
+          {job.params.prompt && <div className="prompt small" style={{ WebkitLineClamp: 4, display: '-webkit-box', WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{job.params.prompt}</div>}
+          <ParamChips p={job.params} />
+          {job.warning && <div className="note warn">⚠ {tError(job.warning)}</div>}
+          <NextActions job={job} acts={acts} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Recent results of one content kind; the full history lives in the library
 const RECENT = 12;
 
-export default function Gallery({ kind, jobs, onDelete, onReuse, onRetry, canManage, onOpenAll }) {
-  const [filter, setFilter] = useState('all');
+export default function Gallery({ kind, jobs, onOpenAll, ...acts }) {
   const [openId, setOpenId] = useState(null);
-  const filtered = jobs.filter((j) => (filter === 'all' ? true : filter === 'done' ? j.status === 'done' : j.status !== 'done'));
-  const shown = filtered.slice(0, RECENT);
+  const shown = jobs.slice(0, RECENT);
   const open = jobs.find((j) => j.id === openId);
   const video = kind === 'video';
 
   return (
     <div className="card">
       <div className="gal-head">
-        <h3>{t('Results')} · {jobs.filter((j) => j.status === 'done').length}</h3>
-        <div className="tabs">
-          {FILTERS.map((f) => (
-            <button key={f.key} className={`tab ${filter === f.key ? 'on' : ''}`} onClick={() => setFilter(f.key)}>{t(f.label)}</button>
-          ))}
-        </div>
+        <h3>{t('Recent')}</h3>
+        {onOpenAll && jobs.length > 0 && (
+          <button className="link" onClick={onOpenAll}>{jobs.length > RECENT ? t('All {n} in the library →', { n: jobs.length }) : t('Open the library →')}</button>
+        )}
       </div>
       {!shown.length ? (
         <div className="muted empty">{video ? t('Finished videos will appear here.') : t('Finished images will appear here.')}</div>
       ) : (
         <div className={`grid ${video ? '' : 'grid-img'}`}>
-          {shown.map((j) => (
-            <Tile key={j.id} job={j} onOpen={(x) => setOpenId(x.id)} onDelete={onDelete} onReuse={onReuse} onRetry={onRetry} canManage={canManage} />
-          ))}
+          {shown.map((j) => <Tile key={j.id} job={j} onOpen={(x) => setOpenId(x.id)} {...acts} />)}
         </div>
       )}
-      {onOpenAll && filtered.length > 0 && (
-        <div className="gal-more">
-          <button className="link" onClick={onOpenAll}>
-            {filtered.length > RECENT ? t('All {n} in the gallery →', { n: filtered.length }) : t('Open the gallery →')}
-          </button>
-        </div>
-      )}
-      {open && <Modal job={open} onClose={() => setOpenId(null)} onDelete={onDelete} onReuse={onReuse} onRetry={onRetry} canManage={canManage} />}
+      {open && <Modal job={open} onClose={() => setOpenId(null)} {...acts} />}
     </div>
   );
 }

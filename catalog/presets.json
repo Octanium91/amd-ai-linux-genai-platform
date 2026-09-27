@@ -471,7 +471,7 @@
     "id": "vid-animatelcm",
     "kind": "video",
     "name": "AnimateLCM · Realistic Vision (fast)",
-    "description": "The fastest video mode. CFG 1 is faster and softer; CFG 1.5 gives more contrast and motion at about twice the time.",
+    "description": "The fastest video mode: a 2 s clip in a few minutes, softer motion. Higher prompt strictness gives more contrast and motion at about twice the time.",
     "promptQuality": {
       "suffix": "cinematic, 8k uhd, dslr, soft lighting, high quality, film grain"
     },
@@ -552,11 +552,11 @@
     "i18n": {
       "uk": {
         "name": "AnimateLCM · Realistic Vision (швидко)",
-        "description": "Найшвидший відеорежим. CFG 1 — швидше й м'якше; CFG 1.5 — контрастніше й більше руху, приблизно вдвічі довше."
+        "description": "Найшвидший відеорежим: кліп на 2 с за кілька хвилин, м'якший рух. Вища точність промпту дає більше контрасту й руху приблизно вдвічі довше."
       },
       "ru": {
         "name": "AnimateLCM · Realistic Vision (быстро)",
-        "description": "Самый быстрый видеорежим. CFG 1 — быстрее и мягче; CFG 1.5 — контрастнее и больше движения, примерно вдвое дольше."
+        "description": "Самый быстрый видеорежим: клип на 2 с за несколько минут, более мягкое движение. Более высокая точность промпта даёт больше контраста и движения примерно вдвое дольше."
       }
     }
   },

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, fmtBytes, jobKind, setUnauthorizedHandler } from './util.js';
+import { api, jobKind, setUnauthorizedHandler } from './util.js';
 import { t, useLang } from './i18n.js';
 import { LangSwitch } from './LangSwitch.jsx';
+import { ThemeSwitch } from './ThemeSwitch.jsx';
 import { Logo } from './Logo.jsx';
 import Login from './Login.jsx';
 import Studio from './Studio.jsx';
@@ -11,25 +12,23 @@ import Users, { ChangePassword } from './Users.jsx';
 import Setup from './Setup.jsx';
 import System from './System.jsx';
 import Settings from './Settings.jsx';
+import { QueueDrawer, StatusPill } from './Jobs.jsx';
 
-// Three separate groups: what can be generated (one section per content kind), the gallery of
-// everything generated, and platform management
-const GEN_TABS = [
-  { key: 'video', label: 'Video' },
-  { key: 'image', label: 'Images' },
-];
-const LIBRARY_TABS = [{ key: 'gallery', label: 'Gallery', icon: 'gallery' }];
+// Two places to be in: Create (images and video, chosen inside the workspace) and the Library of
+// everything generated. Administration lives behind one "Admin" menu.
+const CREATE_TABS = ['image', 'video'];
 const ADMIN_TABS = [
   { key: 'models', label: 'Models', icon: 'models' },
-  { key: 'users', label: 'Users', icon: 'users', admin: true },
-  { key: 'system', label: 'System', icon: 'system', admin: true },
-  { key: 'settings', label: 'Settings', icon: 'settings', admin: true },
+  { key: 'users', label: 'Users', icon: 'users' },
+  { key: 'system', label: 'System', icon: 'system' },
+  { key: 'settings', label: 'Settings', icon: 'settings' },
 ];
-const TABS = [...GEN_TABS, ...LIBRARY_TABS, ...ADMIN_TABS];
+const TABS = [...CREATE_TABS, 'gallery', ...ADMIN_TABS.map((x) => x.key)];
 
 const ICONS = {
   settings: 'M19.4 13a7.6 7.6 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-1.7-1L15 3.5h-4l-.4 2.5a7.4 7.4 0 0 0-1.7 1l-2.4-1-2 3.4L6.6 11a7.6 7.6 0 0 0 0 2l-2 1.6 2 3.4 2.4-1c.5.4 1.1.7 1.7 1l.4 2.5h4l.4-2.5c.6-.3 1.2-.6 1.7-1l2.4 1 2-3.4-2-1.6ZM13 15a3 3 0 1 1 0-6 3 3 0 0 1 0 6Z',
   gallery: 'M4 4h7v7H4V4Zm2 2v3h3V6H6Zm7-2h7v7h-7V4Zm2 2v3h3V6h-3ZM4 13h7v7H4v-7Zm2 2v3h3v-3H6Zm7-2h7v7h-7v-7Zm2 2v3h3v-3h-3Z',
+  create: 'M12 2l1.9 5.6L19.5 9.5l-5.6 1.9L12 17l-1.9-5.6L4.5 9.5l5.6-1.9L12 2zm6.5 12l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9.9-2.6z',
   models: 'M12 2 3 7v10l9 5 9-5V7l-9-5Zm0 2.3L18.7 8 12 11.7 5.3 8 12 4.3ZM5 9.7l6 3.3v6.7l-6-3.3V9.7Zm8 10V13l6-3.3v6.7l-6 3.3Z',
   system: 'M3 12h4l2-6 4 12 2-6h6v-2h-4.6L15 4.5 11 16.8 9 10.5 8.3 10H3v2Z',
   users: 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0-6a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm7.5 6a3.5 3.5 0 1 0 0-7 1 1 0 0 0 0 2 1.5 1.5 0 1 1 0 3 1 1 0 0 0 0 2ZM9 13c-3.9 0-7 2-7 4.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5C16 15 12.9 13 9 13Zm5 6H4v-1.5c0-1.2 2.1-2.5 5-2.5s5 1.3 5 2.5V19Zm3-5.8a1 1 0 0 0-.4 1.9c1.4.6 2.4 1.5 2.4 2.4V19h-1a1 1 0 0 0 0 2h2a1 1 0 0 0 1-1v-2.5c0-1.9-1.6-3.5-4-4.3Z',
@@ -38,165 +37,64 @@ const Icon = ({ name }) => (
   <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d={ICONS[name]} fill="currentColor" /></svg>
 );
 
+const store = {
+  get(k, d) {
+    try {
+      return localStorage.getItem(k) ?? d;
+    } catch {
+      return d;
+    }
+  },
+  set(k, v) {
+    try {
+      localStorage.setItem(k, v);
+    } catch {}
+  },
+};
+
 function readTab() {
   const tab = location.hash.replace('#', '');
-  return TABS.some((x) => x.key === tab) ? tab : 'video';
+  if (tab === 'create') return store.get('gp_kind', 'image');
+  return TABS.includes(tab) ? tab : store.get('gp_kind', 'image');
 }
 
-function SystemBar({ system, online }) {
-  if (!online) return <div className="sysbar"><div className="sys-offline"><span className="dot bad" /> {t('no connection to the server')}</div></div>;
-  if (!system) return null;
-  const pct = (a, b) => (b ? (a / b) * 100 : 0);
-  const ghz = (mhz) => (mhz ? t('{n} GHz', { n: (mhz / 1000).toFixed(2) }) : null);
-  const st = system.storage || {};
-  const Meter = ({ value }) => (
-    <div className="meter"><div style={{ width: Math.min(100, value) + '%' }} className={value > 90 ? 'hot' : ''} /></div>
-  );
-  const Temp = ({ value, title }) => (value == null ? null : (
-    <span className={`sys-temp ${value >= 90 ? 'bad' : value >= 80 ? 'warn' : ''}`} title={title}>{Math.round(value)} °C</span>
-  ));
-  const Row = ({ label, meter, children, title }) => (
-    // Three grid cells per row, so the labels, meters and values line up within a block
-    <div className="sys-row" title={title}>
-      <span className="sys-label">{label}</span>
-      {meter != null ? <Meter value={meter} /> : <span />}
-      <span className="sys-val">{children}</span>
-    </div>
-  );
-  const Block = ({ name, sub, temp, tempTitle, title, badge, children }) => (
-    <div className={`sys-block ${badge?.hot ? 'throttled' : ''}`} title={title}>
-      <div className="sys-head">
-        <span className="sys-name">{name}</span>
-        {sub && <span className="sys-sub">{sub}</span>}
-        {badge && <span className={`sys-badge ${badge.hot ? 'bad' : ''}`} title={badge.title}>{badge.text}</span>}
-        <Temp value={temp} title={tempTitle} />
-      </div>
-      <div className="sys-rows">{children}</div>
-    </div>
-  );
-  const join = (...parts) => parts.filter(Boolean).join(' · ');
-  // Both names come from the hardware: the GPU's from the driver (libdrm or Vulkan) with the CU count
-  // from the KFD topology, the CPU's from its brand string in /proc/cpuinfo
-  const gpuName = join((system.gpuName || system.gpu?.replace(/\s*\(RADV.*\)/, ''))?.replace(/^AMD\s+/, ''),
-    system.gpuCu && t('{n} CU', { n: system.gpuCu }));
-  const cpuName = system.cpu?.replace(/^AMD\s+/, '').replace(/\s+w\/\s+Radeon.*$/i, '').replace(/\s+\S+-Core Processor$/i, '');
-  // Throttling as the SMU firmware reports it (the last 30 s). Thermal reasons are overheating;
-  // a power limit is the normal ceiling of a small machine and is shown quietly.
-  const thermal = system.throttle?.thermal || [];
-  const power = system.throttle?.power || [];
-  const REASON = {
-    prochot: t('PROCHOT (the platform asked the chip to slow down)'), thm_core: t('CPU cores too hot'), thm_gfx: t('GPU too hot'),
-    thm_soc: t('SoC too hot'), spl: t('sustained power limit'), fppt: t('fast power limit'), sppt: t('slow power limit'),
-  };
-  const badgeFor = (hot) => {
-    if (hot.length) return { hot: true, text: t('Throttling'), title: [t('Overheating: the firmware lowered the clocks.'), ...hot.map((r) => REASON[r])].join('\n') };
-    return null;
-  };
-  const cpuBadge = badgeFor(thermal.filter((r) => ['prochot', 'thm_core', 'thm_soc'].includes(r)));
-  const gpuBadge = badgeFor(thermal.filter((r) => ['prochot', 'thm_gfx', 'thm_soc'].includes(r)))
-    || (power.length ? { text: t('Power limit'), title: [t('The clocks are capped by a power limit: normal for a small machine, not overheating.'), ...power.map((r) => REASON[r])].join('\n') } : null);
-  // A GPU clock limit the firmware enforces below the maximum. Not shown for the CPU: on hybrid
-  // Zen 5 / Zen 5c chips the core limit sits below the boost clock even at idle.
-  const capped = (limit, max) => limit && max && limit < max * 0.97;
-  const diskRow = (d, label, results) => d && (
-    <Row
-      label={label || t('Used')}
-      meter={pct(d.total - d.free, d.total)}
-      title={t(results ? 'Results disk: {free} free of {total}; results take {used}' : 'Models disk: {free} free of {total}; models take {used}', {
-        free: fmtBytes(d.free), total: fmtBytes(d.total), used: fmtBytes(d.used),
-      })}
-    >
-      {t('{size} free', { size: fmtBytes(d.free) })}
-      {d.temp != null && st.data && !st.data.sameDisk && <> · <Temp value={d.temp} title={t('Disk temperature')} /></>}
-    </Row>
-  );
-  const splitDisks = st.models && st.data && !st.data.sameDisk;
-  return (
-    <div className="sysbar">
-      <Block
-        name="CPU"
-        sub={cpuName || system.family}
-        badge={cpuBadge}
-        temp={system.cpuTemp}
-        tempTitle={t('CPU temperature (Tctl)')}
-        title={join(system.cpu, system.family, system.threads && t('{n} threads', { n: system.threads }))}
-      >
-        <Row
-          label={t('Load')}
-          meter={system.cpuBusy ?? 0}
-          title={join(t('CPU load'), system.cpuMaxMhz && t('average core clock; up to {max}', { max: ghz(system.cpuMaxMhz) }),
-            system.cpuLimitMhz && t('clock limit set by the firmware now: {limit}', { limit: ghz(system.cpuLimitMhz) }))}
-        >
-          {join(`${system.cpuBusy ?? '—'}%`, ghz(system.cpuMhz))}
-        </Row>
-      </Block>
-      <Block
-        name="GPU"
-        sub={gpuName}
-        badge={gpuBadge}
-        temp={system.gpuTemp}
-        tempTitle={join(t('GPU temperature (edge)'), system.socTemp != null && t('SoC {v} °C', { v: Math.round(system.socTemp) }))}
-        title={join(system.gpu, system.gpuArch, system.driver)}
-      >
-        <Row
-          label={t('Load')}
-          meter={system.gpuBusy ?? 0}
-          title={join(t('iGPU load'), system.gpuMaxMhz && t('shader clock; up to {max}', { max: ghz(system.gpuMaxMhz) }),
-            system.powerW != null && t('power of the whole APU package'),
-            system.gpuLimitMhz && t('clock limit set by the firmware now: {limit}', { limit: ghz(system.gpuLimitMhz) }))}
-        >
-          {join(`${system.gpuBusy ?? '—'}%`, ghz(system.gpuMhz), system.powerW != null && `${system.powerW} W`)}
-          {capped(system.gpuLimitMhz, system.gpuMaxMhz) && <span className="warn"> · {t('limit {v}', { v: ghz(system.gpuLimitMhz) })}</span>}
-        </Row>
-        {system.vramTotal > 0 && (
-          <Row label="VRAM" meter={pct(system.vramUsed, system.vramTotal)} title={t('Dedicated GPU memory (VRAM): the UMA carve-out reserved in the BIOS')}>
-            {fmtBytes(system.vramUsed)} / {fmtBytes(system.vramTotal)}
-          </Row>
-        )}
-        {system.gttTotal > 0 && (
-          <Row
-            label="GTT"
-            meter={pct(system.gttUsed, system.gttTotal)}
-            title={t('GPU memory (GTT), allocated from the shared system RAM')}
-          >
-            {fmtBytes(system.gttUsed)} / {fmtBytes(system.gttTotal)}
-          </Row>
-        )}
-      </Block>
-      <Block name="RAM" temp={system.memTemp} tempTitle={t('Memory module temperature (the hottest one)')}>
-        <Row
-          label={t('Used')}
-          meter={pct(system.memTotal - system.memAvailable, system.memTotal)}
-          title={join(t('RAM: {used} used of {total}', { used: fmtBytes(system.memTotal - system.memAvailable), total: fmtBytes(system.memTotal) }),
-            system.memMhz && t('memory clock {mclk} MHz, fabric clock {fclk} MHz (as reported by the GPU driver)', { mclk: system.memMhz, fclk: system.fabricMhz ?? '—' }))}
-        >
-          {join(t('{size} free', { size: fmtBytes(system.memAvailable) }), system.memMhz && `${system.memMhz} MHz`)}
-        </Row>
-      </Block>
-      {(st.models || st.data) && (
-        <Block
-          name={t('Storage')}
-          temp={splitDisks ? null : (st.models || st.data).temp}
-          tempTitle={t('Disk temperature')}
-        >
-          {diskRow(st.models, splitDisks ? t('Models') : null, false)}
-          {splitDisks && diskRow(st.data, t('Results'), true)}
-          {!st.models && diskRow(st.data, null, true)}
-        </Block>
-      )}
-    </div>
-  );
-}
-
-function UserMenu({ user, onLogout }) {
+// A menu that closes on an outside click
+function useMenu() {
   const [open, setOpen] = useState(false);
-  const [pwd, setPwd] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
     const close = (e) => ref.current && !ref.current.contains(e.target) && setOpen(false);
     document.addEventListener('click', close);
     return () => document.removeEventListener('click', close);
   }, []);
+  return { open, setOpen, ref };
+}
+
+function AdminMenu({ tab, go, health }) {
+  const { open, setOpen, ref } = useMenu();
+  const active = ADMIN_TABS.some((x) => x.key === tab);
+  return (
+    <div className="usermenu" ref={ref}>
+      <button className={`nav-link ${active ? 'on' : ''}`} onClick={() => setOpen((o) => !o)}>
+        <Icon name="settings" /> <span>{t('Admin')}</span> ▾
+        {health && health.status !== 'ok' && <span className={`nav-badge ${health.status}`} />}
+      </button>
+      {open && (
+        <div className="menu">
+          {ADMIN_TABS.map((x) => (
+            <button key={x.key} onClick={() => { go(x.key); setOpen(false); }}>
+              <span className="nav-tab-icon"><Icon name={x.icon} /> {t(x.label)}{x.key === 'system' && health && health.status !== 'ok' ? ' ●' : ''}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function UserMenu({ user, onLogout }) {
+  const { open, setOpen, ref } = useMenu();
+  const [pwd, setPwd] = useState(false);
   return (
     <div className="usermenu" ref={ref}>
       <button className="btn ghost" onClick={() => setOpen((o) => !o)}>
@@ -208,6 +106,11 @@ function UserMenu({ user, onLogout }) {
             <span className="muted small">{t('Language')}</span>
             <LangSwitch />
           </div>
+          <div className="menu-row">
+            <span className="muted small">{t('Theme')}</span>
+            <ThemeSwitch />
+          </div>
+          <div className="menu-sep" />
           <button onClick={() => { setPwd(true); setOpen(false); }}>{t('Change password')}</button>
           <button onClick={onLogout}>{t('Sign out')}</button>
         </div>
@@ -226,11 +129,12 @@ export default function App() {
   const [presets, setPresets] = useState([]);
   const [templates, setTemplates] = useState(null);
   const [setup, setSetup] = useState(null); // first-run setup state (model packs)
-  const [setupSkipped, setSetupSkipped] = useState(false);
+  const [setupSkipped, setSetupSkipped] = useState(() => store.get('gp_setup_later', '') === '1');
   const [online, setOnline] = useState(true);
   const [health, setHealth] = useState(null);
   const [worker, setWorker] = useState(null); // generation engine (worker container) status
-  const [reuse, setReuse] = useState(null); // job parameters to fill the form with ("repeat")
+  const [reuse, setReuse] = useState(null); // job parameters to fill the form with ("repeat", follow-ups)
+  const [queueOpen, setQueueOpen] = useState(false);
   const skew = useRef(0);
 
   useEffect(() => {
@@ -283,16 +187,18 @@ export default function App() {
   if (user === undefined) return <div className="login-wrap muted">{t('Loading…')}</div>;
   if (!user) return <Login onLogin={setUser} />;
 
+  const admin = user.role === 'admin';
   const logout = async () => {
     await api('/api/auth/logout', { method: 'POST' }).catch(() => {});
     setUser(null);
   };
   const go = (key) => {
+    if (CREATE_TABS.includes(key)) store.set('gp_kind', key);
     location.hash = key;
     setTab(key);
   };
 
-  // Job actions shared by the studios and the gallery page
+  // Job actions shared by the studios and the library
   const act = async (fn) => {
     try {
       await fn();
@@ -302,87 +208,77 @@ export default function App() {
     refresh({ force: true });
   };
   const actions = {
-    canManage: (job) => user.role === 'admin' || job.user === user.username,
+    canManage: (job) => admin || job.user === user.username,
     onCancel: (job) => act(() => api(`/api/jobs/${job.id}/cancel`, { method: 'POST' })),
     onDelete: (job) => act(() => api(`/api/jobs/${job.id}`, { method: 'DELETE' })),
     onRetry: (job) => act(() => api(`/api/jobs/${job.id}/retry`, { method: 'POST' })),
-    // "Repeat" fills the form of the job's studio, switching to it from the gallery
+    // "Edit and run again" fills the form of the job's kind, switching to it from the library
     onReuse: (job) => {
       setReuse({ ...job.params, _t: Date.now() });
       if (tab !== jobKind(job)) go(jobKind(job));
       window.scrollTo({ top: 0, behavior: 'smooth' });
     },
+    // What to do next with a finished image: the result becomes the photo of a new task
+    onFollowUp: async (job, index, kind, task) => {
+      try {
+        const { image } = await api(`/api/jobs/${job.id}/as-input`, { method: 'POST', json: { index } });
+        setReuse({ kind, task, image, prompt: '', _t: Date.now() });
+        if (tab !== kind) go(kind);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } catch (e) {
+        alert(e.message);
+      }
+    },
+    onUpscale: async (job, index) => {
+      await api(`/api/jobs/${job.id}/upscale`, { method: 'POST', json: { index } });
+      refresh({ force: true });
+    },
   };
-  const adminTabs = ADMIN_TABS.filter((x) => !x.admin || user.role === 'admin');
-  const doneCount = jobs.filter((j) => j.status === 'done').length;
+
+  // One notice at a time, the most important first
+  const banner = !online ? { cls: 'fail', text: t('no connection to the server') }
+    : worker && !worker.online ? { cls: 'warn', text: t('The generation engine is restarting or unavailable. Queued jobs are kept and continue when it is back.') }
+      : admin && health?.status === 'fail' && tab !== 'system' ? { cls: 'fail', text: t('The system check found problems — generation may not work.'), action: () => go('system'), label: t('Open the system check') }
+        : worker?.draining ? { cls: 'info', text: t('The generation engine will be updated after the current job. New jobs wait in the queue.') }
+          : null;
+  const creating = CREATE_TABS.includes(tab);
 
   return (
     <div className="app">
       <header className="top">
         <div className="brand">
           <Logo />
-          <div>
-            <div className="brand-name">GenAI Platform</div>
-            <div className="brand-sub">AMD Ryzen AI · Linux · Vulkan</div>
-          </div>
+          <div className="brand-name">GenAI Platform</div>
         </div>
-        <div className="nav-main">
-          <nav className="nav" aria-label={t('Generation')}>
-            {GEN_TABS.map((x) => (
-              <button key={x.key} className={`nav-tab ${tab === x.key ? 'on' : ''}`} onClick={() => go(x.key)}>{t(x.label)}</button>
-            ))}
-          </nav>
-          <nav className="nav" aria-label={t('Gallery')}>
-            {LIBRARY_TABS.map((x) => (
-              <button key={x.key} className={`nav-tab nav-tab-icon ${tab === x.key ? 'on' : ''}`} onClick={() => go(x.key)}>
-                <Icon name={x.icon} /> {t(x.label)}
-                {doneCount > 0 && <span className="nav-count">{doneCount}</span>}
-              </button>
-            ))}
-          </nav>
-        </div>
-        <nav className="nav-admin" aria-label={t('Management')}>
-          {adminTabs.map((x) => (
-            <button key={x.key} className={`nav-link ${tab === x.key ? 'on' : ''}`} onClick={() => go(x.key)} title={t(x.label)}>
-              <Icon name={x.icon} /> <span>{t(x.label)}</span>
-              {x.key === 'system' && health && health.status !== 'ok' && <span className={`nav-badge ${health.status}`} />}
-            </button>
-          ))}
+        <nav className="nav" aria-label={t('Sections')}>
+          <button className={`nav-tab ${creating ? 'on' : ''}`} onClick={() => go(store.get('gp_kind', 'image'))}><Icon name="create" /> {t('Create')}</button>
+          <button className={`nav-tab ${tab === 'gallery' ? 'on' : ''}`} onClick={() => go('gallery')}><Icon name="gallery" /> {t('Library')}</button>
         </nav>
         <div className="top-right">
+          <StatusPill jobs={jobs} system={system} online={online} skew={skew.current} onOpen={() => setQueueOpen(true)} />
+          {admin && <AdminMenu tab={tab} go={go} health={health} />}
           <UserMenu user={user} onLogout={logout} />
         </div>
-        <SystemBar system={system} online={online} />
       </header>
 
-      {online && worker && !worker.online && (
-        <div className="banner warn">
-          <span>{t('The generation engine is restarting or unavailable. Queued jobs are kept and continue when it is back.')}</span>
-        </div>
-      )}
-      {worker?.online && worker.draining && (
-        <div className="banner info">
-          <span>{t('The generation engine will be updated after the current job. New jobs wait in the queue.')}</span>
+      {banner && (
+        <div className={`banner ${banner.cls}`}>
+          <span>{banner.text}</span>
+          {banner.action && <button className="btn btn-small" onClick={banner.action}>{banner.label}</button>}
         </div>
       )}
 
-      {user.role === 'admin' && health?.status === 'fail' && worker?.online !== false && tab !== 'system' && (
-        <div className="banner fail">
-          <span>{t('The system check found problems — generation may not work.')}</span>
-          <button className="btn" onClick={() => go('system')}>{t('Open the system check')}</button>
-        </div>
-      )}
-
-      {setup?.needed && !setupSkipped && (tab === 'video' || tab === 'image') ? (
+      {setup?.needed && !setupSkipped && creating ? (
         <Setup
           user={user}
           info={setup}
           onStarted={() => { setSetupSkipped(true); loadPresets(); go('models'); }}
-          onSkip={() => setSetupSkipped(true)}
+          onSkip={() => { setSetupSkipped(true); store.set('gp_setup_later', '1'); }}
         />
-      ) : (tab === 'video' || tab === 'image') && (
+      ) : creating && (
         <Studio
           kind={tab}
+          setKind={go}
           user={user}
           jobs={jobs}
           presets={presets.filter((p) => (p.kind || 'video') === tab)}
@@ -396,13 +292,18 @@ export default function App() {
           onReuseApplied={() => setReuse(null)}
           actions={actions}
           goGallery={() => go('gallery')}
+          openQueue={() => setQueueOpen(true)}
         />
       )}
       {tab === 'gallery' && <GalleryPage user={user} jobs={jobs} {...actions} />}
-      {tab === 'models' && <Models user={user} onChange={loadPresets} />}
-      {tab === 'users' && user.role === 'admin' && <Users me={user} />}
-      {tab === 'system' && user.role === 'admin' && <System />}
-      {tab === 'settings' && user.role === 'admin' && <Settings />}
+      {tab === 'models' && admin && <Models user={user} onChange={loadPresets} />}
+      {tab === 'users' && admin && <Users me={user} />}
+      {tab === 'system' && admin && <System system={system} online={online} />}
+      {tab === 'settings' && admin && <Settings />}
+
+      {queueOpen && (
+        <QueueDrawer jobs={jobs} skew={skew.current} system={system} onClose={() => setQueueOpen(false)} onCancel={actions.onCancel} canManage={actions.canManage} />
+      )}
     </div>
   );
 }

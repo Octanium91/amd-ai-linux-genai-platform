@@ -3,6 +3,7 @@ import { api } from './util.js';
 import { t } from './i18n.js';
 import { Logo } from './Logo.jsx';
 import { LangSwitch } from './LangSwitch.jsx';
+import { ThemeSwitch } from './ThemeSwitch.jsx';
 
 // Sign-in. When there are no users yet — registration of the first administrator.
 export default function Login({ onLogin }) {
@@ -47,7 +48,7 @@ export default function Login({ onLogin }) {
               <div className="brand-sub">AMD Ryzen AI · Linux · Vulkan</div>
             </div>
           </div>
-          <LangSwitch />
+          <span className="login-switches"><ThemeSwitch /><LangSwitch /></span>
         </div>
         {setup && (
           <div className="setup-note">

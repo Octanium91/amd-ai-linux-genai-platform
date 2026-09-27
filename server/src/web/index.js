@@ -256,6 +256,20 @@ api.post('/jobs', beforeUpload, jobFiles, async (req, res) => {
   }
 });
 
+// A finished image as the photo of a next task (change a part, rework, animate): the result file
+// is copied into the uploads and its name returned for the form
+api.post('/jobs/:id/as-input', async (req, res) => {
+  const job = await findJob(req.params.id);
+  const file = job.files?.[Number(req.body?.index) || 0];
+  if (!file || !/\.(png|jpe?g|webp)$/i.test(file)) return res.status(400).json({ error: 'Only images can be used as a photo' });
+  const src = path.join(dirs.output, path.basename(file));
+  const type = fs.existsSync(src) && imageType(src);
+  if (!type) return res.status(404).json({ error: 'The file of this job has been deleted' });
+  const image = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}.${type}`;
+  fs.copyFileSync(src, path.join(dirs.uploads, image));
+  res.json({ image });
+});
+
 // Upscale a finished image ×4: the result file becomes the photo of a new upscale job
 api.post('/jobs/:id/upscale', async (req, res) => {
   const job = await findJob(req.params.id);

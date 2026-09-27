@@ -50,17 +50,18 @@ export function fmtDate(ts) {
 
 export const STAGES = {
   video: [
-    { key: 'prepare', label: 'Preparing' },
-    { key: 'sampling', label: 'Sampling' },
-    { key: 'decoding', label: 'VAE decoding' },
-    { key: 'saving', label: 'Saving and FPS' },
+    { key: 'prepare', label: 'Getting ready' },
+    { key: 'sampling', label: 'Drawing' },
+    { key: 'decoding', label: 'Finishing' },
+    { key: 'saving', label: 'Saving the video' },
   ],
   image: [
-    { key: 'prepare', label: 'Preparing' },
-    { key: 'sampling', label: 'Sampling' },
-    { key: 'decoding', label: 'Decoding' },
+    { key: 'prepare', label: 'Getting ready' },
+    { key: 'sampling', label: 'Drawing' },
+    { key: 'decoding', label: 'Finishing' },
     { key: 'saving', label: 'Saving' },
-  ],  // Upscaling has no sampling: the whole run is one stage
+  ],
+  // Upscaling has no drawing: the whole run is one stage
   upscale: [
     { key: 'prepare', label: 'Upscaling' },
     { key: 'saving', label: 'Saving' },

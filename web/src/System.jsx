@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, fmtBytes, fmtDate } from './util.js';
 import { t } from './i18n.js';
+import SystemBar from './SystemBar.jsx';
 
 // Texts and advice for every server-side check (server/src/diagnostics.js reports only ids, statuses and values)
 const CHECKS = {
@@ -164,7 +165,7 @@ function CopyCommand({ cmd }) {
   );
 }
 
-export default function System() {
+export default function System({ system, online }) {
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -190,6 +191,7 @@ export default function System() {
 
   return (
     <main className="page">
+      <SystemBar system={system} online={online} />
       <div className="card">
         <div className="gal-head">
           <h2>{t('System check')}</h2>

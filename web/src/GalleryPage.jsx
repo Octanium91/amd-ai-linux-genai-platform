@@ -17,7 +17,7 @@ const STATUSES = [
 ];
 const PAGE = 48;
 
-export default function GalleryPage({ user, jobs, onDelete, onReuse, onRetry, canManage }) {
+export default function GalleryPage({ user, jobs, ...acts }) {
   const [kind, setKind] = useState('all');
   const [status, setStatus] = useState('done');
   const [mine, setMine] = useState(false);
@@ -48,7 +48,7 @@ export default function GalleryPage({ user, jobs, onDelete, onReuse, onRetry, ca
     <main className="gallery-page">
       <div className="card">
         <div className="gal-head">
-          <h3>{t('Gallery')} · {count('all')}</h3>
+          <h3>{t('Library')} · {count('all')}</h3>
           <input
             className="gal-search"
             type="search"
@@ -82,8 +82,7 @@ export default function GalleryPage({ user, jobs, onDelete, onReuse, onRetry, ca
         ) : (
           <div className="grid grid-all">
             {shown.slice(0, limit).map((j) => (
-              <Tile key={j.id} job={j} showKind={kind === 'all'} onOpen={(x) => setOpenId(x.id)}
-                onDelete={onDelete} onReuse={onReuse} onRetry={onRetry} canManage={canManage} />
+              <Tile key={j.id} job={j} showKind={kind === 'all'} onOpen={(x) => setOpenId(x.id)} {...acts} />
             ))}
           </div>
         )}
@@ -95,7 +94,7 @@ export default function GalleryPage({ user, jobs, onDelete, onReuse, onRetry, ca
           </div>
         )}
       </div>
-      {open && <Modal job={open} onClose={() => setOpenId(null)} onDelete={onDelete} onReuse={onReuse} onRetry={onRetry} canManage={canManage} />}
+      {open && <Modal job={open} onClose={() => setOpenId(null)} {...acts} />}
     </main>
   );
 }

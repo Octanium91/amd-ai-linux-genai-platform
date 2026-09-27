@@ -63,7 +63,7 @@ export default function Settings() {
           {t('When enabled, every generation writes a JSON document: the system at the start (OS, kernel, runtime, Docker or native, CPU, GPU, memory, board, drivers, clocks), the job with all its parameters, and hardware metrics during the run (CPU, GPU, memory, swap, clocks, power, temperatures) as averages per command and stage plus a compact time series.')}
         </p>
         <p className="muted">{t('The documents stay on this server in data/telemetry; nothing is sent anywhere. When the size limit is reached, the oldest documents are deleted.')}</p>
-        <label className="check">
+        <label className="checkbox">
           <input type="checkbox" checked={form.enabled} onChange={(e) => setForm({ ...form, enabled: e.target.checked })} />
           <span>{t('Collect generation telemetry')}</span>
         </label>
@@ -86,7 +86,7 @@ export default function Settings() {
             <button className="btn ghost danger" disabled={!info.count} onClick={clear}>{t('Delete all')}</button>
           </div>
         </div>
-        <label className="check check-sm">
+        <label className="checkbox checkbox-sm">
           <input type="checkbox" checked={anonymize} onChange={(e) => setAnonymize(e.target.checked)} />
           <span>{t('Anonymize downloads: remove prompts, user names, file names and disk IDs')}</span>
         </label>
@@ -178,7 +178,7 @@ function PromptAssistantSettings() {
         <code>ollama pull dolphin-llama3</code>
       </p>
       <p className="muted small">{t('If Ollama uses the same GPU, it takes GPU memory while it answers; the platform asks it to unload the model a minute after each request.')}</p>
-      <label className="check">
+      <label className="checkbox">
         <input type="checkbox" checked={form.enabled} onChange={(e) => setForm({ ...form, enabled: e.target.checked })} />
         <span>{t('Enable the prompt assistant')}</span>
       </label>
