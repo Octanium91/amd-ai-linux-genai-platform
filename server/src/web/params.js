@@ -169,9 +169,9 @@ function audioParams(preset, body, task) {
   return out;
 }
 
-// The image modes that can draw keyframes, best first: fast SDXL, then Z-Image (follows several
-// characters best), then full SDXL, then SD 1.5
-export const KEYFRAME_ORDER = ['img-realvisxl-lightning', 'img-z-image-turbo', 'img-realvisxl', 'img-realistic-vision'];
+// The image modes that can draw keyframes, best first: Z-Image (keeps several characters apart:
+// Batman and Superman stay themselves, where SDXL mixes their costumes), fast SDXL, SDXL, SD 1.5
+export const KEYFRAME_ORDER = ['img-z-image-turbo', 'img-realvisxl-lightning', 'img-realvisxl', 'img-realistic-vision'];
 
 // The keyframe spec of a shot video: the image mode's models and flags plus its settings, at the
 // mode's own pixel count in the shape of the video (the worker fits it to the video size)

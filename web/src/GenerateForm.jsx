@@ -117,7 +117,7 @@ function fromPreset(p) {
 // can have its own scene; the prompt assistant writes them all from the idea (one subject and style
 // block shared by every part, one action per part). Empty parts repeat the main prompt.
 const SHOWN_PARTS = 8;
-const KEYFRAME_ORDER = ['img-realvisxl-lightning', 'img-z-image-turbo', 'img-realvisxl', 'img-realistic-vision'];
+const KEYFRAME_ORDER = ['img-z-image-turbo', 'img-realvisxl-lightning', 'img-realvisxl', 'img-realistic-vision'];
 
 function StoryboardField({ form, set, preset, plan, hasImage, shots, keyModes, keyMode }) {
   const [status, setStatus] = useState(null);
