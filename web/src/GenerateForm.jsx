@@ -946,6 +946,13 @@ export default function GenerateForm({ kind, user, presets, allPresets = [], tem
   const lastRun = jobs.filter((j) => j.status === 'done' && j.params.presetId === form.presetId).sort((a, b) => b.finishedAt - a.finishedAt)[0];
   const eta = videoEta && keyEta && !(videoEta.source === 'history' && lastRun?.params.shots)
     ? { ...videoEta, sec: videoEta.sec + keyEta.sec * plan.segments } : videoEta;
+  // The expected time with one setting changed, shown on its chip, so a choice shows what it costs
+  const etaWith = (o) => {
+    const f = { ...form, ...o };
+    const st = qualitySteps(d, f.quality) ?? 20;
+    const e = estimate(jobs, isVideo ? { ...f, frames: plan.frames * plan.segments, steps: st, shots } : { ...f, frames: f.count, steps: st }, preset, system?.gpuPower);
+    return e ? fmtDuration(e.sec) : null;
+  };
   // The time per result of every mode card, at its own default size and the chosen quality
   const modeEta = (p) => {
     if (p.id === form.presetId) return eta;
@@ -1221,7 +1228,10 @@ export default function GenerateForm({ kind, user, presets, allPresets = [], tem
           items={shownSizes.map(([w, h]) => ({ key: `${w}x${h}`, w, h }))}
           value={`${form.width}x${form.height}`}
           onChange={(k) => { const [w, h] = k.split('x').map(Number); setForm((f) => ({ ...f, width: w, height: h })); }}
-          render={(x) => `${x.w > x.h ? '▭' : x.w < x.h ? '▯' : '□'} ${x.w}×${x.h}${tested(x.w, x.h) ? ' ✓' : ''}`}
+          render={(x) => {
+            const e = etaWith({ width: x.w, height: x.h });
+            return <>{`${x.w > x.h ? '▭' : x.w < x.h ? '▯' : '□'} ${x.w}×${x.h}${tested(x.w, x.h) ? ' ✓' : ''}`}{e && <span className="chip-sub">≈ {e}</span>}</>;
+          }}
         />
         {offSize && <div className="note warn">⚠ {t('{w}×{h} is not a size this mode was tested at (✓). The result may not match the prompt.', { w: form.width, h: form.height })}</div>}
       </div>
@@ -1264,7 +1274,11 @@ export default function GenerateForm({ kind, user, presets, allPresets = [], tem
 
       <div className="field">
         <span className="field-label">{t('Quality')} <Info text={t('More model passes ({steps}) give a cleaner picture but take longer. Draft is good for trying an idea.', { steps })} /></span>
-        <Chips items={QUALITY} value={form.quality} onChange={set('quality')} render={(q) => t(q.label)} />
+        <Chips items={QUALITY.filter((q) => qualitySteps(d, q.key) != null)} value={form.quality} onChange={set('quality')}
+          render={(q) => {
+            const e = etaWith({ quality: q.key });
+            return <>{t(q.label)}{e && <span className="chip-sub">≈ {e}</span>}</>;
+          }} />
         {form.quality === 'extra' && <div className="note warn">⚠ {t('Extra: {steps} passes — twice as many as High. Time ×2; the quality gain is already small.', { steps })}</div>}
       </div>
 

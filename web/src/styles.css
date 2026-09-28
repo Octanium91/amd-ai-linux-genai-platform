@@ -724,3 +724,6 @@ input[type="range"].extra { accent-color: var(--warn); }
 .part { display: flex; flex-direction: column; gap: 4px; }
 .part-label { font-size: 12.5px; font-weight: 600; }
 .part textarea { min-height: 0; font-size: 13px; }
+
+/* The expected time under a chip (size, quality): what a choice costs on this machine */
+.chip-sub { display: block; font-size: 11px; font-weight: 400; opacity: 0.7; margin-top: 1px; }
