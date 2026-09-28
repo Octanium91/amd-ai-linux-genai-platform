@@ -16,7 +16,11 @@ All numbers are measured, not estimated, unless marked as an estimate.
 | AnimateLCM, **10.6 s from 6 parts with a storyboard** | 512×512, 6 × 15 frames, 6 steps (Standard), CFG 1, a scene per part from the prompt assistant, seed + part, colour-matched seams | — | — | **532 s** (8 min 52 s, through the queue, 8→24 fps); the same cat and window throughout, colours steady across the seams, slightly less contrast by the end; the motion within each part stays small |
 | AnimateLCM, **13.1 s from 7 shots**, RealVisXL Lightning keyframes | 512×512, 7 × 15 frames, 6 steps, CFG 1; each keyframe 1024×1024, 5 steps, animated at strength 0.75 | — | — | **982 s** (16 min 22 s); Mars, the action changes in every shot, but the two costumes mix |
 | AnimateLCM, 13.1 s from 7 shots, **Z-Image Turbo keyframes** | the same scenes; each keyframe 1024×1024, 8 steps | — | — | **1833 s** (30 min 33 s); Batman and Superman distinct in every shot |
-| Wan 2.2 TI2V 5B Q8_0 | 832×480, 17 frames, 10 steps | 676 s (~63 s/step) | 2027 s (tiled VAE) | 45 min |
+| **Wan 2.2 5B Turbo**, one shot from a Z-Image keyframe | 832×480, 49 frames (2 s at 24 fps), 4 steps, CFG 1, flow shift 5, TAEHV decoder with `--vae-conv-direct` | 77 s (19 s/step) | **1.4 s** | **84 s**; real motion: a lunge, a punch, the other recoils, dust |
+| FastWan 2.2 5B, the same shot | 3 steps, CFG 1, flow shift 5, TAEHV without `--vae-conv-direct` | 57 s (18 s/step) | 162 s | 226 s; `--vae-conv-direct` takes the decode down to seconds |
+| **Wan 2.2 5B Turbo, 12.25 s from 6 shots** with a storyboard | 832×480, 6 × 49 frames; Z-Image Turbo keyframes at 960×512 (8 steps), each after the first redrawn from the previous shot's last frame at strength 0.65 | — | — | **836 s** (13 min 56 s); the same Batman and Superman on Mars throughout, each shot continues the previous one, real action in every shot |
+| Z-Image Turbo keyframe | 832×480, 8 steps | — | — | about 60 s |
+| Wan 2.2 TI2V 5B Q8_0 | 832×480, 17 frames, 10 steps | 676 s (~63 s/step) | 2027 s (tiled VAE) | 45 min; the distilled Turbo/FastWan with TAEHV below do 49 frames in 1.5 min |
 | Wan 2.2 TI2V 5B Q8_0 | 832×480, 49 frames, 25 steps | ~172 s/step | — | ≈ 2.5–3 h (estimate) |
 | Wan 2.2 TI2V 5B Q8_0, **High** | 832×480, 49 frames (2 s), 40 steps, CFG 5 | 10 400–10 500 s (~265 s/step) | 5 100–5 170 s (tiled VAE) | **4 h 20 min** (two clips, through the UI) |
 | Wan 2.2 TI2V 5B Q8_0 | 832×480, 65 frames, 40 steps | ~207 s/step | — | > 3 h (estimate) |

@@ -25,6 +25,9 @@ Only administrators can download and delete models. On first start, while no mod
 | `umt5-xxl-q8` | [UMT5-XXL encoder](https://huggingface.co/city96/umt5-xxl-encoder-gguf), GGUF Q8_0 | Wan text encoder | 5.6 GB | Apache-2.0 |
 | `wan21-t2v-1.3b` | [Wan 2.1 T2V 1.3B](https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B) | lightweight Wan (experimental) | 2.6 GB | Apache-2.0 |
 | `wan21-vae` | Wan 2.1 VAE | Wan 2.1 | 0.2 GB | Apache-2.0 |
+| `wan22-5b-turbo-q8` | [Wan 2.2 TI2V 5B Turbo](https://github.com/quanhaol/Wan2.2-TI2V-5B-Turbo), GGUF Q8_0 ([Kiijoku](https://huggingface.co/Kiijoku/Wan2.2-TI2V-5B-Turbo-GGUF)): a Self-Forcing/DMD distill for image to video in 4 steps | fast video with real motion | 5.4 GB | Apache-2.0 per the GGUF repo; the original code is CC BY-NC-SA 4.0, check before commercial use |
+| `fastwan22-5b-q8` | [FastWan 2.2 TI2V 5B](https://huggingface.co/FastVideo/FastWan2.2-TI2V-5B-FullAttn-Diffusers), GGUF Q8_0 ([Green-Sky](https://huggingface.co/Green-Sky/FastWan2.2-TI2V-5B-FullAttn-GGUF)): 3 steps | fast video with real motion | 5.4 GB | Apache-2.0 |
+| `taew2-2` | [TAEHV](https://github.com/madebyollin/taehv) for Wan 2.2 (`--tae`) | decodes a Wan 2.2 clip in seconds | 23 MB | MIT |
 | `wan21-vace-1.3b` | [Wan 2.1 VACE 1.3B](https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged), fp16 (the GGUF from calcuis/wan-1.3b-gguf does not load in sd-cli: its 5-dimensional patch embedding is rejected by ggml) | putting a person into a video, video → video | 4.0 GB | Apache-2.0 |
 | `birefnet-lite` | [BiRefNet lite](https://huggingface.co/ZhengPeng7/BiRefNet_lite), ONNX ([onnx-community](https://huggingface.co/onnx-community/BiRefNet_lite-ONNX)) | background removal | 214 MB | MIT |
 | `realesrgan-x4plus` | [Real-ESRGAN x4plus](https://github.com/xinntao/Real-ESRGAN) | upscaling ×4 | 64 MB | BSD-3-Clause |
@@ -46,6 +49,8 @@ A mode is a ready-made combination of models and parameters, described in [catal
 | Z-Image Turbo · photo | image | Z-Image Turbo + FLUX VAE + Qwen3 4B | 1024×1024, 8 steps, euler, CFG 1 | ~2 min 50 s |
 | AnimateLCM · Realistic Vision | video | RV6 + VAE + AnimateLCM + LoRA | 512×512, 16 frames (2 s at 8 fps → 24 fps), 6 steps, lcm, CFG 1 | **~2.5 min** |
 | AnimateDiff v3 · Realistic Vision | video | RV6 + VAE + AnimateDiff v3 + adapter | 512×512, 16 frames, 20 steps, euler, CFG 8 | ~16 min |
+| **Wan 2.2 5B Turbo** | video | Turbo + TAEHV + UMT5 | 832×480, 49 frames at 24 fps (2 s per part), 4 steps, CFG 1, flow shift 5, `--vae-conv-direct` | **~1.5 min per 2 s shot** |
+| FastWan 2.2 5B | video | FastWan + TAEHV + UMT5 | the same, 3 steps | ~1–1.5 min per 2 s shot |
 | Wan 2.2 TI2V 5B | video | Wan 2.2 5B + VAE + UMT5 | 832×480, 49 frames at 24 fps, 25 steps | hours (meant for Strix Halo) |
 | Wan 2.1 T2V 1.3B | video | Wan 2.1 1.3B + VAE + UMT5 | 832×480, 16 fps | not measured (experimental) |
 | Real-ESRGAN · upscale ×4 | image | Real-ESRGAN x4plus | the photo's size ×4 | not measured yet |
