@@ -700,8 +700,8 @@
   {
     "id": "vid-wan22-5b",
     "kind": "video",
-    "name": "Wan 2.2 TI2V 5B (real motion, slow)",
-    "description": "A full video model: coherent motion, text and image to video. Much slower than AnimateDiff; best on Strix Halo.",
+    "name": "Wan 2.2 TI2V 5B (full, slow)",
+    "description": "The full Wan 2.2 5B: the most faithful motion and detail at CFG 5, but 25–40 steps; the Turbo and FastWan modes are 10× faster. Decoded by TAEHV in seconds.",
     "promptQuality": {
       "suffix": "Photorealistic, rich detail, smooth natural motion."
     },
@@ -712,14 +712,14 @@
       "steps": 10,
       "cfg": 5,
       "samplingSec": 676,
-      "decodeSec": 2027,
+      "decodeSec": 2,
       "otherSec": 0
     },
     "image": "optional",
     "minGtt": 22,
     "models": {
       "diffusion": "wan22-ti2v-5b-q8",
-      "vae": "wan22-vae",
+      "tae": "taew2-2",
       "t5xxl": "umt5-xxl-q8"
     },
     "defaults": {
@@ -783,17 +783,17 @@
     "preview": "proj",
     "extraArgs": [
       "--diffusion-fa",
-      "--vae-tiling",
-      "--offload-to-cpu"
+      "--offload-to-cpu",
+      "--vae-conv-direct"
     ],
     "i18n": {
       "uk": {
-        "name": "Wan 2.2 TI2V 5B (справжній рух, повільно)",
-        "description": "Повноцінна відеомодель: зв'язний рух, текст і картинка → відео. Значно повільніша за AnimateDiff; найкраще — на Strix Halo."
+        "name": "Wan 2.2 TI2V 5B (повна, повільно)",
+        "description": "Повна Wan 2.2 5B: найточніші рух і деталі при CFG 5, але 25–40 кроків; режими Turbo і FastWan у 10 разів швидші. Декодується TAEHV за секунди."
       },
       "ru": {
-        "name": "Wan 2.2 TI2V 5B (настоящее движение, медленно)",
-        "description": "Полноценная видеомодель: связное движение, текст и картинка → видео. Значительно медленнее AnimateDiff; лучше всего — на Strix Halo."
+        "name": "Wan 2.2 TI2V 5B (полная, медленно)",
+        "description": "Полная Wan 2.2 5B: самые точные движение и детали при CFG 5, но 25–40 шагов; режимы Turbo и FastWan в 10 раз быстрее. Декодируется TAEHV за секунды."
       }
     }
   },
