@@ -117,7 +117,9 @@ function fromPreset(p) {
 // can have its own scene; the prompt assistant writes them all from the idea (one subject and style
 // block shared by every part, one action per part). Empty parts repeat the main prompt.
 const SHOWN_PARTS = 8;
-function StoryboardField({ form, set, preset, plan, hasImage }) {
+const KEYFRAME_ORDER = ['img-realvisxl-lightning', 'img-z-image-turbo', 'img-realvisxl', 'img-realistic-vision'];
+
+function StoryboardField({ form, set, preset, plan, hasImage, shots, keyModes, keyMode }) {
   const [status, setStatus] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -158,6 +160,26 @@ function StoryboardField({ form, set, preset, plan, hasImage }) {
         <span>{t('Scenes')} <Info text={t('The video is made of {n} parts, each continuing from the last frame of the previous one. Give each part its own action and keep the person and the place the same.', { n })} /></span>
         {prompts.some(Boolean) && <button type="button" className="link muted small" onClick={() => set('prompts')([])}>{t('Clear')}</button>}
       </span>
+      <div className="seg" role="radiogroup" aria-label={t('How the parts connect')}>
+        <button type="button" role="radio" aria-checked={shots} className={`seg-item ${shots ? 'on' : ''}`} disabled={!keyModes.length}
+          style={{ flex: 1, justifyContent: 'center' }} onClick={() => set('shots')(true)}>{t('A new shot per part')}</button>
+        <button type="button" role="radio" aria-checked={!shots} className={`seg-item ${!shots ? 'on' : ''}`}
+          style={{ flex: 1, justifyContent: 'center' }} onClick={() => set('shots')(false)}>{t('One continuous shot')}</button>
+      </div>
+      <span className="field-hint">
+        {shots
+          ? t('Every part starts from its own keyframe drawn by an image mode, so the action really changes; the parts are joined with cuts.')
+          : keyModes.length
+            ? t('Every part continues from the last frame of the previous one: smooth, but the action barely changes.')
+            : t('Every part continues from the last frame of the previous one. Download an image mode for a video made of shots.')}
+      </span>
+      {shots && keyModes.length > 1 && (
+        <div className="chips">
+          {keyModes.map((p) => (
+            <button key={p.id} type="button" className={`chip ${keyMode?.id === p.id ? 'on' : ''}`} onClick={() => set('keyframePreset')(p.id)}>{loc(p, 'name')}</button>
+          ))}
+        </div>
+      )}
       {ready ? (
         <button type="button" className="btn btn-small" disabled={busy || !form.prompt.trim()} onClick={write}>
           {busy ? (n > 8 ? t('Writing the scenes… up to a few minutes for a long video') : t('Writing the scenes…')) : `✦ ${t('Write the scenes with AI')}`}
@@ -781,7 +803,7 @@ function SoundField({ sound, setSound, duration, canUseVideo }) {
 
 const NO_SOUND = { source: 'none', file: null, ref: null, start: 0, fade: true };
 
-export default function GenerateForm({ kind, user, presets, templates, system, jobs, reuse, onReuseApplied, queueSize, onCreated, reloadPresets, goModels }) {
+export default function GenerateForm({ kind, user, presets, allPresets = [], templates, system, jobs, reuse, onReuseApplied, queueSize, onCreated, reloadPresets, goModels }) {
   const submitting = useRef(false);
   const [form, setForm] = useState(null);
   const [image, setImage] = useState(null); // File
@@ -911,8 +933,14 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
   const offSize = !!recommended && !recommended.some(([w, h]) => w === Number(form.width) && h === Number(form.height));
   const steps = qualitySteps(d, form.quality) ?? 20;
   const extraDuration = isVideo && plan.segments > 1;
-  const eta = estimate(jobs, isVideo ? { ...form, frames: plan.frames * plan.segments, steps }
+  // A video made of shots: an image mode draws a keyframe for every part first
+  const keyModes = KEYFRAME_ORDER.map((id) => allPresets.find((p) => p.id === id && p.available)).filter(Boolean);
+  const keyMode = keyModes.find((p) => p.id === form.keyframePreset) || keyModes[0] || null;
+  const shots = isVideo && plan.segments > 1 && form.shots !== false && !!keyMode;
+  const keyEta = shots ? estimate(jobs, { presetId: keyMode.id, width: keyMode.defaults?.width, height: keyMode.defaults?.height, cfg: keyMode.defaults?.cfg, steps: qualitySteps(keyMode.defaults || {}, 'normal') ?? 20, frames: 1 }, keyMode, system?.gpuPower) : null;
+  const videoEta = estimate(jobs, isVideo ? { ...form, frames: plan.frames * plan.segments, steps }
     : isAudio ? { ...form, task: task.key } : { ...form, frames: form.count, steps }, preset, system?.gpuPower);
+  const eta = videoEta && keyEta ? { ...videoEta, sec: videoEta.sec + keyEta.sec * plan.segments } : videoEta;
   // The time per result of every mode card, at its own default size and the chosen quality
   const modeEta = (p) => {
     if (p.id === form.presetId) return eta;
@@ -968,6 +996,8 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
       const fd = new FormData();
       for (const [k, v] of Object.entries(form)) if (k !== 'prompts' && v != null && v !== '') fd.append(k, v);
       if (isVideo && plan.segments > 1 && form.prompts?.some(Boolean)) fd.append('prompts', JSON.stringify(form.prompts.slice(0, plan.segments)));
+      fd.set('shots', String(shots));
+      if (shots) fd.set('keyframePreset', keyMode.id);
       fd.set('task', task.key);
       if (task.strength != null) fd.set('strength', String(form.strength ?? task.strength));
       if (upscale && !form.prompt.trim()) fd.set('prompt', '');
@@ -1216,7 +1246,7 @@ export default function GenerateForm({ kind, user, presets, templates, system, j
             <div className="note warn">⚠ {t('Passes of {frames} frames are longer than the model was trained on ({trained}): the video may lose the subject and turn into a texture. The prompt will suffer.', { frames: plan.frames, trained: plan.trainedFrames })}</div>
           )}
         </label>
-        {plan.segments > 1 && <StoryboardField form={form} set={set} preset={preset} plan={plan} hasImage={!!(acceptsImage && (image || imageRef))} />}
+        {plan.segments > 1 && <StoryboardField form={form} set={set} preset={preset} plan={plan} hasImage={!!(acceptsImage && (image || imageRef))} shots={shots} keyModes={keyModes} keyMode={keyMode} />}
         </>
       ) : (
         <div className="field">

@@ -8,7 +8,7 @@ import Gallery, { Modal, ResultHero } from './Gallery.jsx';
 // The create workspace: the form on the left (images, video or audio), on the right the running job or
 // the latest result with what to do next, a line about the queue and the recent results.
 // The GPU is shared, so the running job is shown whatever its kind.
-export default function Studio({ kind, setKind, user, jobs, presets, templates, system, skew, refresh, reloadPresets, goModels, reuse, onReuseApplied, actions, goGallery, openQueue }) {
+export default function Studio({ kind, setKind, user, jobs, presets, allPresets, templates, system, skew, refresh, reloadPresets, goModels, reuse, onReuseApplied, actions, goGallery, openQueue }) {
   const { canManage, onCancel } = actions;
   const [openId, setOpenId] = useState(null);
   const running = jobs.find((j) => j.status === 'running');
@@ -33,6 +33,7 @@ export default function Studio({ kind, setKind, user, jobs, presets, templates, 
           kind={kind}
           user={user}
           presets={presets}
+          allPresets={allPresets}
           templates={templates}
           system={system}
           jobs={jobs}

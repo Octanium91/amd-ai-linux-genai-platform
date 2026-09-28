@@ -289,6 +289,7 @@ export default function App() {
           user={user}
           jobs={jobs}
           presets={presets.filter((p) => (p.kind || 'video') === tab)}
+          allPresets={presets}
           templates={templates ? templates[tab] || [] : undefined}
           system={system}
           skew={skew.current}

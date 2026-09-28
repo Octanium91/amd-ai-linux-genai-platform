@@ -139,6 +139,11 @@ export function jobParams(preset, body, image, inputs = {}) {
     });
     const prompts = partPrompts(body, plan.segments, params.prompt);
     if (prompts) params.prompts = prompts;
+    // Made of shots: every part starts from its own keyframe; the parts are joined whole
+    if (plan.segments > 1 && (body.shots === true || body.shots === 'true')) {
+      params.shots = true;
+      params.duration = (plan.frames * plan.segments) / plan.fps;
+    }
   }
   return params;
 }
@@ -162,6 +167,32 @@ function audioParams(preset, body, task) {
     out.lyrics = body.lyricsMode === 'instrumental' ? '[Instrumental]' : body.lyricsMode === 'auto' ? '' : lyrics;
   }
   return out;
+}
+
+// The image modes that can draw keyframes, best first: fast SDXL, then Z-Image (follows several
+// characters best), then full SDXL, then SD 1.5
+export const KEYFRAME_ORDER = ['img-realvisxl-lightning', 'img-z-image-turbo', 'img-realvisxl', 'img-realistic-vision'];
+
+// The keyframe spec of a shot video: the image mode's models and flags plus its settings, at the
+// mode's own pixel count in the shape of the video (the worker fits it to the video size)
+export function keyframeSpec(preset, width, height) {
+  const d = preset.defaults || {};
+  const area = (d.width || 512) * (d.height || 512);
+  const aspect = width / height;
+  const r64 = (v) => Math.max(256, Math.min(2048, Math.round(v / 64) * 64));
+  return {
+    ...jobSpec(preset),
+    kind: 'image',
+    presetId: preset.id,
+    params: {
+      width: r64(Math.sqrt(area * aspect)),
+      height: r64(Math.sqrt(area / aspect)),
+      steps: qualitySteps(d, 'normal') ?? d.steps ?? 20,
+      cfg: d.cfg ?? 5,
+      sampler: d.sampler || 'euler',
+      negative: d.negative ?? '',
+    },
+  };
 }
 
 // What the worker needs to build the sd-cli command: model files by role and the mode's flags

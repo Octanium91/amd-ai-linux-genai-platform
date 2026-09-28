@@ -602,4 +602,12 @@ export default {
   "A storyboard of dozens of parts needs a larger model: dolphin-llama3 (8B) writes a real story in 1–3 minutes, 3B models repeat themselves. Empty: the model above.": "Раскадровці з десятків частин потрібна більша модель: dolphin-llama3 (8B) пише справжню історію за 1–3 хвилини, моделі на 3B повторюються. Порожньо — модель вище.",
   "Model for the scenes of long videos": "Модель для сцен довгих відео",
   "Writing the scenes… up to a few minutes for a long video": "Пишу сцени… для довгого відео до кількох хвилин",
+  "A new shot per part": "Новий план у кожній частині",
+  "A video made of shots needs an image mode: an administrator can download one in Models": "Відео з планів потребує режиму зображень: адміністратор може завантажити його в розділі «Моделі»",
+  "Could not prepare the keyframe:": "Не вдалося підготувати ключовий кадр:",
+  "Every part continues from the last frame of the previous one. Download an image mode for a video made of shots.": "Кожна частина продовжує останній кадр попередньої. Для відео з планів завантажте режим зображень.",
+  "Every part continues from the last frame of the previous one: smooth, but the action barely changes.": "Кожна частина продовжує останній кадр попередньої: плавно, але дія майже не змінюється.",
+  "Every part starts from its own keyframe drawn by an image mode, so the action really changes; the parts are joined with cuts.": "Кожна частина починається зі свого ключового кадру, намальованого режимом зображень, тож дія справді змінюється; частини склеюються монтажем.",
+  "How the parts connect": "Як поєднуються частини",
+  "One continuous shot": "Один безперервний план",
 };

@@ -186,12 +186,13 @@ async function makeThumb(job, src) {
 
 // segments are the segment AVIs in order; from the second one on, the first frame of a segment
 // duplicates the last frame of the previous one (it was the init image) and is dropped when joining
-async function finalizeVideo(job, segments, luts = []) {
+async function finalizeVideo(job, segments, luts = [], shots = false) {
   const base = baseName(job);
   const mp4 = path.join(dirs.output, base + '.mp4');
   const { fps, outFps } = job.params;
   // Every segment after the first drops its first frame (it repeats the previous segment's last one)
-  const totalFrames = segments.length * job.params.frames - (segments.length - 1);
+  // Shots are separate takes joined whole; continued parts share their seam frame
+  const totalFrames = segments.length * job.params.frames - (shots ? 0 : segments.length - 1);
   const seconds = totalFrames / fps;
   const interp = outFps && outFps !== fps
     ? `minterpolate=fps=${outFps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1` : null;
@@ -199,7 +200,8 @@ async function finalizeVideo(job, segments, luts = []) {
     const inputs = segments.flatMap((f) => ['-i', f]);
     const parts = segments.map((f, i) => (i === 0
       ? '[0:v]setpts=PTS-STARTPTS[s0]'
-      : `[${i}:v]trim=start_frame=1,setpts=PTS-STARTPTS${luts[i] ? `,${luts[i]}` : ''}[s${i}]`));
+      : shots ? `[${i}:v]setpts=PTS-STARTPTS[s${i}]`
+        : `[${i}:v]trim=start_frame=1,setpts=PTS-STARTPTS${luts[i] ? `,${luts[i]}` : ''}[s${i}]`));
     const chain = segments.length > 1
       ? `${parts.join(';')};${segments.map((f, i) => `[s${i}]`).join('')}concat=n=${segments.length}:v=1:a=0[c]`
       : '[0:v]null[c]';
@@ -323,7 +325,7 @@ function modelArgs(preset) {
 
 // seg is the part of a long video: each part has its own prompt (a storyboard) and its own seed,
 // since the same seed tends to repeat the same motion
-function buildArgs(job, preset, outBase, initImage, controlDir, refImage, seg = 0) {
+function buildArgs(job, preset, outBase, initImage, controlDir, refImage, seg = 0, keyImage = null) {
   const p = job.params;
   // Upscaling runs the ESRGAN model alone: no prompt, no sampling
   if (p.task === 'upscale') {
@@ -342,7 +344,8 @@ function buildArgs(job, preset, outBase, initImage, controlDir, refImage, seg = 
   }
   if (p.flowShift != null) args.push('--flow-shift', String(p.flowShift));
   // A continuation segment stays closer to the last frame (continueArgs) than regular image-to-video
-  if (initImage) args.push('-i', initImage, ...(preset.continueArgs || preset.imageArgs || []));
+  if (keyImage) args.push('-i', keyImage, ...imageArgs(preset, p));
+  else if (initImage) args.push('-i', initImage, ...(preset.continueArgs || preset.imageArgs || []));
   else if (refImage) args.push('-i', refImage);
   else if (p.image) args.push('-i', path.join(dirs.uploads, p.image), ...imageArgs(preset, p));
   // Inpainting: white in the mask is repainted, black is kept
@@ -477,6 +480,34 @@ async function finalizeAudio(job, wav) {
   if (t.code === 0) job.thumb = job.id + '.jpg';
 }
 
+// A shot of a long video starts from its own keyframe: the image model of spec.keyframe draws the
+// part's scene (at its own size, of the video's shape), and ffmpeg fits it to the video size. The
+// video model then animates it like a photo, so the action of every part really changes.
+function quietParse(job, line) {
+  if (/\[ERROR/.test(line) && !/gguf_init_from_reader|failed to read tensor info/.test(line)) {
+    job.lastErrors = [...(job.lastErrors || []).slice(-4), line.trim()];
+  }
+}
+
+async function keyframe(job, i, tmpBase, log) {
+  const k = job.spec.keyframe;
+  const p = job.params;
+  const outBase = `${tmpBase}_s${i}_key`;
+  const kp = { ...p, ...k.params, prompt: p.prompts?.[i] || p.prompt, prompts: null, seed: p.seed + i, count: 1, task: 'create', image: null, mask: null, strength: null, flowShift: null };
+  const args = buildArgs({ ...job, params: kp }, { ...k, kind: 'image', preview: null }, outBase);
+  const { code, signal, spawnError } = await runSd(job, args, log, config.sdCli, quietParse);
+  if (job.status !== 'running') return null;
+  if (code !== 0 || !fs.existsSync(`${outBase}.png`)) {
+    throw new Error(spawnError?.message || job.lastErrors?.at(-1) || `The keyframe could not be drawn (sd-cli exited with code ${code}${signal ? `, ${signal}` : ''})`);
+  }
+  const init = `${tmpBase}_s${i}_init.png`;
+  const vf = `scale=${p.width}:${p.height}:force_original_aspect_ratio=increase,crop=${p.width}:${p.height}`;
+  const r = await runCmd('ffmpeg', ['-loglevel', 'error', '-y', '-i', `${outBase}.png`, '-vf', vf, '-frames:v', '1', init], 'ffmpeg.keyframe');
+  if (job.status !== 'running') return null;
+  if (r.code !== 0 || !fs.existsSync(init)) throw new Error('Could not prepare the keyframe: ' + r.err.trim().slice(-300));
+  return init;
+}
+
 async function referenceImage(job, tmpBase) {
   const p = job.params;
   const out = `${tmpBase}_ref.png`;
@@ -508,6 +539,8 @@ async function run(job) {
     for (let i = 0; i < segments; i++) {
       fs.rmSync(`${tmpBase}_s${i}.avi`, { force: true });
       fs.rmSync(`${tmpBase}_s${i}_last.png`, { force: true });
+      fs.rmSync(`${tmpBase}_s${i}_key.png`, { force: true });
+      fs.rmSync(`${tmpBase}_s${i}_init.png`, { force: true });
     }
     for (const f of job._saved || []) fs.rmSync(f, { force: true });
     delete job._saved;
@@ -539,7 +572,18 @@ async function run(job) {
     }
     for (let i = 0; i < segments && job.status === 'running' && preset.kind !== 'audio'; i++) {
       let init = null;
-      if (i > 0) {
+      let key = null;
+      if (job.params.shots && job.spec.keyframe) {
+        // A new shot: its own keyframe (the user's photo, if any, starts the first one)
+        if (i > 0) {
+          const prev = job.progress;
+          job.progress = newProgress(i + 1, segments, [...prev.doneSegments, { startedAt: prev.stages.prepare.startedAt, endedAt: Date.now() }]);
+          current.tel?.phase('prepare', { segment: i + 1 });
+        }
+        key = i === 0 && job.params.image ? null : await keyframe(job, i, tmpBase, log);
+        if (job.status !== 'running') break;
+        current.tel?.phase('prepare', { segment: i + 1 });
+      } else if (i > 0) {
         // Continuation: the last frame of the previous segment becomes the init image of the next one
         init = `${tmpBase}_s${i - 1}_last.png`;
         const r = await runCmd('ffmpeg', ['-loglevel', 'error', '-y', '-sseof', '-0.5', '-i', outputs[i - 1],
@@ -557,7 +601,7 @@ async function run(job) {
       if (job.status !== 'running') break;
       // Loading the models after the helper commands is preparation again, not ffmpeg
       if (controlDir || refImage) current.tel?.phase('prepare', { segment: i + 1 });
-      const args = buildArgs(job, preset, outBase, init, controlDir, refImage, i);
+      const args = buildArgs(job, preset, outBase, init, controlDir, refImage, i, key);
       if (i === 0) job.cmd = [config.sdCli, ...args].join(' ');
       const { code, signal, spawnError } = await runSd(job, args, log);
       if (job.status !== 'running') break;
@@ -580,7 +624,7 @@ async function run(job) {
       setStage(job, 'saving');
       if (preset.kind === 'image') await finalizeImages(job);
       else if (preset.kind === 'audio') await finalizeAudio(job, outputs[0]);
-      else await finalizeVideo(job, outputs, luts);
+      else await finalizeVideo(job, outputs, luts, !!job.params.shots);
       cleanup();
       if (job.status === 'running' && jobs.includes(job)) {
         finish(job, 'done');

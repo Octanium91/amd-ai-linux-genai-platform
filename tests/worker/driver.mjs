@@ -234,6 +234,20 @@ const w = await import('/src/worker/color.js');
 const lut = w.colorMatchFilter([{ mean: 120, std: 40 }, { mean: 110, std: 40 }, { mean: 100, std: 40 }], [{ mean: 100, std: 50 }, { mean: 110, std: 40 }, { mean: 160, std: 20 }]);
 check('colour match: gains and shifts are limited', /^lutrgb=r='clip\(val\*0\.8000\+40\.00/.test(lut) && /b='clip\(val\*1\.2500\+-40\.00/.test(lut), lut);
 
+// A video made of shots: every part starts from its own keyframe drawn by the image mode, fitted to
+// the video size and animated with the mode's image-to-video strength; the parts are joined whole
+const shotSpec = { ...spec, imageArgs: ['--strength', '0.75'], keyframe: { kind: 'image', models: [], imageArgs: [], extraArgs: [], promptSuffix: '', params: { width: 96, height: 96, steps: 2, cfg: 1, sampler: 'euler', negative: '' } } };
+let sh = (await api('/v1/jobs', 'POST', { user: 'test', spec: shotSpec, params: { ...video(3).params, shots: true, prompts: ['shot one', 'shot two', 'shot three'] } })).body;
+sh = await waitFor(sh.id, (j) => ['done', 'failed'].includes(j.status));
+const shotRuns = fs.readFileSync(`${DATA}/state/logs/${sh.id}.log`, 'utf8').split('\n').filter((l) => l.startsWith('$ '));
+const keyRuns = shotRuns.filter((l) => / -M img_gen /.test(l));
+const vidRuns = shotRuns.filter((l) => / -M vid_gen /.test(l));
+const shDur = sh.files ? Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', `${DATA}/output/${sh.files[0]}`]).toString().trim()) : 0;
+check('shots: a keyframe per part, animated with the image strength, joined whole', sh.status === 'done' && keyRuns.length === 3 && vidRuns.length === 3
+  && keyRuns.map((l) => argOf(l, '-p')).join('|') === 'shot one|shot two|shot three' && vidRuns.every((l, i) => l.includes(`_s${i}_init.png --strength 0.75`))
+  && Math.abs(shDur - 27 / 8) < 0.06 && !outputFiles().some((f) => /_key|_init/.test(f)),
+  `${sh.status} ${sh.error || ''} keys ${keyRuns.length} videos ${vidRuns.length} ${shDur} s`);
+
 // Audio: one audio.cpp run with the mode's engine settings; the result is an MP3 with a waveform
 // thumbnail and its measured length
 fs.mkdirSync(`${DATA}/models/audio`, { recursive: true });

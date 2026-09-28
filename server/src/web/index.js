@@ -12,7 +12,7 @@ import { jobLog } from './joblog.js';
 import {
   cancelDownload, deleteModel, diskUsage, enqueueDownloads, loadCatalog, modelStatus,
 } from './models.js';
-import { jobParams, jobSpec } from './params.js';
+import { jobParams, jobSpec, KEYFRAME_ORDER, keyframeSpec } from './params.js';
 import { loadPresets, loadTemplates, presetsWithAvailability, TASK_INPUTS } from './presets.js';
 import { readJson } from '../common/store.js';
 import { promptAdminRoutes, promptRoutes, storyboardRoutes } from './prompt.js';
@@ -211,8 +211,8 @@ api.post('/jobs', beforeUpload, jobFiles, async (req, res) => {
   if (!preset) return reject('Unknown mode');
   if (!preset.available) return reject('Models not downloaded: ' + preset.missing.map((m) => m.name).join(', '));
   const task = b.task && TASK_INPUTS[b.task] ? b.task : preset.tasks[0];
-  // An engine of an older version would ignore the photo, mask or video and silently do something else
-  if (task !== 'create' && !(await workerState()).worker?.compatible) return reject('The generation engine is being updated, try again in a minute');
+  // An engine of an older version would ignore the photo, mask, video or shots and silently do something else
+  if ((task !== 'create' || b.shots === 'true') && !(await workerState()).worker?.compatible) return reject('The generation engine is being updated, try again in a minute');
   if (!preset.tasks.includes(task)) return reject('This mode cannot do this task');
   const needs = TASK_INPUTS[task];
   if (needs.instant) return reject('This task runs without the queue');
@@ -276,16 +276,30 @@ api.post('/jobs', beforeUpload, jobFiles, async (req, res) => {
   // An upscale job's size is its result: the photo ×4
   if (task === 'upscale' && size) Object.assign(b, { width: size[0] * 4, height: size[1] * 4 });
 
+  const params = jobParams(preset, b, inputs.image, { ...inputs, task });
+  const spec = jobSpec(preset);
+  if (params.shots) {
+    const key = pickKeyframe(b.keyframePreset);
+    if (!key) return reject('A video made of shots needs an image mode: an administrator can download one in Models');
+    spec.keyframe = keyframeSpec(key, params.width, params.height);
+    params.keyframePreset = key.id;
+  }
   try {
     res.json(await callWorker('/v1/jobs', {
       method: 'POST',
-      body: { user: req.user.username, params: jobParams(preset, b, inputs.image, { ...inputs, task }), spec: jobSpec(preset) },
+      body: { user: req.user.username, params, spec },
     }));
   } catch (e) {
     for (const f of uploaded) fs.rmSync(f.path, { force: true });
     throw e;
   }
 });
+
+// The image mode that draws the keyframes of a shot video: the chosen one, else the best available
+function pickKeyframe(id) {
+  const fit = presetsWithAvailability().filter((p) => p.kind === 'image' && p.available && p.tasks.includes('create'));
+  return fit.find((p) => p.id === id) || KEYFRAME_ORDER.map((k) => fit.find((p) => p.id === k)).find(Boolean) || fit[0] || null;
+}
 
 // Background removal: the subject mask of a photo as a grayscale PNG (white = keep). The photo is
 // an upload in this request, an earlier upload by name, or an image of a finished job. One at a
@@ -393,7 +407,13 @@ api.post('/jobs/:id/retry', async (req, res) => {
       return res.status(400).json({ error: 'The source file of this job has been deleted' });
     }
   }
-  res.json(await callWorker(`/v1/jobs/${job.id}/retry`, { method: 'POST', body: { spec: jobSpec(preset) } }));
+  const spec = jobSpec(preset);
+  if (job.params.shots) {
+    const key = pickKeyframe(job.params.keyframePreset);
+    if (!key) return res.status(400).json({ error: 'A video made of shots needs an image mode: an administrator can download one in Models' });
+    spec.keyframe = keyframeSpec(key, job.params.width, job.params.height);
+  }
+  res.json(await callWorker(`/v1/jobs/${job.id}/retry`, { method: 'POST', body: { spec } }));
 });
 
 api.delete('/jobs/:id', async (req, res) => {

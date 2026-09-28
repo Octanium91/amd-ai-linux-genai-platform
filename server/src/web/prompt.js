@@ -153,7 +153,7 @@ const RULES = {
     'You are an expert prompt engineer for photorealistic Stable Diffusion models (SD 1.5, SDXL) with a CLIP text encoder.',
     'You turn a short idea into the parts of a prompt. First write idea_en: an exact English translation of the idea, nothing added.',
     'Then fill every other field with short comma-separated phrases in English, not sentences, strictly about idea_en:',
-    '- subject: who or what, with the key visual details (age, clothing, colors, materials, textures)',
+    '- subject: who or what, with the key visual details (age, clothing, colors, materials, textures). Well-known characters (from films, comics, games) keep their name and get their canonical look (costume, colors, emblem, mask), each one distinct, so they are drawn correctly and do not merge into one',
     '- action: the pose or expression (for a video: the motion)',
     '- setting: the place, background and weather',
     '- lighting: the kind and direction of light, time of day',
@@ -164,6 +164,7 @@ const RULES = {
   natural: (video) => [
     `You are an expert prompt engineer for a modern ${video ? 'text-to-video' : 'text-to-image'} model whose text encoder understands natural language well.`,
     'First write idea_en: an exact English translation of the idea, nothing added. Then write the prompt strictly about idea_en.',
+    'Well-known characters (from films, comics, games) keep their name and get their canonical look (costume, colors, emblem, mask), each one distinct, so they are drawn correctly and do not merge into one.',
     video
       ? 'The prompt is 2 to 4 flowing English sentences, 50 to 110 words: the subject and its appearance, what happens and how it moves over time, the environment, the lighting and atmosphere, and the camera (shot size and camera movement).'
       : 'The prompt is 2 to 4 flowing English sentences, 50 to 110 words: the subject and its appearance, the pose and expression, the environment, the lighting and atmosphere, and the camera (shot size, angle, lens).',
@@ -405,6 +406,7 @@ const BEATS_EXAMPLE = {
   answer: {
     idea_en: 'two knights fight on a bridge',
     names: 'two knights',
+    looks: 'one knight in black plate armor with a red plume, the other knight in silver armor with a blue shield',
     b1: 'the two knights face each other and draw their swords',
     b2: 'the two knights clash, swords striking, one pushes the other back',
     b3: 'the two knights fight harder, one knight is knocked down and rolls away from a blow',
@@ -429,9 +431,10 @@ function beatsSystem(n, seconds) {
     `You plan the story of one continuous shot of about ${seconds} seconds for an AI video model; it is rendered in parts, each continuing from the previous one.`,
     'First write idea_en: an exact English translation of the idea, nothing added, nothing removed.',
     'names: the main characters or objects exactly as idea_en names them (for example "Batman and Superman"), copied word for word from idea_en.',
+    'looks: how each of them looks, in short visual phrases, one per character, each clearly different from the others. Well-known characters (films, comics, games) get their canonical look (for example "Batman in a black armored bat suit with a pointed-ear cowl and a black cape, Superman in a blue suit with a red cape and the red S emblem"); others get a simple fixed look. This is repeated in every part, so the characters stay the same and never merge.',
     `b1 … b${n}: the ${n} beats of the story in order, following the arc setup, rising action, climax, ending. Every beat names the characters exactly as in names, keeps the same kind of event as the idea (a fight stays a fight, a walk stays a walk, the ending stays inside the event), adds no new characters, and does not describe looks, the place or the light. Each beat is one short sentence.`,
     'The idea may be in any language; always answer in English. The first exchange is only an example of the format: never reuse its content.',
-    `Answer with JSON with the fields idea_en, names, ${Array.from({ length: n }, (_, i) => `b${i + 1}`).join(', ')}.`,
+    `Answer with JSON with the fields idea_en, names, looks, ${Array.from({ length: n }, (_, i) => `b${i + 1}`).join(', ')}.`,
   ].join('\n');
 }
 
@@ -488,7 +491,7 @@ export async function storyboard(s, preset, input, signal = null) {
 
   // 1. The arc as beats, and the anchor
   const b = await chatJson(s, beatsSystem(nBeats, seconds), BEATS_EXAMPLE, `${nBeats} beats\nIdea: ${input.idea}`,
-    requiredFields(['idea_en', 'names', ...numberedKeys(['b'], nBeats)]), 250 + nBeats * 50, signal);
+    requiredFields(['idea_en', 'names', 'looks', ...numberedKeys(['b'], nBeats)]), 300 + nBeats * 50, signal);
   if (b.truncated) return { truncated: true };
   const idea = cleanText(b.data?.idea_en);
   // The anchor: the main prompt itself when it is already English, otherwise its exact translation;
@@ -501,6 +504,7 @@ export async function storyboard(s, preset, input, signal = null) {
   if (!names || [...words(names)].some((w) => !words(anchor).has(w))) names = '';
   // "Batman, Superman" reads as "Batman and Superman" in front of an action
   const namesText = names.replace(/\s*,\s*(?:and\s+)?/g, ', ').replace(/, ([^,]+)$/, ' and $1');
+  const looks = cleanText(b.data?.looks);
   let beats = Array.from({ length: nBeats }, (_, i) => cleanText(b.data?.[`b${i + 1}`])).filter(Boolean);
   if (!beats.length) beats = [anchor];
 
@@ -531,16 +535,17 @@ export async function storyboard(s, preset, input, signal = null) {
   const prompts = list.map(({ action, camera }, k) => {
     if (style === 'tags') {
       // (anchor:1.15) first, never cut; the action and camera get what is left of the 77-token chunk
-      const head = `(${clipTags(anchor, 30)}:1.15)`;
+      // then the characters' looks (about 30 tokens at most), then the part
+      const head = [`(${clipTags(anchor, 30)}:1.15)`, looks && clipTags(looks, 30)].filter(Boolean).join(', ');
       const budget = CLIP_TOKENS - estTokens(preset.promptSuffix) - estTokens(head) - 1;
       return `${head}, ${assembleTags({ action, camera }, quality, budget, ['action', 'camera'])}`;
     }
     const trim = (x) => x.replace(/[.\s]+$/, '');
     const cap = (x) => x.charAt(0).toUpperCase() + x.slice(1);
-    const text = [cap(trim(anchor)), `Part ${k + 1} of ${list.length}: ${trim(action)}`, camera && cap(trim(camera))].filter(Boolean).join('. ') + '.';
+    const text = [cap(trim(anchor)), looks && cap(trim(looks)), `Part ${k + 1} of ${list.length}: ${trim(action)}`, camera && cap(trim(camera))].filter(Boolean).join('. ') + '.';
     return quality.suffix && !text.includes(quality.suffix) ? `${text} ${quality.suffix}` : text;
   });
-  return { prompts, anchor, names, beats, parts: list, model: s.model, seconds: Math.round((Date.now() - started) / 100) / 10 };
+  return { prompts, anchor, names, looks, beats, parts: list, model: s.model, seconds: Math.round((Date.now() - started) / 100) / 10 };
 }
 
 // One request per user at a time and two in total: each can hold the Ollama model (and GPU

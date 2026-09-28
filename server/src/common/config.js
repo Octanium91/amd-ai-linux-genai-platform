@@ -40,7 +40,8 @@ export const config = {
 // 3: video jobs may carry a soundtrack (audio, audioStart, audioFade)
 // 4: audio jobs (music, sound effects, speech) through audio.cpp
 // 5: long videos: a prompt per part (prompts), a seed per part, colour-matched seams
-export const WORKER_API = 5;
+// 6: long videos made of shots: a keyframe per part drawn by an image model (shots, spec.keyframe)
+export const WORKER_API = 6;
 
 // Some directories are mounted read-only in one of the containers (output in web, models in worker)
 for (const d of Object.values(config.dirs)) {
