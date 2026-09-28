@@ -418,5 +418,62 @@
         "description": "Речь из текста на 31 языке, в том числе английском, украинском и русском; 10 встроенных голосов. Быстрее реального времени."
       }
     }
+  },
+  {
+    "id": "wan22-5b-turbo-q8",
+    "name": "Wan 2.2 TI2V 5B Turbo (GGUF Q8_0)",
+    "category": "diffusion",
+    "description": "Wan 2.2 5B distilled for image to video in 4 steps without CFG (Self-Forcing/DMD): real motion in about a minute per 2 s shot.",
+    "file": "diffusion_models/Wan2_2-TI2V-5B-Turbo-Q8_0.gguf",
+    "url": "https://huggingface.co/Kiijoku/Wan2.2-TI2V-5B-Turbo-GGUF/resolve/main/Wan2_2-TI2V-5B-Turbo-Q8_0.gguf",
+    "size": 5404990176,
+    "license": "Apache-2.0 (as stated by the GGUF repo; the original code is CC BY-NC-SA 4.0, check before commercial use)",
+    "homepage": "https://github.com/quanhaol/Wan2.2-TI2V-5B-Turbo",
+    "i18n": {
+      "uk": {
+        "description": "Wan 2.2 5B, дистильована для «картинка → відео» за 4 кроки без CFG (Self-Forcing/DMD): справжній рух приблизно за хвилину на план у 2 с."
+      },
+      "ru": {
+        "description": "Wan 2.2 5B, дистиллированная для «картинка → видео» за 4 шага без CFG (Self-Forcing/DMD): настоящее движение примерно за минуту на план в 2 с."
+      }
+    }
+  },
+  {
+    "id": "fastwan22-5b-q8",
+    "name": "FastWan 2.2 TI2V 5B (GGUF Q8_0)",
+    "category": "diffusion",
+    "description": "Wan 2.2 5B distilled by FastVideo for 3 steps without CFG: real motion in about a minute per 2 s shot.",
+    "file": "diffusion_models/FastWan2.2-TI2V-5B-q8_0.gguf",
+    "url": "https://huggingface.co/Green-Sky/FastWan2.2-TI2V-5B-FullAttn-GGUF/resolve/main/FastWan2.2-TI2V-5B-q8_0.gguf",
+    "size": 5412844128,
+    "license": "Apache-2.0",
+    "homepage": "https://huggingface.co/FastVideo/FastWan2.2-TI2V-5B-FullAttn-Diffusers",
+    "i18n": {
+      "uk": {
+        "description": "Wan 2.2 5B, дистильована FastVideo під 3 кроки без CFG: справжній рух приблизно за хвилину на план у 2 с."
+      },
+      "ru": {
+        "description": "Wan 2.2 5B, дистиллированная FastVideo под 3 шага без CFG: настоящее движение примерно за минуту на план в 2 с."
+      }
+    }
+  },
+  {
+    "id": "taew2-2",
+    "name": "TAEHV for Wan 2.2 (taew2_2)",
+    "category": "vae",
+    "description": "Tiny autoencoder for Wan 2.2: decodes a clip in seconds instead of tens of minutes, slightly softer than the full VAE.",
+    "file": "vae/taew2_2.safetensors",
+    "url": "https://github.com/madebyollin/taehv/raw/main/safetensors/taew2_2.safetensors",
+    "size": 22848048,
+    "license": "MIT",
+    "homepage": "https://github.com/madebyollin/taehv",
+    "i18n": {
+      "uk": {
+        "description": "Крихітний автоенкодер для Wan 2.2: декодує кліп за секунди замість десятків хвилин, трохи м'якше за повний VAE."
+      },
+      "ru": {
+        "description": "Крошечный автоэнкодер для Wan 2.2: декодирует клип за секунды вместо десятков минут, чуть мягче полного VAE."
+      }
+    }
   }
 ]

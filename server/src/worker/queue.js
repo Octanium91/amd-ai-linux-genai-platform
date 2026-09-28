@@ -293,6 +293,8 @@ const ROLE_FLAGS = {
   diffusion: '--diffusion-model',
   high_noise: '--high-noise-diffusion-model',
   vae: '--vae',
+  // A tiny autoencoder (TAEHV) instead of the VAE: decodes a Wan clip in seconds
+  tae: '--tae',
   t5xxl: '--t5xxl',
   clip_vision: '--clip_vision',
   motion_module: '--motion-module',
@@ -489,12 +491,22 @@ function quietParse(job, line) {
   }
 }
 
-async function keyframe(job, i, tmpBase, log) {
+// From the second shot on, the keyframe is redrawn from the last frame of the previous shot with the
+// next action (image to image at strength 0.65): the new shot starts where the last one ended, with
+// the same place, light and characters, instead of a brand-new picture.
+async function keyframe(job, i, tmpBase, log, prevShot = null) {
   const k = job.spec.keyframe;
   const p = job.params;
   const outBase = `${tmpBase}_s${i}_key`;
-  const kp = { ...p, ...k.params, prompt: p.prompts?.[i] || p.prompt, prompts: null, seed: p.seed + i, count: 1, task: 'create', image: null, mask: null, strength: null, flowShift: null };
-  const args = buildArgs({ ...job, params: kp }, { ...k, kind: 'image', preview: null }, outBase);
+  let from = null;
+  if (prevShot) {
+    from = `${tmpBase}_s${i}_from.png`;
+    const r = await runCmd('ffmpeg', ['-loglevel', 'error', '-y', '-sseof', '-0.3', '-i', prevShot, '-update', '1', '-q:v', '1', from], 'ffmpeg.last_frame');
+    if (job.status !== 'running') return null;
+    if (r.code !== 0 || !fs.existsSync(from)) from = null;
+  }
+  const kp = { ...p, ...k.params, prompt: p.prompts?.[i] || p.prompt, prompts: null, seed: p.seed + i, count: 1, task: 'create', image: null, mask: null, strength: from ? 0.65 : null, flowShift: null };
+  const args = buildArgs({ ...job, params: kp }, { ...k, kind: 'image', preview: null }, outBase, null, null, null, 0, from);
   const { code, signal, spawnError } = await runSd(job, args, log, config.sdCli, quietParse);
   if (job.status !== 'running') return null;
   if (code !== 0 || !fs.existsSync(`${outBase}.png`)) {
@@ -541,6 +553,7 @@ async function run(job) {
       fs.rmSync(`${tmpBase}_s${i}_last.png`, { force: true });
       fs.rmSync(`${tmpBase}_s${i}_key.png`, { force: true });
       fs.rmSync(`${tmpBase}_s${i}_init.png`, { force: true });
+      fs.rmSync(`${tmpBase}_s${i}_from.png`, { force: true });
     }
     for (const f of job._saved || []) fs.rmSync(f, { force: true });
     delete job._saved;
@@ -580,7 +593,7 @@ async function run(job) {
           job.progress = newProgress(i + 1, segments, [...prev.doneSegments, { startedAt: prev.stages.prepare.startedAt, endedAt: Date.now() }]);
           current.tel?.phase('prepare', { segment: i + 1 });
         }
-        key = i === 0 && job.params.image ? null : await keyframe(job, i, tmpBase, log);
+        key = i === 0 && job.params.image ? null : await keyframe(job, i, tmpBase, log, outputs[i - 1] || null);
         if (job.status !== 'running') break;
         current.tel?.phase('prepare', { segment: i + 1 });
       } else if (i > 0) {

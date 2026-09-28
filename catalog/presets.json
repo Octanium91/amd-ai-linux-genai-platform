@@ -1075,5 +1075,183 @@
         "description": "Читает текст вслух одним из 10 голосов на 31 языке, в том числе английском, украинском и русском."
       }
     }
+  },
+  {
+    "id": "vid-wan22-turbo",
+    "kind": "video",
+    "name": "Wan 2.2 5B Turbo (real motion, fast)",
+    "description": "Real Wan motion in 4 steps: a 2 s shot at 832×480 in about 1.5 minutes, the most action per shot. Best from a photo or a keyframe.",
+    "promptQuality": {
+      "suffix": "Photorealistic, natural colors, rich detail, smooth natural motion."
+    },
+    "reference": {
+      "width": 832,
+      "height": 480,
+      "frames": 49,
+      "steps": 4,
+      "cfg": 1,
+      "samplingSec": 77,
+      "decodeSec": 2,
+      "otherSec": 8
+    },
+    "image": "optional",
+    "models": {
+      "diffusion": "wan22-5b-turbo-q8",
+      "tae": "taew2-2",
+      "t5xxl": "umt5-xxl-q8"
+    },
+    "defaults": {
+      "width": 832,
+      "height": 480,
+      "cfg": 1,
+      "flowShift": 5,
+      "sampler": "euler",
+      "negative": "",
+      "nativeFps": 24,
+      "maxFrames": 121,
+      "segmentFrames": 49,
+      "maxSegments": 60,
+      "duration": 2,
+      "quality": {
+        "normal": 4
+      },
+      "outFpsOptions": [
+        24,
+        48
+      ]
+    },
+    "resolutions": [
+      [
+        832,
+        480
+      ],
+      [
+        480,
+        832
+      ],
+      [
+        1280,
+        704
+      ],
+      [
+        704,
+        1280
+      ]
+    ],
+    "recommendedResolutions": [
+      [
+        832,
+        480
+      ],
+      [
+        480,
+        832
+      ]
+    ],
+    "preview": "proj",
+    "extraArgs": [
+      "--diffusion-fa",
+      "--offload-to-cpu",
+      "--vae-conv-direct"
+    ],
+    "i18n": {
+      "uk": {
+        "name": "Wan 2.2 5B Turbo (справжній рух, швидко)",
+        "description": "Справжній рух Wan за 4 кроки: план у 2 с при 832×480 приблизно за 1,5 хвилини, найбільше дії в плані. Найкраще — з фото чи ключового кадру."
+      },
+      "ru": {
+        "name": "Wan 2.2 5B Turbo (настоящее движение, быстро)",
+        "description": "Настоящее движение Wan за 4 шага: план в 2 с при 832×480 примерно за 1,5 минуты, больше всего действия в плане. Лучше всего — с фото или ключевого кадра."
+      }
+    }
+  },
+  {
+    "id": "vid-fastwan22",
+    "kind": "video",
+    "name": "FastWan 2.2 5B (real motion, fast)",
+    "description": "Real Wan motion in 3 steps: a 2 s shot at 832×480 in about a minute. Apache-2.0.",
+    "promptQuality": {
+      "suffix": "Photorealistic, natural colors, rich detail, smooth natural motion."
+    },
+    "reference": {
+      "width": 832,
+      "height": 480,
+      "frames": 49,
+      "steps": 3,
+      "cfg": 1,
+      "samplingSec": 57,
+      "decodeSec": 2,
+      "otherSec": 8
+    },
+    "image": "optional",
+    "models": {
+      "diffusion": "fastwan22-5b-q8",
+      "tae": "taew2-2",
+      "t5xxl": "umt5-xxl-q8"
+    },
+    "defaults": {
+      "width": 832,
+      "height": 480,
+      "cfg": 1,
+      "flowShift": 5,
+      "sampler": "euler",
+      "negative": "",
+      "nativeFps": 24,
+      "maxFrames": 121,
+      "segmentFrames": 49,
+      "maxSegments": 60,
+      "duration": 2,
+      "quality": {
+        "normal": 3
+      },
+      "outFpsOptions": [
+        24,
+        48
+      ]
+    },
+    "resolutions": [
+      [
+        832,
+        480
+      ],
+      [
+        480,
+        832
+      ],
+      [
+        1280,
+        704
+      ],
+      [
+        704,
+        1280
+      ]
+    ],
+    "recommendedResolutions": [
+      [
+        832,
+        480
+      ],
+      [
+        480,
+        832
+      ]
+    ],
+    "preview": "proj",
+    "extraArgs": [
+      "--diffusion-fa",
+      "--offload-to-cpu",
+      "--vae-conv-direct"
+    ],
+    "i18n": {
+      "uk": {
+        "name": "FastWan 2.2 5B (справжній рух, швидко)",
+        "description": "Справжній рух Wan за 3 кроки: план у 2 с при 832×480 приблизно за хвилину. Apache-2.0."
+      },
+      "ru": {
+        "name": "FastWan 2.2 5B (настоящее движение, быстро)",
+        "description": "Настоящее движение Wan за 3 шага: план в 2 с при 832×480 примерно за минуту. Apache-2.0."
+      }
+    }
   }
 ]

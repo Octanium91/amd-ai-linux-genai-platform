@@ -173,11 +173,12 @@ function audioParams(preset, body, task) {
 // Batman and Superman stay themselves, where SDXL mixes their costumes), fast SDXL, SDXL, SD 1.5
 export const KEYFRAME_ORDER = ['img-z-image-turbo', 'img-realvisxl-lightning', 'img-realvisxl', 'img-realistic-vision'];
 
-// The keyframe spec of a shot video: the image mode's models and flags plus its settings, at the
-// mode's own pixel count in the shape of the video (the worker fits it to the video size)
+// The keyframe spec of a shot video: the image mode's models and flags plus its settings, in the
+// shape of the video at about its size, but at least 0.5 megapixels (SDXL and Z-Image lose quality
+// below that) and at most the mode's own size; the worker fits it to the video size
 export function keyframeSpec(preset, width, height) {
   const d = preset.defaults || {};
-  const area = (d.width || 512) * (d.height || 512);
+  const area = Math.min((d.width || 512) * (d.height || 512), Math.max(width * height, 0.5e6));
   const aspect = width / height;
   const r64 = (v) => Math.max(256, Math.min(2048, Math.round(v / 64) * 64));
   return {

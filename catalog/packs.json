@@ -300,5 +300,31 @@
         "description": "Озвучка текста на 31 языке, в том числе английском, украинском и русском. 313 МБ."
       }
     }
+  },
+  {
+    "id": "video-wan22-fast",
+    "name": "Video · Wan 2.2 5B fast (Turbo and FastWan)",
+    "description": "Real motion in about a minute per 2 s shot: two distilled Wan 2.2 5B models, the tiny TAEHV decoder and the UMT5 encoder. 10.8 GB plus the encoder.",
+    "recommended": true,
+    "models": [
+      "wan22-5b-turbo-q8",
+      "fastwan22-5b-q8",
+      "taew2-2",
+      "umt5-xxl-q8"
+    ],
+    "presets": [
+      "vid-wan22-turbo",
+      "vid-fastwan22"
+    ],
+    "i18n": {
+      "uk": {
+        "name": "Відео · Wan 2.2 5B швидко (Turbo і FastWan)",
+        "description": "Справжній рух приблизно за хвилину на план у 2 с: дві дистильовані Wan 2.2 5B, крихітний декодер TAEHV і енкодер UMT5. 10,8 ГБ плюс енкодер."
+      },
+      "ru": {
+        "name": "Видео · Wan 2.2 5B быстро (Turbo и FastWan)",
+        "description": "Настоящее движение примерно за минуту на план в 2 с: две дистиллированные Wan 2.2 5B, крошечный декодер TAEHV и энкодер UMT5. 10,8 ГБ плюс энкодер."
+      }
+    }
   }
 ]
