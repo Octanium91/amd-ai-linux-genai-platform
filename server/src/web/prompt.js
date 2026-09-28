@@ -431,7 +431,7 @@ function beatsSystem(n, seconds) {
     `You plan the story of one continuous shot of about ${seconds} seconds for an AI video model; it is rendered in parts, each continuing from the previous one.`,
     'First write idea_en: an exact English translation of the idea, nothing added, nothing removed.',
     'names: the main characters or objects exactly as idea_en names them (for example "Batman and Superman"), copied word for word from idea_en.',
-    'looks: how each of them looks, in short visual phrases, one per character, each clearly different from the others. Well-known characters (films, comics, games) get their canonical look (for example "Batman in a black armored bat suit with a pointed-ear cowl and a black cape, Superman in a blue suit with a red cape and the red S emblem"); others get a simple fixed look. This is repeated in every part, so the characters stay the same and never merge.',
+    'looks: how each of them looks, one short visual phrase of at most 12 words per character, each clearly different from the others. Well-known characters (films, comics, games) get their canonical look (for example "Batman in a black armored bat suit with a pointed-ear cowl and a black cape, Superman in a blue suit with a red cape and the red S emblem"); others get a simple fixed look. This is repeated in every part, so the characters stay the same and never merge.',
     `b1 … b${n}: the ${n} beats of the story in order, following the arc setup, rising action, climax, ending. Every beat names the characters exactly as in names, keeps the same kind of event as the idea (a fight stays a fight, a walk stays a walk, the ending stays inside the event), adds no new characters, and does not describe looks, the place or the light. Each beat is one short sentence.`,
     'The idea may be in any language; always answer in English. The first exchange is only an example of the format: never reuse its content.',
     `Answer with JSON with the fields idea_en, names, looks, ${Array.from({ length: n }, (_, i) => `b${i + 1}`).join(', ')}.`,
@@ -535,8 +535,8 @@ export async function storyboard(s, preset, input, signal = null) {
   const prompts = list.map(({ action, camera }, k) => {
     if (style === 'tags') {
       // (anchor:1.15) first, never cut; the action and camera get what is left of the 77-token chunk
-      // then the characters' looks (about 30 tokens at most), then the part
-      const head = [`(${clipTags(anchor, 30)}:1.15)`, looks && clipTags(looks, 30)].filter(Boolean).join(', ');
+      // then the characters' looks (up to about 45 tokens: every character must stay in), then the part
+      const head = [`(${clipTags(anchor, 30)}:1.15)`, looks && clipTags(looks, 45)].filter(Boolean).join(', ');
       const budget = CLIP_TOKENS - estTokens(preset.promptSuffix) - estTokens(head) - 1;
       return `${head}, ${assembleTags({ action, camera }, quality, budget, ['action', 'camera'])}`;
     }
