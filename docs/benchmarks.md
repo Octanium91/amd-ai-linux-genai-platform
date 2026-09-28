@@ -44,6 +44,186 @@ Peak GTT usage: AnimateDiff and AnimateLCM ~8 GB; Wan 2.2 5B ~16 GB during sampl
 
 With continuation strength 0.55 the second segment of an extra-length clip keeps the composition of the first one; with 0.75 it drifted into a different scene.
 
+## Full benchmark, all modes and parameters (September 2026)
+
+Every installed mode at every size it offers, its quality levels and the parameters that change time or result, one at a time, run by `scripts/benchmark.mjs` on the reference machine through the queue. The same prompt and seed (42) per kind: images "portrait photo of an old fisherman in a knitted sweater on a harbor pier, overcast light, detailed skin, 85mm"; video "an old fisherman in a knitted sweater turns his head and smiles on a windy harbor pier, waves and boats behind him, overcast light, cinematic" (image-to-video modes start from a picture of the image prompt fitted to the size); music "warm acoustic folk, fingerpicked guitar, soft piano, light percussion, nostalgic, 90 BPM"; sound effects "waves crashing on a rocky shore with seagulls and wind"; speech "The old fisherman looked at the sea and smiled. The wind was calm, and the boats were ready for the morning.". Times include loading the models. Peak GTT is the GPU memory the job used; thermal is the share of the job the GPU spent throttled by temperature. Audio jobs are too short for the thermal share to mean much.
+
+
+### Realistic Vision 6 · photo
+
+| Setting | Parameters | Total | Sampling | Decoding | s/step | Peak GTT | GPU | Thermal |
+|---|---|---|---|---|---|---|---|---|
+| size 512×768 | 512×768, 25 steps, CFG 5.5 | **30 s** | 27 s | 3 s | 1.074 | 6.1 GB | 74 °C | 0% |
+| size 768×1024 | 768×1024, 25 steps, CFG 5.5 | **1 min 17 s** | 1 min 11 s | 5 s | 2.824 | 10 GB | 76 °C | 0% |
+| size 896×896 | 896×896, 25 steps, CFG 5.5 | **1 min 19 s** | 1 min 13 s | 5 s | 2.93 | 10.2 GB | 78 °C | 0% |
+| size 1024×768 | 1024×768, 25 steps, CFG 5.5 | **1 min 18 s** | 1 min 12 s | 6 s | 2.859 | 10 GB | 78 °C | 0% |
+| size 640×1152 | 640×1152, 25 steps, CFG 5.5 | **1 min 09 s** | 1 min 04 s | 4 s | 2.568 | 9.5 GB | 79 °C | 0% |
+| size 1152×640 | 1152×640, 25 steps, CFG 5.5 | **1 min 09 s** | 1 min 04 s | 4 s | 2.554 | 9.5 GB | 80 °C | 0% |
+| quality draft | 512×768, 12 steps, CFG 5.5 | **16 s** | 13 s | 3 s | 1.078 | 6.1 GB | 77 °C | 0% |
+| quality high | 512×768, 40 steps, CFG 5.5 | **45 s** | 42 s | 3 s | 1.051 | 6.1 GB | 78 °C | 0% |
+| strictness 2.75 | 512×768, 25 steps, CFG 2.75 | **30 s** | 27 s | 3 s | 1.058 | 6.1 GB | 78 °C | 0% |
+| strictness 8.25 | 512×768, 25 steps, CFG 8.25 | **30 s** | 27 s | 3 s | 1.059 | 6.1 GB | 78 °C | 0% |
+
+### RealVisXL V5 · SDXL photo
+
+| Setting | Parameters | Total | Sampling | Decoding | s/step | Peak GTT | GPU | Thermal |
+|---|---|---|---|---|---|---|---|---|
+| size 1024×1024 | 1024×1024, 30 steps, CFG 5 | **3 min 02 s** | 2 min 39 s | 20 s | 5.311 | 7.3 GB | 78 °C | 0% |
+| size 896×1152 | 896×1152, 30 steps, CFG 5 | **2 min 36 s** | 2 min 18 s | 16 s | 4.602 | 7.3 GB | 79 °C | 0% |
+| size 1152×896 | 1152×896, 30 steps, CFG 5 | **2 min 36 s** | 2 min 18 s | 17 s | 4.588 | 7.3 GB | 80 °C | 0% |
+| size 832×1216 | 832×1216, 30 steps, CFG 5 | **2 min 38 s** | 2 min 23 s | 14 s | 4.759 | 7.3 GB | 78 °C | 0% |
+| size 1216×832 | 1216×832, 30 steps, CFG 5 | **2 min 38 s** | 2 min 22 s | 14 s | 4.741 | 7.3 GB | 78 °C | 0% |
+| size 768×1344 | 768×1344, 30 steps, CFG 5 | **2 min 35 s** | 2 min 17 s | 15 s | 4.579 | 7.3 GB | 80 °C | 0% |
+| size 1344×768 | 1344×768, 30 steps, CFG 5 | **2 min 35 s** | 2 min 18 s | 15 s | 4.587 | 7.3 GB | 81 °C | 0% |
+| quality draft | 1024×1024, 20 steps, CFG 5 | **1 min 53 s** | 1 min 34 s | 17 s | 4.711 | 7.3 GB | 80 °C | 0% |
+| quality high | 1024×1024, 45 steps, CFG 5 | **3 min 50 s** | 3 min 31 s | 17 s | 4.69 | 7.3 GB | 81 °C | 0% |
+| strictness 2.5 | 1024×1024, 30 steps, CFG 2.5 | **2 min 38 s** | 2 min 20 s | 17 s | 4.654 | 7.3 GB | 80 °C | 0% |
+| strictness 7.5 | 1024×1024, 30 steps, CFG 7.5 | **2 min 36 s** | 2 min 18 s | 17 s | 4.597 | 7.3 GB | 80 °C | 0% |
+
+### RealVisXL V5 Lightning · fast SDXL
+
+| Setting | Parameters | Total | Sampling | Decoding | s/step | Peak GTT | GPU | Thermal |
+|---|---|---|---|---|---|---|---|---|
+| size 1024×1024 | 1024×1024, 5 steps, CFG 1.5 | **47 s** | 27 s | 18 s | 5.484 | 7.3 GB | 79 °C | 0% |
+| size 896×1152 | 896×1152, 5 steps, CFG 1.5 | **42 s** | 24 s | 17 s | 4.794 | 7.3 GB | 78 °C | 0% |
+| size 1152×896 | 1152×896, 5 steps, CFG 1.5 | **42 s** | 24 s | 17 s | 4.838 | 7.3 GB | 76 °C | 0% |
+| size 832×1216 | 832×1216, 5 steps, CFG 1.5 | **40 s** | 25 s | 14 s | 4.924 | 7.3 GB | 77 °C | 0% |
+| size 1216×832 | 1216×832, 5 steps, CFG 1.5 | **40 s** | 25 s | 14 s | 4.958 | 7.3 GB | 78 °C | 0% |
+| size 768×1344 | 768×1344, 5 steps, CFG 1.5 | **41 s** | 24 s | 16 s | 4.828 | 7.3 GB | 77 °C | 0% |
+| size 1344×768 | 1344×768, 5 steps, CFG 1.5 | **41 s** | 24 s | 15 s | 4.838 | 7.3 GB | 78 °C | 0% |
+| quality draft | 1024×1024, 4 steps, CFG 1.5 | **38 s** | 20 s | 17 s | 4.958 | 7.3 GB | 77 °C | 0% |
+| quality high | 1024×1024, 6 steps, CFG 1.5 | **47 s** | 29 s | 17 s | 4.79 | 7.3 GB | 76 °C | 0% |
+| quality extra | 1024×1024, 8 steps, CFG 1.5 | **57 s** | 38 s | 17 s | 4.804 | 7.3 GB | 78 °C | 0% |
+| strictness 0.75 | 1024×1024, 5 steps, CFG 0.75 | **43 s** | 24 s | 17 s | 4.83 | 7.3 GB | 78 °C | 0% |
+| strictness 2.25 | 1024×1024, 5 steps, CFG 2.25 | **43 s** | 24 s | 17 s | 4.848 | 7.3 GB | 80 °C | 0% |
+
+### Z-Image Turbo · photo
+
+| Setting | Parameters | Total | Sampling | Decoding | s/step | Peak GTT | GPU | Thermal |
+|---|---|---|---|---|---|---|---|---|
+| size 1024×1024 | 1024×1024, 8 steps, CFG 1 | **2 min 16 s** | 1 min 57 s | 17 s | 14.606 | 11.5 GB | 82 °C | 3% |
+| size 832×1216 | 832×1216, 8 steps, CFG 1 | **2 min 14 s** | 1 min 57 s | 14 s | 14.666 | 11.5 GB | 81 °C | 0% |
+| size 1216×832 | 1216×832, 8 steps, CFG 1 | **2 min 13 s** | 1 min 58 s | 14 s | 14.689 | 11.5 GB | 82 °C | 0% |
+| size 768×1344 | 768×1344, 8 steps, CFG 1 | **2 min 17 s** | 1 min 59 s | 16 s | 14.885 | 11.5 GB | 82 °C | 0% |
+| size 1344×768 | 1344×768, 8 steps, CFG 1 | **2 min 18 s** | 2 min 00 s | 16 s | 15.005 | 11.5 GB | 82 °C | 0% |
+| size 1024×512 | 1024×512, 8 steps, CFG 1 | **1 min 06 s** | 57 s | 7 s | 7.114 | 11.3 GB | 81 °C | 0% |
+| size 512×1024 | 512×1024, 8 steps, CFG 1 | **1 min 06 s** | 57 s | 7 s | 7.071 | 11.3 GB | 81 °C | 0% |
+| quality draft | 1024×1024, 6 steps, CFG 1 | **1 min 52 s** | 1 min 34 s | 17 s | 15.58 | 11.5 GB | 81 °C | 0% |
+| quality high | 1024×1024, 10 steps, CFG 1 | **2 min 51 s** | 2 min 33 s | 17 s | 15.25 | 11.5 GB | 82 °C | 0% |
+| quality extra | 1024×1024, 14 steps, CFG 1 | **3 min 52 s** | 3 min 33 s | 17 s | 15.234 | 11.5 GB | 82 °C | 0% |
+
+### Real-ESRGAN · upscale ×4
+
+| Setting | Parameters | Total | Sampling | Decoding | s/step | Peak GTT | GPU | Thermal |
+|---|---|---|---|---|---|---|---|---|
+| upscale 256×256 | 1024×1024, CFG 1 | **4 s** | 0 s | 0 s | — | 0 GB | 59 °C | 0% |
+| upscale 512×512 | 2048×2048, CFG 1 | **29 s** | 0 s | 0 s | — | 2.9 GB | 74 °C | 0% |
+
+### AnimateLCM · Realistic Vision (fast)
+
+| Setting | Parameters | Total | Sampling | Decoding | s/step | Peak GTT | GPU | Thermal |
+|---|---|---|---|---|---|---|---|---|
+| size 512×512 | 512×512, 16 frames, 6 steps, CFG 1, 8→24 fps | **1 min 49 s** | 1 min 16 s | 28 s | 15.26 | 9.2 GB | 77 °C | 0% |
+| size 768×512 | 768×512, 16 frames, 6 steps, CFG 1, 8→24 fps | **2 min 31 s** | 1 min 44 s | 41 s | 20.826 | 11.8 GB | 79 °C | 3% |
+| size 512×768 | 512×768, 16 frames, 6 steps, CFG 1, 8→24 fps | **2 min 27 s** | 1 min 42 s | 40 s | 20.43 | 11.8 GB | 81 °C | 3% |
+| quality draft | 512×512, 16 frames, 4 steps, CFG 1, 8→24 fps | **1 min 29 s** | 56 s | 28 s | 14.048 | 9.2 GB | 74 °C | 4% |
+| quality high | 512×512, 16 frames, 8 steps, CFG 1, 8→24 fps | **2 min 10 s** | 1 min 37 s | 28 s | 13.887 | 9.2 GB | 74 °C | 3% |
+| text to video | 512×512, 16 frames, 6 steps, CFG 1, 8→24 fps | **1 min 55 s** | 1 min 24 s | 29 s | 13.915 | 9.2 GB | 74 °C | 3% |
+| strictness 1.5 | 512×512, 16 frames, 6 steps, CFG 1.5, 8→24 fps | **2 min 51 s** | 2 min 19 s | 28 s | 27.752 | 9.2 GB | 77 °C | 3% |
+| strictness 2 | 512×512, 16 frames, 6 steps, CFG 2, 8→24 fps | **2 min 51 s** | 2 min 18 s | 28 s | 27.684 | 9.2 GB | 76 °C | 3% |
+| 8 frames | 512×512, 8 frames, 6 steps, CFG 1, 8→24 fps | **59 s** | 42 s | 14 s | 8.358 | 7 GB | 74 °C | 6% |
+| 8 fps output | 512×512, 16 frames, 6 steps, CFG 1 | **1 min 40 s** | 1 min 10 s | 28 s | 13.906 | 9.2 GB | 74 °C | 4% |
+| 16 fps output | 512×512, 16 frames, 6 steps, CFG 1, 8→16 fps | **1 min 41 s** | 1 min 10 s | 28 s | 13.894 | 9.2 GB | 74 °C | 0% |
+
+### AnimateDiff v3 · Realistic Vision (detailed)
+
+| Setting | Parameters | Total | Sampling | Decoding | s/step | Peak GTT | GPU | Thermal |
+|---|---|---|---|---|---|---|---|---|
+| size 512×512 | 512×512, 16 frames, 25 steps, CFG 8, 8→24 fps | **8 min 06 s** | 7 min 34 s | 28 s | 23.896 | 8.7 GB | 79 °C | 1% |
+| size 768×512 | 768×512, 16 frames, 25 steps, CFG 8, 8→24 fps | **11 min 42 s** | 10 min 55 s | 41 s | 34.469 | 11.5 GB | 82 °C | 1% |
+| size 512×768 | 512×768, 16 frames, 25 steps, CFG 8, 8→24 fps | **11 min 38 s** | 10 min 53 s | 40 s | 34.358 | 11.5 GB | 81 °C | 1% |
+| quality draft | 512×512, 16 frames, 16 steps, CFG 8, 8→24 fps | **5 min 43 s** | 5 min 11 s | 28 s | 23.941 | 8.7 GB | 78 °C | 1% |
+| quality high | 512×512, 16 frames, 30 steps, CFG 8, 8→24 fps | **9 min 42 s** | 9 min 09 s | 28 s | 23.883 | 8.7 GB | 79 °C | 1% |
+
+### Wan 2.2 TI2V 5B (full, slow)
+
+| Setting | Parameters | Total | Sampling | Decoding | s/step | Peak GTT | GPU | Thermal |
+|---|---|---|---|---|---|---|---|---|
+| 17 frames | 832×480, 17 frames, 12 steps, CFG 5 | **2 min 35 s** | 2 min 26 s | 1 s | 12.145 | 16.9 GB | 80 °C | 3% |
+| 49 frames | 832×480, 49 frames, 12 steps, CFG 5 | **7 min 39 s** | 7 min 29 s | 1 s | 37.441 | 17.2 GB | 80 °C | 1% |
+
+### Wan 2.1 T2V 1.3B (experimental)
+
+| Setting | Parameters | Total | Sampling | Decoding | s/step | Peak GTT | GPU | Thermal |
+|---|---|---|---|---|---|---|---|---|
+| size 832×480 | 832×480, 81 frames, 20 steps, CFG 6 | **1 h 50 min** | 1 h 41 min | 8 min 09 s | 304.371 | 14.3 GB | 78 °C | 0% |
+| size 480×832 | 480×832, 81 frames, 20 steps, CFG 6 | **1 h 44 min** | 1 h 36 min | 7 min 35 s | 287.458 | 14.3 GB | 78 °C | 0% |
+| quality draft | 832×480, 81 frames, 12 steps, CFG 6 | **1 h 05 min** | 57 min 44 s | 7 min 37 s | 288.627 | 14.3 GB | 79 °C | 0% |
+| 17 frames | 832×480, 17 frames, 20 steps, CFG 6 | **10 min 26 s** | 8 min 43 s | 1 min 36 s | 26.128 | 13.7 GB | 76 °C | 1% |
+
+### ACE-Step 1.5 · music
+
+| Setting | Parameters | Total | Sampling | Decoding | s/step | Peak GTT | GPU | Thermal |
+|---|---|---|---|---|---|---|---|---|
+| 10 s | 8 steps, 10 s of audio | **28 s** | 10 s | 6 s | — | 11.6 GB | 64 °C | 20% |
+| 30 s | 8 steps, 30 s of audio | **35 s** | 14 s | 14 s | — | 11.1 GB | 69 °C | 15% |
+| 60 s | 8 steps, 60 s of audio | **55 s** | 22 s | 26 s | — | 11.6 GB | 73 °C | 18% |
+| 120 s | 8 steps, 120 s of audio | **1 min 42 s** | 40 s | 54 s | — | 12.2 GB | 73 °C | 12% |
+| 30 s with vocals | 8 steps, 30 s of audio | **36 s** | 15 s | 13 s | — | 11.3 GB | 68 °C | 15% |
+
+### Stable Audio 3 Small · sound effects
+
+| Setting | Parameters | Total | Sampling | Decoding | s/step | Peak GTT | GPU | Thermal |
+|---|---|---|---|---|---|---|---|---|
+| 2 s | 8 steps, 2 s of audio | **4 s** | 1 s | 0 s | — | 1.5 GB | 69 °C | 33% |
+| 8 s | 8 steps, 8 s of audio | **4 s** | 1 s | 0 s | — | 1.6 GB | 67 °C | 100% |
+| 30 s | 8 steps, 30 s of audio | **5 s** | 2 s | 0 s | — | 1.6 GB | 70 °C | 17% |
+
+### Supertonic 3 · speech
+
+| Setting | Parameters | Total | Sampling | Decoding | s/step | Peak GTT | GPU | Thermal |
+|---|---|---|---|---|---|---|---|---|
+| 108 characters, en | 8 steps, 7.8 s of audio | **4 s** | 0 s | 0 s | — | 0.3 GB | 64 °C | 67% |
+| 432 characters, en | 8 steps, 29.9 s of audio | **5 s** | 1 s | 1 s | — | 0.3 GB | 65 °C | 40% |
+| Ukrainian | 8 steps, 7.2 s of audio | **4 s** | 0 s | 0 s | — | 0.3 GB | 64 °C | 67% |
+
+### Wan 2.2 5B Turbo (real motion, fast)
+
+| Setting | Parameters | Total | Sampling | Decoding | s/step | Peak GTT | GPU | Thermal |
+|---|---|---|---|---|---|---|---|---|
+| size 832×480 | 832×480, 49 frames, 4 steps, CFG 1 | **1 min 25 s** | 1 min 16 s | 1 s | 18.973 | 17.2 GB | 75 °C | 0% |
+| size 480×832 | 480×832, 49 frames, 4 steps, CFG 1 | **1 min 25 s** | 1 min 16 s | 1 s | 18.923 | 17.2 GB | 78 °C | 4% |
+| size 1280×704 | 1280×704, 49 frames, 4 steps, CFG 1 | **4 min 03 s** | 3 min 51 s | 3 s | 57.79 | 21 GB | 77 °C | 4% |
+| size 704×1280 | 704×1280, 49 frames, 4 steps, CFG 1 | **4 min 11 s** | 3 min 59 s | 3 s | 59.802 | 18.3 GB | 76 °C | 2% |
+| text to video | 832×480, 49 frames, 4 steps, CFG 1 | **1 min 24 s** | 1 min 16 s | 1 s | 18.895 | 17.2 GB | 76 °C | 0% |
+| 17 frames | 832×480, 17 frames, 4 steps, CFG 1 | **31 s** | 26 s | 1 s | 6.493 | 16.9 GB | 75 °C | 8% |
+| 81 frames | 832×480, 81 frames, 4 steps, CFG 1 | **2 min 30 s** | 2 min 21 s | 2 s | 35.32 | 17.5 GB | 77 °C | 3% |
+| 121 frames | 832×480, 121 frames, 4 steps, CFG 1 | **4 min 29 s** | 4 min 18 s | 3 s | 64.555 | 21.5 GB | 77 °C | 2% |
+| 48 fps output | 832×480, 49 frames, 4 steps, CFG 1, 24→48 fps | **1 min 28 s** | 1 min 16 s | 1 s | 18.93 | 17.2 GB | 77 °C | 4% |
+
+### FastWan 2.2 5B (real motion, fast)
+
+| Setting | Parameters | Total | Sampling | Decoding | s/step | Peak GTT | GPU | Thermal |
+|---|---|---|---|---|---|---|---|---|
+| size 832×480 | 832×480, 49 frames, 3 steps, CFG 1 | **1 min 05 s** | 57 s | 1 s | 19 | 17.3 GB | 77 °C | 6% |
+| size 480×832 | 480×832, 49 frames, 3 steps, CFG 1 | **1 min 01 s** | 54 s | 1 s | 17.897 | 17.3 GB | 78 °C | 6% |
+| size 1280×704 | 1280×704, 49 frames, 3 steps, CFG 1 | **3 min 05 s** | 2 min 55 s | 3 s | 58.36 | 18.3 GB | 78 °C | 5% |
+| size 704×1280 | 704×1280, 49 frames, 3 steps, CFG 1 | **3 min 07 s** | 2 min 57 s | 3 s | 59.067 | 21 GB | 77 °C | 2% |
+| text to video | 832×480, 49 frames, 3 steps, CFG 1 | **1 min 05 s** | 57 s | 1 s | 19.003 | 17.2 GB | 77 °C | 5% |
+| 17 frames | 832×480, 17 frames, 3 steps, CFG 1 | **24 s** | 20 s | 1 s | 6.473 | 17 GB | 74 °C | 13% |
+| 81 frames | 832×480, 81 frames, 3 steps, CFG 1 | **1 min 56 s** | 1 min 47 s | 2 s | 35.647 | 17.6 GB | 78 °C | 3% |
+| 121 frames | 832×480, 121 frames, 3 steps, CFG 1 | **3 min 27 s** | 3 min 16 s | 3 s | 65.43 | 18.4 GB | 76 °C | 2% |
+
+What the full run shows (95 jobs, no failure, no hard throttling: the GPU stayed at or below 82 °C, thermal limits at most 8% of a job):
+
+- **Prompt strictness (CFG) costs nothing extra above or below 1,** but exactly 1 skips the negative pass: AnimateLCM at CFG 1.5 or 2 took 171 s against 109 s at 1; RealVisXL at CFG 2.5, 5 and 7.5 all took 156–158 s.
+- **Time does not grow linearly with pixels and frames:** Realistic Vision at 896×896 (2× the pixels of 512×768) took 2.7× the time; Wan 2.2 Turbo at 121 frames (2.5× of 49) took 3.2×. The estimates therefore scale from the measurement closest in work (`reference.samples` in `catalog/presets.json`): checked by leaving each measurement out, the median error is 2 %, the 90th percentile 12 %.
+- **SDXL sizes:** all seven ~1 MP sizes take about the same (2 min 35 s – 3 min 02 s); 1024×1024 is the slowest. Lightning spends as long decoding as sampling (17 s each).
+- **Video, 2 s at 832×480 with real motion:** FastWan 65 s, Wan 2.2 Turbo 85 s, the full Wan 2.2 5B about 8 min at Draft (TAEHV decodes in about a second). 1280×704 costs about 3× (3–4 min). **Wan 2.1 1.3B is the slowest video mode by far:** 81 frames took 1 h 50 min (5 min per step) and its full VAE 8 min.
+- **Output frame rate** (interpolation) adds only seconds: AnimateLCM 8, 16 and 24 fps took 100, 101 and 109 s.
+- **Audio:** music ≈ 17 s + 0.7 s per second of audio (2 min of music in 102 s), sound effects 4–5 s for up to 30 s, speech about 4 s regardless of length.
+
+
 ## Audio
 
 audio.cpp `v0.8.2-audio8-perf-hotfix`, Vulkan (RADV GFX1150), Q8_0 or F16 GGUF packages. Times are the whole job through the queue unless marked as a direct CLI run.

@@ -111,9 +111,10 @@ function stageDuration(job, key) {
 }
 
 // Scales a measured run to other parameters: sampling ~ steps × pixels × frames × CFG passes
-// (CFG > 1 adds a negative pass), decoding ~ pixels × frames, loading stays the same.
+// (any CFG other than 1 adds a negative pass: measured, 0.75 costs as much as 1.5), decoding ~
+// pixels × frames, loading stays the same.
 const vol = (p) => p.width * p.height * (p.frames || p.count || 1) * (p.segments || 1);
-const passes = (p) => (p.cfg > 1 ? 2 : 1);
+const passes = (p) => (Math.abs((p.cfg ?? 1) - 1) > 1e-6 ? 2 : 1);
 const scaleRun = (r, p, gpuFactor = 1) =>
   ((r.samplingSec * p.steps * vol(p) * passes(p)) / (r.steps * vol(r) * passes(r)) + (r.decodeSec * vol(p)) / vol(r)) * gpuFactor +
   r.otherSec;
@@ -150,6 +151,10 @@ export function estimate(jobs, params, preset, gpuPower) {
     const had = (job.params.frames || 1) * (job.params.segments || 1);
     return { sec: (job.durationSec * (Number(params.frames) || had)) / had, source: 'history' };
   }
+  // Candidates: the latest run of the mode here, and the mode's measurements (catalog, benchmark of
+  // the reference machine, scaled by this GPU's power). Time does not grow linearly with pixels and
+  // frames (attention is quadratic), so the measurement closest in work is scaled, not the first one.
+  const cands = [];
   const samplingSec = job && stageDuration(job, 'sampling');
   if (samplingSec) {
     // Progress is kept per pass: the stage times are of the last pass, so a multi-pass video is
@@ -157,10 +162,14 @@ export function estimate(jobs, params, preset, gpuPower) {
     const segs = job.params.segments || 1;
     const decodeSec = stageDuration(job, 'decoding') || 0;
     const otherSec = Math.max(0, (job.durationSec || 0) / segs - samplingSec - decodeSec);
-    return { sec: scaleRun({ ...job.params, segments: 1, samplingSec, decodeSec, otherSec }, params), source: 'history' };
+    cands.push({ run: { ...job.params, frames: job.params.frames || job.params.count, segments: 1, samplingSec, decodeSec, otherSec }, source: 'history', factor: 1 });
   }
-  if (preset?.reference && gpuPower?.score) {
-    return { sec: scaleRun(preset.reference, params, 1 / gpuPower.score), source: 'reference', gpu: gpuPower.name };
-  }
-  return null;
+  const ref = preset?.reference;
+  const factor = gpuPower?.score ? 1 / gpuPower.score : 1;
+  for (const r of ref?.samples || (ref?.samplingSec != null ? [ref] : [])) cands.push({ run: r, source: 'reference', factor });
+  if (!cands.length) return null;
+  const work = (r) => vol(r) * (r.steps || 1) * passes(r);
+  const dist = (c) => Math.abs(Math.log(work(c.run) / work(params))) + (passes(c.run) === passes(params) ? 0 : 0.5);
+  const best = cands.reduce((a, c) => (dist(c) < dist(a) - 1e-9 ? c : a));
+  return { sec: scaleRun(best.run, params, best.factor), source: best.source, gpu: best.source === 'reference' ? gpuPower?.name : undefined };
 }

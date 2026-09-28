@@ -11,12 +11,94 @@
     "reference": {
       "width": 512,
       "height": 768,
-      "frames": 2,
+      "frames": 1,
       "steps": 25,
       "cfg": 5.5,
-      "samplingSec": 43,
-      "decodeSec": 8,
-      "otherSec": 34
+      "samplingSec": 26.8,
+      "decodeSec": 2.5,
+      "otherSec": 0.7,
+      "samples": [
+        {
+          "width": 512,
+          "height": 768,
+          "frames": 1,
+          "steps": 25,
+          "cfg": 5.5,
+          "samplingSec": 26.8,
+          "decodeSec": 2.5,
+          "otherSec": 0.7
+        },
+        {
+          "width": 768,
+          "height": 1024,
+          "frames": 1,
+          "steps": 25,
+          "cfg": 5.5,
+          "samplingSec": 70.6,
+          "decodeSec": 5.2,
+          "otherSec": 1.2
+        },
+        {
+          "width": 896,
+          "height": 896,
+          "frames": 1,
+          "steps": 25,
+          "cfg": 5.5,
+          "samplingSec": 73.2,
+          "decodeSec": 4.8,
+          "otherSec": 1.0
+        },
+        {
+          "width": 1024,
+          "height": 768,
+          "frames": 1,
+          "steps": 25,
+          "cfg": 5.5,
+          "samplingSec": 71.5,
+          "decodeSec": 6.2,
+          "otherSec": 0.3
+        },
+        {
+          "width": 640,
+          "height": 1152,
+          "frames": 1,
+          "steps": 25,
+          "cfg": 5.5,
+          "samplingSec": 64.2,
+          "decodeSec": 4.3,
+          "otherSec": 0.5
+        },
+        {
+          "width": 1152,
+          "height": 640,
+          "frames": 1,
+          "steps": 25,
+          "cfg": 5.5,
+          "samplingSec": 63.8,
+          "decodeSec": 4.4,
+          "otherSec": 0.8
+        },
+        {
+          "width": 512,
+          "height": 768,
+          "frames": 1,
+          "steps": 12,
+          "cfg": 5.5,
+          "samplingSec": 12.9,
+          "decodeSec": 2.5,
+          "otherSec": 0.6
+        },
+        {
+          "width": 512,
+          "height": 768,
+          "frames": 1,
+          "steps": 40,
+          "cfg": 5.5,
+          "samplingSec": 42.1,
+          "decodeSec": 2.5,
+          "otherSec": 0.4
+        }
+      ]
     },
     "image": "optional",
     "models": {
@@ -97,9 +179,101 @@
       "frames": 1,
       "steps": 30,
       "cfg": 5,
-      "samplingSec": 143,
-      "decodeSec": 17,
-      "otherSec": 2
+      "samplingSec": 159.3,
+      "decodeSec": 20.4,
+      "otherSec": 2.3,
+      "samples": [
+        {
+          "width": 1024,
+          "height": 1024,
+          "frames": 1,
+          "steps": 30,
+          "cfg": 5,
+          "samplingSec": 159.3,
+          "decodeSec": 20.4,
+          "otherSec": 2.3
+        },
+        {
+          "width": 896,
+          "height": 1152,
+          "frames": 1,
+          "steps": 30,
+          "cfg": 5,
+          "samplingSec": 138.1,
+          "decodeSec": 16.4,
+          "otherSec": 1.5
+        },
+        {
+          "width": 1152,
+          "height": 896,
+          "frames": 1,
+          "steps": 30,
+          "cfg": 5,
+          "samplingSec": 137.7,
+          "decodeSec": 16.9,
+          "otherSec": 1.4
+        },
+        {
+          "width": 832,
+          "height": 1216,
+          "frames": 1,
+          "steps": 30,
+          "cfg": 5,
+          "samplingSec": 142.8,
+          "decodeSec": 13.8,
+          "otherSec": 1.4
+        },
+        {
+          "width": 1216,
+          "height": 832,
+          "frames": 1,
+          "steps": 30,
+          "cfg": 5,
+          "samplingSec": 142.2,
+          "decodeSec": 13.9,
+          "otherSec": 1.9
+        },
+        {
+          "width": 768,
+          "height": 1344,
+          "frames": 1,
+          "steps": 30,
+          "cfg": 5,
+          "samplingSec": 137.4,
+          "decodeSec": 15.4,
+          "otherSec": 2.2
+        },
+        {
+          "width": 1344,
+          "height": 768,
+          "frames": 1,
+          "steps": 30,
+          "cfg": 5,
+          "samplingSec": 137.6,
+          "decodeSec": 15.4,
+          "otherSec": 2.0
+        },
+        {
+          "width": 1024,
+          "height": 1024,
+          "frames": 1,
+          "steps": 20,
+          "cfg": 5,
+          "samplingSec": 94.2,
+          "decodeSec": 17.3,
+          "otherSec": 1.5
+        },
+        {
+          "width": 1024,
+          "height": 1024,
+          "frames": 1,
+          "steps": 45,
+          "cfg": 5,
+          "samplingSec": 211.1,
+          "decodeSec": 16.9,
+          "otherSec": 2.0
+        }
+      ]
     },
     "image": "optional",
     "models": {
@@ -213,11 +387,123 @@
       "width": 1024,
       "height": 1024,
       "frames": 1,
-      "steps": 6,
+      "steps": 5,
       "cfg": 1.5,
-      "samplingSec": 29,
-      "decodeSec": 17,
-      "otherSec": 2
+      "samplingSec": 27.4,
+      "decodeSec": 17.6,
+      "otherSec": 2.0,
+      "samples": [
+        {
+          "width": 1024,
+          "height": 1024,
+          "frames": 1,
+          "steps": 5,
+          "cfg": 1.5,
+          "samplingSec": 27.4,
+          "decodeSec": 17.6,
+          "otherSec": 2.0
+        },
+        {
+          "width": 896,
+          "height": 1152,
+          "frames": 1,
+          "steps": 5,
+          "cfg": 1.5,
+          "samplingSec": 24,
+          "decodeSec": 16.5,
+          "otherSec": 1.5
+        },
+        {
+          "width": 1152,
+          "height": 896,
+          "frames": 1,
+          "steps": 5,
+          "cfg": 1.5,
+          "samplingSec": 24.2,
+          "decodeSec": 16.5,
+          "otherSec": 1.3
+        },
+        {
+          "width": 832,
+          "height": 1216,
+          "frames": 1,
+          "steps": 5,
+          "cfg": 1.5,
+          "samplingSec": 24.6,
+          "decodeSec": 13.9,
+          "otherSec": 1.5
+        },
+        {
+          "width": 1216,
+          "height": 832,
+          "frames": 1,
+          "steps": 5,
+          "cfg": 1.5,
+          "samplingSec": 24.8,
+          "decodeSec": 13.8,
+          "otherSec": 1.4
+        },
+        {
+          "width": 768,
+          "height": 1344,
+          "frames": 1,
+          "steps": 5,
+          "cfg": 1.5,
+          "samplingSec": 24.1,
+          "decodeSec": 15.6,
+          "otherSec": 1.3
+        },
+        {
+          "width": 1344,
+          "height": 768,
+          "frames": 1,
+          "steps": 5,
+          "cfg": 1.5,
+          "samplingSec": 24.2,
+          "decodeSec": 15.4,
+          "otherSec": 1.4
+        },
+        {
+          "width": 1024,
+          "height": 1024,
+          "frames": 1,
+          "steps": 4,
+          "cfg": 1.5,
+          "samplingSec": 19.8,
+          "decodeSec": 16.8,
+          "otherSec": 1.4
+        },
+        {
+          "width": 1024,
+          "height": 1024,
+          "frames": 1,
+          "steps": 6,
+          "cfg": 1.5,
+          "samplingSec": 28.7,
+          "decodeSec": 16.7,
+          "otherSec": 1.6
+        },
+        {
+          "width": 1024,
+          "height": 1024,
+          "frames": 1,
+          "steps": 8,
+          "cfg": 1.5,
+          "samplingSec": 38.4,
+          "decodeSec": 16.9,
+          "otherSec": 1.7
+        },
+        {
+          "width": 1024,
+          "height": 1024,
+          "frames": 1,
+          "steps": 5,
+          "cfg": 0.75,
+          "samplingSec": 24.2,
+          "decodeSec": 17.1,
+          "otherSec": 1.7
+        }
+      ]
     },
     "image": "optional",
     "models": {
@@ -334,9 +620,111 @@
       "frames": 1,
       "steps": 8,
       "cfg": 1,
-      "samplingSec": 149,
-      "decodeSec": 17,
-      "otherSec": 2
+      "samplingSec": 116.9,
+      "decodeSec": 16.7,
+      "otherSec": 2.4,
+      "samples": [
+        {
+          "width": 1024,
+          "height": 1024,
+          "frames": 1,
+          "steps": 8,
+          "cfg": 1,
+          "samplingSec": 116.9,
+          "decodeSec": 16.7,
+          "otherSec": 2.4
+        },
+        {
+          "width": 832,
+          "height": 1216,
+          "frames": 1,
+          "steps": 8,
+          "cfg": 1,
+          "samplingSec": 117.3,
+          "decodeSec": 13.8,
+          "otherSec": 2.9
+        },
+        {
+          "width": 1216,
+          "height": 832,
+          "frames": 1,
+          "steps": 8,
+          "cfg": 1,
+          "samplingSec": 117.5,
+          "decodeSec": 13.6,
+          "otherSec": 1.9
+        },
+        {
+          "width": 768,
+          "height": 1344,
+          "frames": 1,
+          "steps": 8,
+          "cfg": 1,
+          "samplingSec": 119.1,
+          "decodeSec": 15.5,
+          "otherSec": 2.4
+        },
+        {
+          "width": 1344,
+          "height": 768,
+          "frames": 1,
+          "steps": 8,
+          "cfg": 1,
+          "samplingSec": 120.1,
+          "decodeSec": 15.7,
+          "otherSec": 2.2
+        },
+        {
+          "width": 1024,
+          "height": 512,
+          "frames": 1,
+          "steps": 8,
+          "cfg": 1,
+          "samplingSec": 56.9,
+          "decodeSec": 7.4,
+          "otherSec": 1.7
+        },
+        {
+          "width": 512,
+          "height": 1024,
+          "frames": 1,
+          "steps": 8,
+          "cfg": 1,
+          "samplingSec": 56.6,
+          "decodeSec": 7.4,
+          "otherSec": 2.0
+        },
+        {
+          "width": 1024,
+          "height": 1024,
+          "frames": 1,
+          "steps": 6,
+          "cfg": 1,
+          "samplingSec": 93.5,
+          "decodeSec": 16.8,
+          "otherSec": 1.7
+        },
+        {
+          "width": 1024,
+          "height": 1024,
+          "frames": 1,
+          "steps": 10,
+          "cfg": 1,
+          "samplingSec": 152.5,
+          "decodeSec": 17,
+          "otherSec": 1.5
+        },
+        {
+          "width": 1024,
+          "height": 1024,
+          "frames": 1,
+          "steps": 14,
+          "cfg": 1,
+          "samplingSec": 213.3,
+          "decodeSec": 17,
+          "otherSec": 1.7
+        }
+      ]
     },
     "image": "optional",
     "models": {
@@ -465,6 +853,38 @@
         "name": "Real-ESRGAN · увеличение ×4",
         "description": "Увеличивает фото в 4 раза и восстанавливает мелкие детали. Промпт не нужен."
       }
+    },
+    "reference": {
+      "width": 1024,
+      "height": 1024,
+      "frames": 1,
+      "steps": 1,
+      "cfg": 1,
+      "samplingSec": 0,
+      "decodeSec": 0,
+      "otherSec": 4,
+      "samples": [
+        {
+          "width": 1024,
+          "height": 1024,
+          "frames": 1,
+          "steps": 1,
+          "cfg": 1,
+          "samplingSec": 0,
+          "decodeSec": 0,
+          "otherSec": 4
+        },
+        {
+          "width": 2048,
+          "height": 2048,
+          "frames": 1,
+          "steps": 1,
+          "cfg": 1,
+          "samplingSec": 0,
+          "decodeSec": 0,
+          "otherSec": 29
+        }
+      ]
     }
   },
   {
@@ -515,9 +935,81 @@
       "frames": 16,
       "steps": 6,
       "cfg": 1,
-      "samplingSec": 101,
-      "decodeSec": 46,
-      "otherSec": 3
+      "samplingSec": 76.3,
+      "decodeSec": 28.1,
+      "otherSec": 4.6,
+      "samples": [
+        {
+          "width": 512,
+          "height": 512,
+          "frames": 16,
+          "steps": 6,
+          "cfg": 1,
+          "samplingSec": 76.3,
+          "decodeSec": 28.1,
+          "otherSec": 4.6
+        },
+        {
+          "width": 768,
+          "height": 512,
+          "frames": 16,
+          "steps": 6,
+          "cfg": 1,
+          "samplingSec": 104.2,
+          "decodeSec": 41.2,
+          "otherSec": 5.6
+        },
+        {
+          "width": 512,
+          "height": 768,
+          "frames": 16,
+          "steps": 6,
+          "cfg": 1,
+          "samplingSec": 102.2,
+          "decodeSec": 39.6,
+          "otherSec": 5.2
+        },
+        {
+          "width": 512,
+          "height": 512,
+          "frames": 16,
+          "steps": 4,
+          "cfg": 1,
+          "samplingSec": 56.2,
+          "decodeSec": 28.3,
+          "otherSec": 4.5
+        },
+        {
+          "width": 512,
+          "height": 512,
+          "frames": 16,
+          "steps": 8,
+          "cfg": 1,
+          "samplingSec": 97.2,
+          "decodeSec": 28.3,
+          "otherSec": 4.5
+        },
+        {
+          "width": 512,
+          "height": 512,
+          "frames": 16,
+          "steps": 6,
+          "cfg": 1.5,
+          "samplingSec": 138.8,
+          "decodeSec": 28.2,
+          "otherSec": 4.0
+        },
+        {
+          "width": 512,
+          "height": 512,
+          "frames": 8,
+          "steps": 6,
+          "cfg": 1,
+          "samplingSec": 41.8,
+          "decodeSec": 14.2,
+          "otherSec": 3.0
+        }
+      ]
     },
     "image": "optional",
     "models": {
@@ -611,11 +1103,63 @@
       "width": 512,
       "height": 512,
       "frames": 16,
-      "steps": 20,
+      "steps": 25,
       "cfg": 8,
-      "samplingSec": 899,
-      "decodeSec": 57,
-      "otherSec": 1
+      "samplingSec": 454,
+      "decodeSec": 27.9,
+      "otherSec": 4.1,
+      "samples": [
+        {
+          "width": 512,
+          "height": 512,
+          "frames": 16,
+          "steps": 25,
+          "cfg": 8,
+          "samplingSec": 454,
+          "decodeSec": 27.9,
+          "otherSec": 4.1
+        },
+        {
+          "width": 768,
+          "height": 512,
+          "frames": 16,
+          "steps": 25,
+          "cfg": 8,
+          "samplingSec": 654.9,
+          "decodeSec": 41.4,
+          "otherSec": 5.7
+        },
+        {
+          "width": 512,
+          "height": 768,
+          "frames": 16,
+          "steps": 25,
+          "cfg": 8,
+          "samplingSec": 652.8,
+          "decodeSec": 39.6,
+          "otherSec": 5.6
+        },
+        {
+          "width": 512,
+          "height": 512,
+          "frames": 16,
+          "steps": 16,
+          "cfg": 8,
+          "samplingSec": 311.2,
+          "decodeSec": 28,
+          "otherSec": 3.8
+        },
+        {
+          "width": 512,
+          "height": 512,
+          "frames": 16,
+          "steps": 30,
+          "cfg": 8,
+          "samplingSec": 549.3,
+          "decodeSec": 28.2,
+          "otherSec": 4.5
+        }
+      ]
     },
     "image": "optional",
     "models": {
@@ -701,7 +1245,7 @@
     "id": "vid-wan22-5b",
     "kind": "video",
     "name": "Wan 2.2 TI2V 5B (full, slow)",
-    "description": "The full Wan 2.2 5B: the most faithful motion and detail at CFG 5, but 25–40 steps; the Turbo and FastWan modes are 10× faster. Decoded by TAEHV in seconds.",
+    "description": "The full Wan 2.2 5B at CFG 5: the most faithful motion and detail, 2 s (49 frames) in about 8 min at Draft, decoded by TAEHV in seconds; the Turbo and FastWan modes do it in about a minute.",
     "promptQuality": {
       "suffix": "Photorealistic, rich detail, smooth natural motion."
     },
@@ -709,11 +1253,33 @@
       "width": 832,
       "height": 480,
       "frames": 17,
-      "steps": 10,
+      "steps": 12,
       "cfg": 5,
-      "samplingSec": 676,
-      "decodeSec": 2,
-      "otherSec": 0
+      "samplingSec": 145.8,
+      "decodeSec": 0.6,
+      "otherSec": 8.6,
+      "samples": [
+        {
+          "width": 832,
+          "height": 480,
+          "frames": 17,
+          "steps": 12,
+          "cfg": 5,
+          "samplingSec": 145.8,
+          "decodeSec": 0.6,
+          "otherSec": 8.6
+        },
+        {
+          "width": 832,
+          "height": 480,
+          "frames": 49,
+          "steps": 12,
+          "cfg": 5,
+          "samplingSec": 449.4,
+          "decodeSec": 1.4,
+          "otherSec": 8.2
+        }
+      ]
     },
     "image": "optional",
     "minGtt": 22,
@@ -789,11 +1355,11 @@
     "i18n": {
       "uk": {
         "name": "Wan 2.2 TI2V 5B (повна, повільно)",
-        "description": "Повна Wan 2.2 5B: найточніші рух і деталі при CFG 5, але 25–40 кроків; режими Turbo і FastWan у 10 разів швидші. Декодується TAEHV за секунди."
+        "description": "Повна Wan 2.2 5B при CFG 5: найточніші рух і деталі, 2 с (49 кадрів) приблизно за 8 хв у чернетці, декодування TAEHV за секунди; режими Turbo і FastWan роблять це приблизно за хвилину."
       },
       "ru": {
         "name": "Wan 2.2 TI2V 5B (полная, медленно)",
-        "description": "Полная Wan 2.2 5B: самые точные движение и детали при CFG 5, но 25–40 шагов; режимы Turbo и FastWan в 10 раз быстрее. Декодируется TAEHV за секунды."
+        "description": "Полная Wan 2.2 5B при CFG 5: самые точные движение и детали, 2 с (49 кадров) примерно за 8 мин в черновике, декодирование TAEHV за секунды; режимы Turbo и FastWan делают это примерно за минуту."
       }
     }
   },
@@ -801,7 +1367,7 @@
     "id": "vid-wan21-1.3b",
     "kind": "video",
     "name": "Wan 2.1 T2V 1.3B (experimental)",
-    "description": "Lightweight Wan 2.1, text to video only. Not yet tested on this platform.",
+    "description": "Lightweight Wan 2.1, text to video only. Measured the slowest video mode here: a 5 s clip (81 frames) takes about 1 h 50 min, 17 frames 10 min; Wan 2.2 Turbo or FastWan give real motion far faster.",
     "promptQuality": {
       "suffix": "Photorealistic, rich detail, smooth natural motion."
     },
@@ -864,12 +1430,64 @@
     "i18n": {
       "uk": {
         "name": "Wan 2.1 T2V 1.3B (експериментально)",
-        "description": "Легка Wan 2.1, лише текст → відео. На цій платформі ще не перевірялася."
+        "description": "Легка Wan 2.1, лише текст → відео. За замірами найповільніший відеорежим тут: кліп на 5 с (81 кадр) — близько 1 год 50 хв, 17 кадрів — 10 хв; Wan 2.2 Turbo чи FastWan дають справжній рух набагато швидше."
       },
       "ru": {
         "name": "Wan 2.1 T2V 1.3B (экспериментально)",
-        "description": "Лёгкая Wan 2.1, только текст → видео. На этой платформе ещё не проверялась."
+        "description": "Лёгкая Wan 2.1, только текст → видео. По замерам самый медленный видеорежим здесь: клип на 5 с (81 кадр) — около 1 ч 50 мин, 17 кадров — 10 мин; Wan 2.2 Turbo или FastWan дают настоящее движение гораздо быстрее."
       }
+    },
+    "reference": {
+      "width": 832,
+      "height": 480,
+      "frames": 81,
+      "steps": 20,
+      "cfg": 6,
+      "samplingSec": 6087.5,
+      "decodeSec": 488.9,
+      "otherSec": 7.6,
+      "samples": [
+        {
+          "width": 832,
+          "height": 480,
+          "frames": 81,
+          "steps": 20,
+          "cfg": 6,
+          "samplingSec": 6087.5,
+          "decodeSec": 488.9,
+          "otherSec": 7.6
+        },
+        {
+          "width": 480,
+          "height": 832,
+          "frames": 81,
+          "steps": 20,
+          "cfg": 6,
+          "samplingSec": 5749.3,
+          "decodeSec": 455.1,
+          "otherSec": 6.6
+        },
+        {
+          "width": 832,
+          "height": 480,
+          "frames": 81,
+          "steps": 12,
+          "cfg": 6,
+          "samplingSec": 3463.6,
+          "decodeSec": 457.4,
+          "otherSec": 7.0
+        },
+        {
+          "width": 832,
+          "height": 480,
+          "frames": 17,
+          "steps": 20,
+          "cfg": 6,
+          "samplingSec": 522.6,
+          "decodeSec": 96.2,
+          "otherSec": 7.2
+        }
+      ]
     }
   },
   {
@@ -981,8 +1599,8 @@
       }
     },
     "reference": {
-      "fixedSec": 8,
-      "perAudioSec": 0.95
+      "fixedSec": 17.0,
+      "perAudioSec": 0.6913
     },
     "preview": "none",
     "i18n": {
@@ -1021,8 +1639,8 @@
       }
     },
     "reference": {
-      "fixedSec": 2.5,
-      "perAudioSec": 0.15
+      "fixedSec": 3.8,
+      "perAudioSec": 0.0383
     },
     "preview": "none",
     "i18n": {
@@ -1061,8 +1679,8 @@
       }
     },
     "reference": {
-      "fixedSec": 2,
-      "perChar": 0.01
+      "fixedSec": 3.7,
+      "perChar": 0.0031
     },
     "preview": "none",
     "i18n": {
@@ -1090,9 +1708,81 @@
       "frames": 49,
       "steps": 4,
       "cfg": 1,
-      "samplingSec": 77,
-      "decodeSec": 2,
-      "otherSec": 8
+      "samplingSec": 76,
+      "decodeSec": 1.4,
+      "otherSec": 7.6,
+      "samples": [
+        {
+          "width": 832,
+          "height": 480,
+          "frames": 49,
+          "steps": 4,
+          "cfg": 1,
+          "samplingSec": 76,
+          "decodeSec": 1.4,
+          "otherSec": 7.6
+        },
+        {
+          "width": 480,
+          "height": 832,
+          "frames": 49,
+          "steps": 4,
+          "cfg": 1,
+          "samplingSec": 75.8,
+          "decodeSec": 1.4,
+          "otherSec": 7.8
+        },
+        {
+          "width": 1280,
+          "height": 704,
+          "frames": 49,
+          "steps": 4,
+          "cfg": 1,
+          "samplingSec": 231.3,
+          "decodeSec": 3.1,
+          "otherSec": 8.6
+        },
+        {
+          "width": 704,
+          "height": 1280,
+          "frames": 49,
+          "steps": 4,
+          "cfg": 1,
+          "samplingSec": 239.3,
+          "decodeSec": 3.2,
+          "otherSec": 8.5
+        },
+        {
+          "width": 832,
+          "height": 480,
+          "frames": 17,
+          "steps": 4,
+          "cfg": 1,
+          "samplingSec": 26,
+          "decodeSec": 0.7,
+          "otherSec": 4.3
+        },
+        {
+          "width": 832,
+          "height": 480,
+          "frames": 81,
+          "steps": 4,
+          "cfg": 1,
+          "samplingSec": 141.4,
+          "decodeSec": 2.2,
+          "otherSec": 6.4
+        },
+        {
+          "width": 832,
+          "height": 480,
+          "frames": 121,
+          "steps": 4,
+          "cfg": 1,
+          "samplingSec": 258.3,
+          "decodeSec": 3.3,
+          "otherSec": 7.4
+        }
+      ]
     },
     "image": "optional",
     "models": {
@@ -1179,9 +1869,81 @@
       "frames": 49,
       "steps": 3,
       "cfg": 1,
-      "samplingSec": 57,
-      "decodeSec": 2,
-      "otherSec": 8
+      "samplingSec": 57.1,
+      "decodeSec": 1.4,
+      "otherSec": 6.5,
+      "samples": [
+        {
+          "width": 832,
+          "height": 480,
+          "frames": 49,
+          "steps": 3,
+          "cfg": 1,
+          "samplingSec": 57.1,
+          "decodeSec": 1.4,
+          "otherSec": 6.5
+        },
+        {
+          "width": 480,
+          "height": 832,
+          "frames": 49,
+          "steps": 3,
+          "cfg": 1,
+          "samplingSec": 53.7,
+          "decodeSec": 1.4,
+          "otherSec": 5.9
+        },
+        {
+          "width": 1280,
+          "height": 704,
+          "frames": 49,
+          "steps": 3,
+          "cfg": 1,
+          "samplingSec": 175.2,
+          "decodeSec": 3.1,
+          "otherSec": 6.7
+        },
+        {
+          "width": 704,
+          "height": 1280,
+          "frames": 49,
+          "steps": 3,
+          "cfg": 1,
+          "samplingSec": 177.3,
+          "decodeSec": 3.2,
+          "otherSec": 6.5
+        },
+        {
+          "width": 832,
+          "height": 480,
+          "frames": 17,
+          "steps": 3,
+          "cfg": 1,
+          "samplingSec": 19.5,
+          "decodeSec": 0.6,
+          "otherSec": 3.9
+        },
+        {
+          "width": 832,
+          "height": 480,
+          "frames": 81,
+          "steps": 3,
+          "cfg": 1,
+          "samplingSec": 107,
+          "decodeSec": 2.2,
+          "otherSec": 6.8
+        },
+        {
+          "width": 832,
+          "height": 480,
+          "frames": 121,
+          "steps": 3,
+          "cfg": 1,
+          "samplingSec": 196.4,
+          "decodeSec": 3.2,
+          "otherSec": 7.4
+        }
+      ]
     },
     "image": "optional",
     "models": {

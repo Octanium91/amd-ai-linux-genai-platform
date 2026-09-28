@@ -1309,7 +1309,7 @@ export default function GenerateForm({ kind, user, presets, allPresets = [], tem
           <details className="more">
             <summary>{t('Expert settings')}</summary>
             <div className="more-body">
-              <Num label={<>{t('Prompt strictness')} <Info text={t('How literally the model follows the prompt. Higher is more precise but adds overexposure and artifacts; lower is freer and softer. The default is tuned for the mode.')} /></>}
+              <Num label={<>{t('Prompt strictness')} <Info text={t('How literally the model follows the prompt. Higher is more precise but adds overexposure and artifacts; lower is freer and softer. The default is tuned for the mode. At exactly 1 the model runs one pass instead of two: about twice as fast, but the negative prompt is not used.')} /></>}
                 value={form.cfg} onChange={set('cfg')} step={0.5} min={0} max={30} />
               <div className="grid2">
                 <Num label={t('Width')} value={form.width} onChange={set('width')} step={16} min={128} max={2048} />

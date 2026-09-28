@@ -85,7 +85,7 @@ export default {
   "Hardware:": "Железо:",
   "Height": "Высота",
   "High": "Высокое",
-  "How literally the model follows the prompt. Higher is more precise but adds overexposure and artifacts; lower is freer and softer. The default is tuned for the mode.": "Насколько буквально модель выполняет описание. Выше — точнее, но появляются пересвет и артефакты; ниже — свободнее и мягче. Значение по умолчанию подобрано под режим.",
+  "How literally the model follows the prompt. Higher is more precise but adds overexposure and artifacts; lower is freer and softer. The default is tuned for the mode. At exactly 1 the model runs one pass instead of two: about twice as fast, but the negative prompt is not used.": "Насколько буквально модель следует промпту. Выше — точнее, но с пересветами и артефактами; ниже — свободнее и мягче. Значение по умолчанию подобрано под режим. Ровно при 1 модель делает один проход вместо двух: примерно вдвое быстрее, но негативный промпт не используется.",
   "iGPU load": "Загрузка iGPU",
   "Images": "Изображения",
   "in use": "используется",
