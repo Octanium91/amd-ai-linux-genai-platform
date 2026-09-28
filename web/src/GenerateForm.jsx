@@ -937,10 +937,15 @@ export default function GenerateForm({ kind, user, presets, allPresets = [], tem
   const keyModes = KEYFRAME_ORDER.map((id) => allPresets.find((p) => p.id === id && p.available)).filter(Boolean);
   const keyMode = keyModes.find((p) => p.id === form.keyframePreset) || keyModes[0] || null;
   const shots = isVideo && plan.segments > 1 && form.shots !== false && !!keyMode;
-  const keyEta = shots ? estimate(jobs, { presetId: keyMode.id, width: keyMode.defaults?.width, height: keyMode.defaults?.height, cfg: keyMode.defaults?.cfg, steps: qualitySteps(keyMode.defaults || {}, 'normal') ?? 20, frames: 1 }, keyMode, system?.gpuPower) : null;
-  const videoEta = estimate(jobs, isVideo ? { ...form, frames: plan.frames * plan.segments, steps }
+  // The keyframe is drawn near the video size, at least 0.5 MP (as on the server)
+  const keyArea = shots ? Math.min((keyMode.defaults?.width || 512) * (keyMode.defaults?.height || 512), Math.max(form.width * form.height, 0.5e6)) : 0;
+  const keyEta = shots ? estimate(jobs, { presetId: keyMode.id, width: Math.sqrt(keyArea * form.width / form.height), height: Math.sqrt(keyArea * form.height / form.width), cfg: keyMode.defaults?.cfg, steps: qualitySteps(keyMode.defaults || {}, 'normal') ?? 20, frames: 1 }, keyMode, system?.gpuPower) : null;
+  const videoEta = estimate(jobs, isVideo ? { ...form, frames: plan.frames * plan.segments, steps, shots }
     : isAudio ? { ...form, task: task.key } : { ...form, frames: form.count, steps }, preset, system?.gpuPower);
-  const eta = videoEta && keyEta ? { ...videoEta, sec: videoEta.sec + keyEta.sec * plan.segments } : videoEta;
+  // A previous run of the mode already includes its keyframes when it was made of shots
+  const lastRun = jobs.filter((j) => j.status === 'done' && j.params.presetId === form.presetId).sort((a, b) => b.finishedAt - a.finishedAt)[0];
+  const eta = videoEta && keyEta && !(videoEta.source === 'history' && lastRun?.params.shots)
+    ? { ...videoEta, sec: videoEta.sec + keyEta.sec * plan.segments } : videoEta;
   // The time per result of every mode card, at its own default size and the chosen quality
   const modeEta = (p) => {
     if (p.id === form.presetId) return eta;

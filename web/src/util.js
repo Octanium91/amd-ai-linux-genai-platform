@@ -145,6 +145,11 @@ export function estimate(jobs, params, preset, gpuPower) {
   const job = jobs
     .filter((j) => j.status === 'done' && j.params.presetId === params.presetId && j.progress)
     .sort((a, b) => b.finishedAt - a.finishedAt)[0];
+  // A video made of shots scales with its frames as a whole: the keyframes of every part are in it
+  if (job?.params.shots && params.shots && job.durationSec) {
+    const had = (job.params.frames || 1) * (job.params.segments || 1);
+    return { sec: (job.durationSec * (Number(params.frames) || had)) / had, source: 'history' };
+  }
   const samplingSec = job && stageDuration(job, 'sampling');
   if (samplingSec) {
     // Progress is kept per pass: the stage times are of the last pass, so a multi-pass video is
