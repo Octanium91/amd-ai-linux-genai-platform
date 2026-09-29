@@ -33,6 +33,16 @@ RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DAUDIOCPP_MODEL_SET=full -DE
  && cmake --build build --parallel "$(nproc)" --target audiocpp_cli \
  && mkdir -p /out && cp build/bin/audiocpp_cli /out/ && find build -name "*.so*" -exec cp -P {} /out/ \;
 
+# ---------- RIFE frame interpolation (rife-ncnn-vulkan, MIT): only the binary and the v4.6 model ----------
+FROM debian:trixie AS rife
+ARG RIFE_REF=20221029
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates unzip \
+    && rm -rf /var/lib/apt/lists/*
+RUN curl -fsSL -o /tmp/rife.zip "https://github.com/nihui/rife-ncnn-vulkan/releases/download/${RIFE_REF}/rife-ncnn-vulkan-${RIFE_REF}-ubuntu.zip" \
+ && unzip -q /tmp/rife.zip -d /tmp/r && mkdir -p /out \
+ && cp /tmp/r/*/rife-ncnn-vulkan /tmp/r/*/LICENSE /out/ && cp -r /tmp/r/*/rife-v4.6 /out/ \
+ && rm -rf /tmp/rife.zip /tmp/r
+
 # ---------- web UI build ----------
 FROM node:22-trixie-slim AS ui
 WORKDIR /web
@@ -55,6 +65,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=sdcpp /src/build/bin/ /usr/local/bin/
 COPY --from=audiocpp /out/ /opt/audiocpp/
+COPY --from=rife /out/ /opt/rife/
 RUN echo /opt/audiocpp > /etc/ld.so.conf.d/audiocpp.conf && ldconfig && ln -s /opt/audiocpp/audiocpp_cli /usr/local/bin/audiocpp_cli
 COPY --from=deps /usr/local/bin/node /usr/local/bin/node
 RUN mkdir -p /app/server && echo '{"type":"module"}' > /app/server/package.json

@@ -38,7 +38,7 @@ closeInterrupted(interrupted);
 // directories, _ref prepared references, _snd soundtracks, _audio.wav engine output) are useless: remove them
 try {
   for (const f of fs.readdirSync(dirs.output)) {
-    if (/^\.[0-9a-f]{12}_(s\d+|ctrl|ref|snd|audio)/.test(f)) fs.rmSync(path.join(dirs.output, f), { recursive: true, force: true });
+    if (/^\.[0-9a-f]{12}_(s\d+|ctrl|ref|snd|audio|rife)/.test(f)) fs.rmSync(path.join(dirs.output, f), { recursive: true, force: true });
   }
 } catch {}
 
@@ -186,6 +186,52 @@ async function makeThumb(job, src) {
 
 // segments are the segment AVIs in order; from the second one on, the first frame of a segment
 // duplicates the last frame of the previous one (it was the init image) and is dropped when joining
+// Frame interpolation with RIFE (rife-ncnn-vulkan, on the GPU through Vulkan): 98 frames at
+// 1280×704 in 6 s, where minterpolate took 10 s and blurs fast motion. Part by part, so nothing is
+// invented across a cut: each part's frames go through RIFE and are encoded as a chunk, and the
+// chunks are joined without re-encoding. Returns false when anything fails (minterpolate then).
+const rifeReady = () => fs.existsSync(config.rifeBin) && fs.existsSync(config.rifeModel);
+
+async function interpolateRife(job, segments, luts, shots, mp4, fps, outFps) {
+  const work = path.join(dirs.output, `.${job.id}_rife`);
+  fs.rmSync(work, { recursive: true, force: true });
+  const chunks = [];
+  try {
+    for (let i = 0; i < segments.length; i++) {
+      if (job.status !== 'running') return false;
+      const inDir = path.join(work, `in${i}`);
+      const outDir = path.join(work, `out${i}`);
+      fs.mkdirSync(inDir, { recursive: true });
+      fs.mkdirSync(outDir, { recursive: true });
+      // The same frames as the plain join: a continued part drops its repeated first frame and
+      // takes its colour match; a shot is used whole
+      const vf = shots || i === 0 ? 'null' : ['trim=start_frame=1,setpts=PTS-STARTPTS', luts[i]].filter(Boolean).join(',');
+      let r = await runCmd('ffmpeg', ['-loglevel', 'error', '-y', '-i', segments[i], '-vf', vf, '-q:v', '2', path.join(inDir, '%08d.jpg')], 'ffmpeg.frames');
+      const n = r.code === 0 ? fs.readdirSync(inDir).length : 0;
+      if (n < 2) return false;
+      const target = Math.round((n * outFps) / fps);
+      r = await runCmd(config.rifeBin, ['-i', inDir, '-o', outDir, '-m', config.rifeModel, '-n', String(target), '-f', 'jpg', '-g', '0', '-j', '1:2:2'], 'rife');
+      if (r.code !== 0 || fs.readdirSync(outDir).length < target) {
+        console.error(`[worker] ${job.id}: rife: ${r.err.trim().slice(-300)}`);
+        return false;
+      }
+      const chunk = path.join(work, `c${i}.mp4`);
+      r = await runCmd('ffmpeg', ['-loglevel', 'error', '-y', '-framerate', String(outFps), '-i', path.join(outDir, '%08d.jpg'), '-frames:v', String(target),
+        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', chunk], 'ffmpeg.encode');
+      if (r.code !== 0) return false;
+      chunks.push(chunk);
+      fs.rmSync(inDir, { recursive: true, force: true });
+      fs.rmSync(outDir, { recursive: true, force: true });
+    }
+    const list = path.join(work, 'list.txt');
+    fs.writeFileSync(list, chunks.map((c) => `file '${c}'`).join('\n'));
+    const r = await runCmd('ffmpeg', ['-loglevel', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', '-movflags', '+faststart', mp4], 'ffmpeg.encode');
+    return r.code === 0;
+  } finally {
+    fs.rmSync(work, { recursive: true, force: true });
+  }
+}
+
 async function finalizeVideo(job, segments, luts = [], shots = false) {
   const base = baseName(job);
   const mp4 = path.join(dirs.output, base + '.mp4');
@@ -214,7 +260,8 @@ async function finalizeVideo(job, segments, luts = [], shots = false) {
     return runCmd('ffmpeg', ['-loglevel', 'error', '-y', ...inputs, '-filter_complex', graph, '-map', '[out]', '-frames:v', String(outFrames),
       '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', '-movflags', '+faststart', mp4], withInterp && interp ? 'ffmpeg.encode+interpolate' : 'ffmpeg.encode');
   };
-  let conv = await encode(true);
+  let conv = interp && rifeReady() && (await interpolateRife(job, segments, luts, shots, mp4, fps, outFps)) ? { code: 0, err: '' } : null;
+  if (!conv) conv = await encode(true);
   if (conv.code !== 0 && interp) {
     job.warning = `Interpolation to ${outFps} fps failed, saved at ${fps} fps`;
     conv = await encode(false);

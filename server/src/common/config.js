@@ -14,6 +14,9 @@ export const config = {
   workerUrl: process.env.WORKER_URL || 'http://127.0.0.1:7861',
   sdCli: process.env.SD_CLI || 'sd-cli',
   audioCli: process.env.AUDIO_CLI || 'audiocpp_cli',
+  // RIFE frame interpolation (rife-ncnn-vulkan): the binary and its model directory
+  rifeBin: process.env.RIFE_BIN || '/opt/rife/rife-ncnn-vulkan',
+  rifeModel: process.env.RIFE_MODEL || '/opt/rife/rife-v4.6',
   hfToken: process.env.HF_TOKEN || '',
   cookieSecure: process.env.COOKIE_SECURE === 'true',
   trustProxy: process.env.TRUST_PROXY === 'true',
