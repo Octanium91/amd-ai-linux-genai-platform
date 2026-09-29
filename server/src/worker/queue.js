@@ -492,11 +492,11 @@ function quietParse(job, line) {
 }
 
 // From the second shot on, the keyframe is redrawn from the last frame of the previous shot with the
-// next action (image to image at strength 0.7): the new shot starts where the last one ended, with
+// next action (image to image at strength 0.75): the new shot starts where the last one ended, with
 // the same place, light and characters, instead of a brand-new picture. Chained redraws drift (a
 // 1280×704 run grew darker and redder shot by shot, and Superman ended up in a bat cowl), so every
 // keyframe is colour-matched to the first one, the scene's anchor, and the redraw is strong enough
-// for the prompt's looks to restore the characters.
+// (0.75) for the prompt's looks to restore the characters.
 async function keyframe(job, i, tmpBase, log, prevShot = null) {
   const k = job.spec.keyframe;
   const p = job.params;
@@ -508,7 +508,7 @@ async function keyframe(job, i, tmpBase, log, prevShot = null) {
     if (job.status !== 'running') return null;
     if (r.code !== 0 || !fs.existsSync(from)) from = null;
   }
-  const kp = { ...p, ...k.params, prompt: p.prompts?.[i] || p.prompt, prompts: null, seed: p.seed + i, count: 1, task: 'create', image: null, mask: null, strength: from ? 0.7 : null, flowShift: null };
+  const kp = { ...p, ...k.params, prompt: p.prompts?.[i] || p.prompt, prompts: null, seed: p.seed + i, count: 1, task: 'create', image: null, mask: null, strength: from ? 0.75 : null, flowShift: null };
   const args = buildArgs({ ...job, params: kp }, { ...k, kind: 'image', preview: null }, outBase, null, null, null, 0, from);
   const { code, signal, spawnError } = await runSd(job, args, log, config.sdCli, quietParse);
   if (job.status !== 'running') return null;
