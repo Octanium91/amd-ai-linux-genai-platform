@@ -396,10 +396,12 @@ export async function enhancePrompt(s, preset, input, signal = null) {
 //   - the language model writes only what changes: one action and one camera move per part, along a
 //     story arc (setup, rising action, climax, ending inside the same event), naming the characters
 //     exactly as the idea does. It never describes looks, the place or the light.
-// Long videos are planned in two steps: the arc as a few beats (about one per 12 s), then each beat
+// Long videos are planned in two steps: the arc as a few beats (about one per 6 s, at least three), then each beat
 // written out into its parts, knowing how the previous one ended. The fields are numbered and required
 // (b1…bN, a1…aN, c1…cN): a small model given an array writes a few items and stops.
-const BEAT_SECONDS = 12;
+// About one story beat per 6 s, and at least three (setup, clash, climax): with one beat for a 12 s
+// video the model spent half of it on a setup (landing, stepping out) before anything happened
+const BEAT_SECONDS = 6;
 
 const BEATS_EXAMPLE = {
   ask: '4 beats\nIdea: два рыцаря сражаются на мосту',
@@ -489,7 +491,7 @@ export async function storyboard(s, preset, input, signal = null) {
   const seconds = Math.round(parts * partSeconds);
   const style = promptStyle(preset);
   const started = Date.now();
-  const nBeats = Math.max(1, Math.min(12, Math.round(seconds / BEAT_SECONDS), parts));
+  const nBeats = Math.min(parts, 12, Math.max(3, Math.round(seconds / BEAT_SECONDS)));
 
   // 1. The arc as beats, and the anchor
   const b = await chatJson(s, beatsSystem(nBeats, seconds), BEATS_EXAMPLE, `${nBeats} beats\nIdea: ${input.idea}`,
