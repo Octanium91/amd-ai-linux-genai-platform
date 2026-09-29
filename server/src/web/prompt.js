@@ -442,7 +442,8 @@ function partsSystem(style, n) {
   return [
     `Write ${n} consecutive parts that play out the given beat, from where "Before" ended to where "After" begins. For each part k write:`,
     '- ak: the action of that part, naming the characters exactly as in Names (no pronouns, no nicknames); one small continuous step, different from the other parts, a little more intense as the beat builds. It never describes looks, the place or the light.',
-    '- ck: the camera for that part in at most 6 words (shot size or movement).',
+    '- ck: the camera for that part in at most 6 words: a shot size (wide, medium, close-up) and an angle or movement.',
+    'Direct it like a film: vary the shot size and angle from part to part (never the same shot twice in a row), keep screen direction (a character on the left stays on the left), and split a big action across parts (the wind-up in one, the impact in the next) so the cuts connect.',
     style === 'tags'
       ? 'Each action is a short English phrase of at most 15 words, present tense, only things that can be seen.'
       : 'Each action is one English sentence of 10 to 30 words, present tense, with the speed and size of the motion, only things that can be seen.',
