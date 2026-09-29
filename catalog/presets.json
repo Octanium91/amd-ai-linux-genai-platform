@@ -1698,7 +1698,7 @@
     "id": "vid-wan22-turbo",
     "kind": "video",
     "name": "Wan 2.2 5B Turbo (real motion, fast)",
-    "description": "Real Wan motion in 4 steps: a 2 s shot at 832×480 in about 1.5 minutes, the most action per shot. Best from a photo or a keyframe.",
+    "description": "Real Wan motion in 4 steps: a 2 s shot at 832×480 in about 1.5 minutes, the most action per shot. Best from a photo or a keyframe. 1280×704 is the size the model was trained at: the sharpest, about 3× the time.",
     "promptQuality": {
       "suffix": "Photorealistic, natural colors, rich detail, smooth natural motion."
     },
@@ -1836,6 +1836,14 @@
       [
         480,
         832
+      ],
+      [
+        1280,
+        704
+      ],
+      [
+        704,
+        1280
       ]
     ],
     "preview": "proj",
@@ -1847,11 +1855,11 @@
     "i18n": {
       "uk": {
         "name": "Wan 2.2 5B Turbo (справжній рух, швидко)",
-        "description": "Справжній рух Wan за 4 кроки: план у 2 с при 832×480 приблизно за 1,5 хвилини, найбільше дії в плані. Найкраще — з фото чи ключового кадру."
+        "description": "Справжній рух Wan за 4 кроки: план у 2 с при 832×480 приблизно за 1,5 хвилини, найбільше дії в плані. Найкраще — з фото чи ключового кадру. 1280×704 — розмір, на якому модель навчали: найчіткіше, приблизно втричі довше."
       },
       "ru": {
         "name": "Wan 2.2 5B Turbo (настоящее движение, быстро)",
-        "description": "Настоящее движение Wan за 4 шага: план в 2 с при 832×480 примерно за 1,5 минуты, больше всего действия в плане. Лучше всего — с фото или ключевого кадра."
+        "description": "Настоящее движение Wan за 4 шага: план в 2 с при 832×480 примерно за 1,5 минуты, больше всего действия в плане. Лучше всего — с фото или ключевого кадра. 1280×704 — размер, на котором модель обучали: чётче всего, примерно втрое дольше."
       }
     }
   },
@@ -1859,7 +1867,7 @@
     "id": "vid-fastwan22",
     "kind": "video",
     "name": "FastWan 2.2 5B (real motion, fast)",
-    "description": "Real Wan motion in 3 steps: a 2 s shot at 832×480 in about a minute. Apache-2.0.",
+    "description": "Real Wan motion in 3 steps: a 2 s shot at 832×480 in about a minute. Apache-2.0. 1280×704 is the size the model was trained at: the sharpest, about 3× the time.",
     "promptQuality": {
       "suffix": "Photorealistic, natural colors, rich detail, smooth natural motion."
     },
@@ -1997,6 +2005,14 @@
       [
         480,
         832
+      ],
+      [
+        1280,
+        704
+      ],
+      [
+        704,
+        1280
       ]
     ],
     "preview": "proj",
@@ -2008,11 +2024,11 @@
     "i18n": {
       "uk": {
         "name": "FastWan 2.2 5B (справжній рух, швидко)",
-        "description": "Справжній рух Wan за 3 кроки: план у 2 с при 832×480 приблизно за хвилину. Apache-2.0."
+        "description": "Справжній рух Wan за 3 кроки: план у 2 с при 832×480 приблизно за хвилину. Apache-2.0. 1280×704 — розмір, на якому модель навчали: найчіткіше, приблизно втричі довше."
       },
       "ru": {
         "name": "FastWan 2.2 5B (настоящее движение, быстро)",
-        "description": "Настоящее движение Wan за 3 шага: план в 2 с при 832×480 примерно за минуту. Apache-2.0."
+        "description": "Настоящее движение Wan за 3 шага: план в 2 с при 832×480 примерно за минуту. Apache-2.0. 1280×704 — размер, на котором модель обучали: чётче всего, примерно втрое дольше."
       }
     }
   }
