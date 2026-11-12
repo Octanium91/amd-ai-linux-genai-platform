@@ -212,7 +212,7 @@ api.post('/jobs', beforeUpload, jobFiles, async (req, res) => {
   if (!preset.available) return reject('Models not downloaded: ' + preset.missing.map((m) => m.name).join(', '));
   const task = b.task && TASK_INPUTS[b.task] ? b.task : preset.tasks[0];
   // An engine of an older version would ignore the photo, mask, video or shots and silently do something else
-  if ((task !== 'create' || b.shots === 'true') && !(await workerState()).worker?.compatible) return reject('The generation engine is being updated, try again in a minute');
+  if ((task !== 'create' || b.shots === 'true' || preset.keyframeStart) && !(await workerState()).worker?.compatible) return reject('The generation engine is being updated, try again in a minute');
   if (!preset.tasks.includes(task)) return reject('This mode cannot do this task');
   const needs = TASK_INPUTS[task];
   if (needs.instant) return reject('This task runs without the queue');
@@ -278,11 +278,15 @@ api.post('/jobs', beforeUpload, jobFiles, async (req, res) => {
 
   const params = jobParams(preset, b, inputs.image, { ...inputs, task });
   const spec = jobSpec(preset);
-  if (params.shots) {
+  if (params.shots || params.keyframe) {
     const key = pickKeyframe(b.keyframePreset);
-    if (!key) return reject('A video made of shots needs an image mode: an administrator can download one in Models');
-    spec.keyframe = keyframeSpec(key, params.width, params.height);
-    params.keyframePreset = key.id;
+    if (!key && params.shots) return reject('A video made of shots needs an image mode: an administrator can download one in Models');
+    // Without an image mode the first frame cannot be drawn: the video mode starts from the text
+    if (!key) delete params.keyframe;
+    else {
+      spec.keyframe = keyframeSpec(key, params.width, params.height);
+      params.keyframePreset = key.id;
+    }
   }
   try {
     res.json(await callWorker('/v1/jobs', {
@@ -408,10 +412,10 @@ api.post('/jobs/:id/retry', async (req, res) => {
     }
   }
   const spec = jobSpec(preset);
-  if (job.params.shots) {
+  if (job.params.shots || job.params.keyframe) {
     const key = pickKeyframe(job.params.keyframePreset);
-    if (!key) return res.status(400).json({ error: 'A video made of shots needs an image mode: an administrator can download one in Models' });
-    spec.keyframe = keyframeSpec(key, job.params.width, job.params.height);
+    if (!key && job.params.shots) return res.status(400).json({ error: 'A video made of shots needs an image mode: an administrator can download one in Models' });
+    if (key) spec.keyframe = keyframeSpec(key, job.params.width, job.params.height);
   }
   res.json(await callWorker(`/v1/jobs/${job.id}/retry`, { method: 'POST', body: { spec } }));
 });

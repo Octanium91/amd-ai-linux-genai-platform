@@ -144,6 +144,9 @@ export function jobParams(preset, body, image, inputs = {}) {
       params.shots = true;
       params.duration = (plan.frames * plan.segments) / plan.fps;
     }
+    // The fast Wan 5B distills draw a smeared picture from text alone (a fisherman without a face)
+    // but animate a photo well: without a photo, an image mode draws the first frame (keyframeStart)
+    if (preset.keyframeStart && !params.shots && !image && inputs.task === 'create') params.keyframe = true;
   }
   return params;
 }

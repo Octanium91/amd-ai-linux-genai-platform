@@ -45,7 +45,8 @@ export const config = {
 // 5: long videos: a prompt per part (prompts), a seed per part, colour-matched seams
 // 6: long videos made of shots: a keyframe per part drawn by an image model (shots, spec.keyframe)
 // 7: the tae model role (TAEHV decoder); shot keyframes chained from the previous shot's last frame
-export const WORKER_API = 7;
+// 8: text to video may start from a first frame drawn by an image model (keyframe, spec.keyframe)
+export const WORKER_API = 8;
 
 // Some directories are mounted read-only in one of the containers (output in web, models in worker)
 for (const d of Object.values(config.dirs)) {

@@ -605,6 +605,8 @@ export default {
   "A new shot per part": "Новий план у кожній частині",
   "A video made of shots needs an image mode: an administrator can download one in Models": "Відео з планів потребує режиму зображень: адміністратор може завантажити його в розділі «Моделі»",
   "Could not prepare the keyframe:": "Не вдалося підготувати ключовий кадр:",
+  "The first frame is drawn by {mode}, then animated: from text alone this mode draws a smeared picture.": "Перший кадр малює {mode}, потім він оживляється: за самим текстом цей режим дає змазану картинку.",
+  "From text alone this mode draws a smeared picture. Add a photo, or download an image mode in Models to have the first frame drawn.": "За самим текстом цей режим дає змазану картинку. Додайте фото або завантажте режим зображень у розділі «Моделі», щоб перший кадр було намальовано.",
   "Every part continues from the last frame of the previous one. Download an image mode for a video made of shots.": "Кожна частина продовжує останній кадр попередньої. Для відео з планів завантажте режим зображень.",
   "Every part continues from the last frame of the previous one: smooth, but the action barely changes.": "Кожна частина продовжує останній кадр попередньої: плавно, але дія майже не змінюється.",
   "Every part starts from its own keyframe drawn by an image mode, so the action really changes; the parts are joined with cuts.": "Кожна частина починається зі свого ключового кадру, намальованого режимом зображень, тож дія справді змінюється; частини склеюються монтажем.",

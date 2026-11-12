@@ -654,6 +654,12 @@ async function run(job) {
         key = i === 0 && job.params.image ? null : await keyframe(job, i, tmpBase, log, outputs[i - 1] || null);
         if (job.status !== 'running') break;
         current.tel?.phase('prepare', { segment: i + 1 });
+      } else if (i === 0 && job.params.keyframe && job.spec.keyframe && !job.params.image) {
+        // Text to video in a mode that draws poorly from text alone: the image mode draws the
+        // first frame and the video mode animates it; later parts continue from the last frame
+        key = await keyframe(job, 0, tmpBase, log);
+        if (job.status !== 'running') break;
+        current.tel?.phase('prepare', { segment: 1 });
       } else if (i > 0) {
         // Continuation: the last frame of the previous segment becomes the init image of the next one
         init = `${tmpBase}_s${i - 1}_last.png`;

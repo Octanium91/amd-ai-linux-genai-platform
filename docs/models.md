@@ -67,7 +67,7 @@ The form starts with the task, and the mode list shows only the modes that fit i
 
 | Task | Kind | Inputs | How it runs |
 |---|---|---|---|
-| **Create** | image, video | a description | text → image or video |
+| **Create** | image, video | a description | text → image or video. The fast Wan 2.2 5B modes (`keyframeStart` in the mode) draw a smeared picture from text alone but animate a photo well, so there an image mode (the same choice as for shots, Z-Image Turbo first) draws the first frame from the prompt and the video mode animates it (`params.keyframe`, `spec.keyframe`); without an installed image mode they start from the text |
 | **Rework a photo** | image | a photo, "how much to change" | image → image (`-i`, `--strength`); the size follows the photo's aspect ratio |
 | **Change a part** | image | a photo, a part painted over it with the brush, "how much to change" | inpainting: `--mask` (white is repainted, black kept); afterwards ffmpeg pastes the original photo back outside the widened, feathered mask, so the rest keeps its sharpness and no seam of the 8 px latent grid shows |
 | **Remove background** | image | a photo | BiRefNet lite (ONNX) on the CPU in the web container, no job and no GPU queue: `POST /api/cutout` returns the subject mask, the browser shows the cut-out over a checkerboard, "keep" and "remove" brushes paint on its transparency, and the PNG is exported in the browser (~3–7 s per photo) |

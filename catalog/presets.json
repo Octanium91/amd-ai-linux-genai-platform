@@ -1698,6 +1698,7 @@
     "id": "vid-wan22-turbo",
     "kind": "video",
     "name": "Wan 2.2 5B Turbo (real motion, fast)",
+    "keyframeStart": true,
     "description": "Real Wan motion in 4 steps: a 2 s shot at 832×480 in about 1.5 minutes, the most action per shot. Best from a photo or a keyframe. 1280×704 is the size the model was trained at: the sharpest, about 3× the time.",
     "promptQuality": {
       "suffix": "Photorealistic, natural colors, rich detail, smooth natural motion."
@@ -1867,6 +1868,7 @@
     "id": "vid-fastwan22",
     "kind": "video",
     "name": "FastWan 2.2 5B (real motion, fast)",
+    "keyframeStart": true,
     "description": "Real Wan motion in 3 steps: a 2 s shot at 832×480 in about a minute. Apache-2.0. 1280×704 is the size the model was trained at: the sharpest, about 3× the time.",
     "promptQuality": {
       "suffix": "Photorealistic, natural colors, rich detail, smooth natural motion."

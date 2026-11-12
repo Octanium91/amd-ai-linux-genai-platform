@@ -248,6 +248,15 @@ check('shots: a keyframe per part, animated with the image strength, joined whol
   && Math.abs(shDur - 27 / 8) < 0.06 && !outputFiles().some((f) => /_key|_init/.test(f)),
   `${sh.status} ${sh.error || ''} keys ${keyRuns.length} videos ${vidRuns.length} ${shDur} s`);
 
+// Text to video with a drawn first frame: the image mode draws it, the first part animates it and
+// the next part continues from the last frame as usual
+let kf = (await api('/v1/jobs', 'POST', { user: 'test', spec: shotSpec, params: { ...video(2).params, keyframe: true } })).body;
+kf = await waitFor(kf.id, (j) => ['done', 'failed'].includes(j.status));
+const kfRuns = fs.readFileSync(`${DATA}/state/logs/${kf.id}.log`, 'utf8').split('\n').filter((l) => l.startsWith('$ '));
+check('first frame: drawn once, animated, then continued from the last frame', kf.status === 'done' && kfRuns.length === 3
+  && / -M img_gen /.test(kfRuns[0]) && kfRuns[1].includes('_s0_init.png --strength 0.75') && kfRuns[2].includes('_s0_last.png --strength 0.55')
+  && !outputFiles().some((f) => /_key|_init/.test(f)), `${kf.status} ${kf.error || ''} runs ${kfRuns.length}`);
+
 // Audio: one audio.cpp run with the mode's engine settings; the result is an MP3 with a waveform
 // thumbnail and its measured length
 fs.mkdirSync(`${DATA}/models/audio`, { recursive: true });

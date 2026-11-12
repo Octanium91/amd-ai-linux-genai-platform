@@ -938,14 +938,17 @@ export default function GenerateForm({ kind, user, presets, allPresets = [], tem
   const keyMode = keyModes.find((p) => p.id === form.keyframePreset) || keyModes[0] || null;
   const shots = isVideo && plan.segments > 1 && form.shots !== false && !!keyMode;
   // The keyframe is drawn near the video size, at least 0.5 MP (as on the server)
-  const keyArea = shots ? Math.min((keyMode.defaults?.width || 512) * (keyMode.defaults?.height || 512), Math.max(form.width * form.height, 0.5e6)) : 0;
-  const keyEta = shots ? estimate(jobs, { presetId: keyMode.id, width: Math.sqrt(keyArea * form.width / form.height), height: Math.sqrt(keyArea * form.height / form.width), cfg: keyMode.defaults?.cfg, steps: qualitySteps(keyMode.defaults || {}, 'normal') ?? 20, frames: 1 }, keyMode, system?.gpuPower) : null;
+  // Text to video in a mode that draws poorly from text alone: an image mode draws the first frame
+  const startKey = isVideo && !!preset?.keyframeStart && !shots && task.key === 'create' && !(image || imageRef);
+  const keyCount = shots ? plan.segments : startKey && keyMode ? 1 : 0;
+  const keyArea = keyCount ? Math.min((keyMode.defaults?.width || 512) * (keyMode.defaults?.height || 512), Math.max(form.width * form.height, 0.5e6)) : 0;
+  const keyEta = keyCount ? estimate(jobs, { presetId: keyMode.id, width: Math.sqrt(keyArea * form.width / form.height), height: Math.sqrt(keyArea * form.height / form.width), cfg: keyMode.defaults?.cfg, steps: qualitySteps(keyMode.defaults || {}, 'normal') ?? 20, frames: 1 }, keyMode, system?.gpuPower) : null;
   const videoEta = estimate(jobs, isVideo ? { ...form, frames: plan.frames * plan.segments, steps, shots }
     : isAudio ? { ...form, task: task.key } : { ...form, frames: form.count, steps }, preset, system?.gpuPower);
   // A previous run of the mode already includes its keyframes when it was made of shots
   const lastRun = jobs.filter((j) => j.status === 'done' && j.params.presetId === form.presetId).sort((a, b) => b.finishedAt - a.finishedAt)[0];
-  const eta = videoEta && keyEta && !(videoEta.source === 'history' && lastRun?.params.shots)
-    ? { ...videoEta, sec: videoEta.sec + keyEta.sec * plan.segments } : videoEta;
+  const eta = videoEta && keyEta && !(videoEta.source === 'history' && (lastRun?.params.shots || lastRun?.params.keyframe))
+    ? { ...videoEta, sec: videoEta.sec + keyEta.sec * keyCount } : videoEta;
   // The expected time with one setting changed, shown on its chip, so a choice shows what it costs
   const etaWith = (o) => {
     const f = { ...form, ...o };
@@ -1261,6 +1264,9 @@ export default function GenerateForm({ kind, user, presets, allPresets = [], tem
             <div className="note warn">⚠ {t('Passes of {frames} frames are longer than the model was trained on ({trained}): the video may lose the subject and turn into a texture. The prompt will suffer.', { frames: plan.frames, trained: plan.trainedFrames })}</div>
           )}
         </label>
+        {startKey && (keyMode
+          ? <div className="field-hint">{t('The first frame is drawn by {mode}, then animated: from text alone this mode draws a smeared picture.', { mode: loc(keyMode, 'name') })}</div>
+          : <div className="note warn">⚠ {t('From text alone this mode draws a smeared picture. Add a photo, or download an image mode in Models to have the first frame drawn.')}</div>)}
         {plan.segments > 1 && <StoryboardField form={form} set={set} preset={preset} plan={plan} hasImage={!!(acceptsImage && (image || imageRef))} shots={shots} keyModes={keyModes} keyMode={keyMode} />}
         </>
       ) : (
