@@ -12,6 +12,13 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+# A marker file makes the next run fail for lack of GPU memory, once
+if [ -f /data/t/nomem ]; then
+  rm -f /data/t/nomem
+  echo "[WARN   ] model_manager.cpp:1826 - model manager cannot make enough memory available on Vulkan0: need 990.17 MB device"
+  echo "[ERROR  ] main.cpp:928  - generate failed"
+  exit 1
+fi
 steps=${FAKE_STEPS:-6}
 sample() {
   for i in $(seq 1 "$steps"); do

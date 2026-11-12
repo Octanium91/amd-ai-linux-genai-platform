@@ -35,6 +35,11 @@ async function ollama(base, path, body, timeoutMs = 8000, signal = null) {
   return data;
 }
 
+// The assistant shares the GPU memory with the generations: a model left loaded after its answer
+// (5.7 GB for a minute) made the keyframe of the very next job fail for lack of memory. It is
+// unloaded as soon as the answer is written; loading it again takes a few seconds.
+const unload = (s, model = s.model) => ollama(s.url, '/api/generate', { model, keep_alive: 0 }, 8000).catch(() => {});
+
 // Ollama reports "dolphin-phi" as "dolphin-phi:latest"
 const sameModel = (a, b) => a === b || a === `${b}:latest` || `${a}:latest` === b;
 
@@ -580,6 +585,7 @@ export function promptRoutes(api) {
       const r = await enhancePrompt(s, preset, { idea, width: req.body.width, height: req.body.height, duration: req.body.duration, hasImage: !!req.body.hasImage, task: String(req.body.task || ''), lyricsMode: String(req.body.lyricsMode || '') }, abort.signal);
       if (r.truncated) return res.status(502).json({ error: 'The model answer was cut off, try a shorter description' });
       if (!r.prompt) return res.status(502).json({ error: 'The model returned an empty prompt, try again' });
+      await unload(s);
       res.json(r);
     } catch (e) {
       if (abort.signal.aborted) return;
@@ -611,6 +617,7 @@ export function storyboardRoutes(api) {
       const r = await storyboard({ ...s, model: s.storyboardModel || s.model }, preset, { idea, parts: req.body.parts, partSeconds: req.body.partSeconds, hasImage: !!req.body.hasImage }, abort.signal);
       if (r.truncated) return res.status(502).json({ error: 'The model answer was cut off, try a shorter description' });
       if (!r.prompts) return res.status(502).json({ error: 'The model returned an empty prompt, try again' });
+      await unload(s, s.storyboardModel || s.model);
       res.json(r);
     } catch (e) {
       if (abort.signal.aborted) return;

@@ -10,7 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { config } from '../common/config.js';
 import { debouncedWriter, readJson, statePath } from '../common/store.js';
-import { colorMatchFilter, frameStats } from './color.js';
+import { colorMatchFilter, frameStats, rampFilter } from './color.js';
 import { closeInterrupted, startTelemetry } from './telemetry.js';
 
 const { dirs } = config;
@@ -81,10 +81,20 @@ function parseAudioLine(job, line) {
   if (/^audio_out=/.test(line)) setStage(job, 'saving');
 }
 
+// The GPU memory is shared with everything else on the machine (an Ollama model, another engine):
+// when the engine cannot get its share, the job says so instead of "generate failed"
+const NO_MEMORY = /cannot make enough memory available|ErrorOutOfDeviceMemory|failed to allocate/i;
+function engineError(job, spawnError, fallback) {
+  if (spawnError) return spawnError.message;
+  if (job._noMemory) return 'Not enough GPU memory: another program is using it (for example a language model in Ollama). Try again in a minute';
+  return job.lastErrors?.at(-1) || fallback;
+}
+
 function parseLine(job, line) {
   const pr = job.progress;
   if (!line.trim()) return;
   let m;
+  if (NO_MEMORY.test(line)) job._noMemory = true;
   if (/\[ERROR/.test(line) && !/gguf_init_from_reader|failed to read tensor info/.test(line)) {
     job.lastErrors = [...(job.lastErrors || []).slice(-4), line.trim()];
   }
@@ -205,7 +215,7 @@ async function interpolateRife(job, segments, luts, shots, mp4, fps, outFps) {
       fs.mkdirSync(outDir, { recursive: true });
       // The same frames as the plain join: a continued part drops its repeated first frame and
       // takes its colour match; a shot is used whole
-      const vf = shots || i === 0 ? 'null' : ['trim=start_frame=1,setpts=PTS-STARTPTS', luts[i]].filter(Boolean).join(',');
+      const vf = shots ? 'null' : i === 0 ? luts[0] || 'null' : ['trim=start_frame=1,setpts=PTS-STARTPTS', luts[i]].filter(Boolean).join(',');
       let r = await runCmd('ffmpeg', ['-loglevel', 'error', '-y', '-i', segments[i], '-vf', vf, '-q:v', '2', path.join(inDir, '%08d.jpg')], 'ffmpeg.frames');
       const n = r.code === 0 ? fs.readdirSync(inDir).length : 0;
       if (n < 2) return false;
@@ -245,9 +255,9 @@ async function finalizeVideo(job, segments, luts = [], shots = false) {
   const encode = (withInterp) => {
     const inputs = segments.flatMap((f) => ['-i', f]);
     const parts = segments.map((f, i) => (i === 0
-      ? '[0:v]setpts=PTS-STARTPTS[s0]'
+      ? `[0:v]setpts=PTS-STARTPTS${!shots && luts[0] ? `,${luts[0]}` : ''}${!shots && segments.length > 1 ? ',format=yuv420p' : ''}[s0]`
       : shots ? `[${i}:v]setpts=PTS-STARTPTS[s${i}]`
-        : `[${i}:v]trim=start_frame=1,setpts=PTS-STARTPTS${luts[i] ? `,${luts[i]}` : ''}[s${i}]`));
+        : `[${i}:v]trim=start_frame=1,setpts=PTS-STARTPTS${luts[i] ? `,${luts[i]}` : ''},format=yuv420p[s${i}]`));
     const chain = segments.length > 1
       ? `${parts.join(';')};${segments.map((f, i) => `[s${i}]`).join('')}concat=n=${segments.length}:v=1:a=0[c]`
       : '[0:v]null[c]';
@@ -449,6 +459,27 @@ function runSd(job, args, log, program = config.sdCli, parse = parseLine) {
   });
 }
 
+// The GPU memory is shared with the rest of the machine, and another program may hold it only for a
+// moment (a language model that Ollama unloads a minute after its last answer). A run that failed
+// for lack of memory is repeated twice, half a minute apart: a long video must not lose its
+// finished parts to that.
+const MEMORY_RETRIES = 2;
+const MEMORY_WAIT_MS = Number(process.env.MEMORY_WAIT_MS) || 30000;
+async function runSdRetry(job, args, log, program = config.sdCli, parse = parseLine) {
+  for (let attempt = 0; ; attempt++) {
+    job._noMemory = false;
+    const r = await runSd(job, args, log, program, parse);
+    if (r.code === 0 || !job._noMemory || attempt >= MEMORY_RETRIES || job.status !== 'running') return r;
+    log.write(`
+[worker] not enough GPU memory, trying again in ${MEMORY_WAIT_MS / 1000} s (attempt ${attempt + 2} of ${MEMORY_RETRIES + 1})
+`);
+    job.lastErrors = [];
+    setStage(job, 'prepare');
+    for (let waited = 0; waited < MEMORY_WAIT_MS && job.status === 'running'; waited += 500) await new Promise((res) => setTimeout(res, 500));
+    if (job.status !== 'running') return r;
+  }
+}
+
 // The control video for video to video (VACE): the uploaded video at the job's fps and size,
 // cut to its frame count, as contours (edges: keeps the motion and shapes, the look comes from the
 // prompt and the reference) or in grayscale (gray: keeps more of the original). Frames go to a
@@ -533,6 +564,7 @@ async function finalizeAudio(job, wav) {
 // part's scene (at its own size, of the video's shape), and ffmpeg fits it to the video size. The
 // video model then animates it like a photo, so the action of every part really changes.
 function quietParse(job, line) {
+  if (NO_MEMORY.test(line)) job._noMemory = true;
   if (/\[ERROR/.test(line) && !/gguf_init_from_reader|failed to read tensor info/.test(line)) {
     job.lastErrors = [...(job.lastErrors || []).slice(-4), line.trim()];
   }
@@ -557,10 +589,10 @@ async function keyframe(job, i, tmpBase, log, prevShot = null) {
   }
   const kp = { ...p, ...k.params, prompt: p.prompts?.[i] || p.prompt, prompts: null, seed: p.seed + i, count: 1, task: 'create', image: null, mask: null, strength: from ? 0.75 : null, flowShift: null };
   const args = buildArgs({ ...job, params: kp }, { ...k, kind: 'image', preview: null }, outBase, null, null, null, 0, from);
-  const { code, signal, spawnError } = await runSd(job, args, log, config.sdCli, quietParse);
+  const { code, signal, spawnError } = await runSdRetry(job, args, log, config.sdCli, quietParse);
   if (job.status !== 'running') return null;
   if (code !== 0 || !fs.existsSync(`${outBase}.png`)) {
-    throw new Error(spawnError?.message || job.lastErrors?.at(-1) || `The keyframe could not be drawn (sd-cli exited with code ${code}${signal ? `, ${signal}` : ''})`);
+    throw new Error(engineError(job, spawnError, `The keyframe could not be drawn (sd-cli exited with code ${code}${signal ? `, ${signal}` : ''})`));
   }
   const init = `${tmpBase}_s${i}_init.png`;
   const vf = `scale=${p.width}:${p.height}:force_original_aspect_ratio=increase,crop=${p.width}:${p.height}`;
@@ -597,7 +629,9 @@ async function run(job) {
   const segments = job.params.segments || 1;
   const tmpBase = path.join(dirs.output, `.${job.id}`);
   const outputs = [];
+  // Colour grading of a continuous shot: a ramp per part and the correction of its last frame
   const luts = [];
+  const ends = [];
   job.startedAt = Date.now();
   job.progress = newProgress(1, segments);
   current = { job, proc: null, tel: null };
@@ -664,7 +698,7 @@ async function run(job) {
         // Continuation: the last frame of the previous segment becomes the init image of the next one
         init = `${tmpBase}_s${i - 1}_last.png`;
         const r = await runCmd('ffmpeg', ['-loglevel', 'error', '-y', '-sseof', '-0.5', '-i', outputs[i - 1],
-          ...(luts[i - 1] ? ['-vf', luts[i - 1]] : []), '-update', '1', '-q:v', '1', init], 'ffmpeg.last_frame');
+          ...(ends[i - 1] ? ['-vf', ends[i - 1]] : []), '-update', '1', '-q:v', '1', init], 'ffmpeg.last_frame');
         if (job.status !== 'running') break;
         if (r.code !== 0 || !fs.existsSync(init)) throw new Error('Could not extract the last frame of the segment: ' + r.err.trim());
         const prev = job.progress;
@@ -680,16 +714,21 @@ async function run(job) {
       if (controlDir || refImage) current.tel?.phase('prepare', { segment: i + 1 });
       const args = buildArgs(job, preset, outBase, init, controlDir, refImage, i, key);
       if (i === 0) job.cmd = [config.sdCli, ...args].join(' ');
-      const { code, signal, spawnError } = await runSd(job, args, log);
+      const { code, signal, spawnError } = await runSdRetry(job, args, log);
       if (job.status !== 'running') break;
       if (code !== 0) {
-        throw new Error(spawnError?.message || job.lastErrors?.at(-1)
-          || `sd-cli exited with code ${code}${signal ? ` (${signal})` : ''}`);
+        throw new Error(engineError(job, spawnError, `sd-cli exited with code ${code}${signal ? ` (${signal})` : ''}`));
       }
       if (preset.kind !== 'image') {
         if (!fs.existsSync(`${outBase}.avi`)) throw new Error('sd-cli did not save the video');
         outputs.push(`${outBase}.avi`);
-        if (init) luts[i] = colorMatchFilter(await frameStats(init), await frameStats(`${outBase}.avi`));
+        if (segments > 1 && !job.params.shots) {
+          // Towards the frame the part started from: its init image, or its own first frame
+          const first = await frameStats(`${outBase}.avi`);
+          const ref = init ? await frameStats(init) : first;
+          ends[i] = colorMatchFilter(ref, await frameStats(`${outBase}.avi`, job.params.frames - 1));
+          luts[i] = rampFilter(i, init ? colorMatchFilter(ref, first) : null, ends[i], job.params.frames, i > 0);
+        }
       } else if (!job._saved?.length && fs.existsSync(`${outBase}.png`)) {
         // The upscale mode saves its result without the "save result image" line
         job._saved = [`${outBase}.png`];
@@ -723,6 +762,7 @@ async function run(job) {
     clearInterval(previewTimer);
     delete job.previewAt;
     delete job.previewExt;
+    delete job._noMemory;
     await current.tel?.finish().catch((e) => console.error(`[telemetry] ${e.message}`));
     current = null;
     try {
@@ -787,7 +827,7 @@ export function retryJob(job, spec) {
   // A cancelled job may still be stopping (sd-cli exiting, ffmpeg running): wait for it
   if (current?.job === job) throw new Error('The job is still stopping, try again in a few seconds');
   for (const ext of ['.webp', '.png']) fs.rmSync(path.join(dirs.previews, job.id + ext), { force: true });
-  for (const k of ['error', 'warning', 'lastErrors', 'progress', 'startedAt', 'finishedAt', 'durationSec', 'cmd', 'files', 'thumb', '_saved']) {
+  for (const k of ['error', 'warning', 'lastErrors', '_noMemory', 'progress', 'startedAt', 'finishedAt', 'durationSec', 'cmd', 'files', 'thumb', '_saved']) {
     delete job[k];
   }
   Object.assign(job, { status: 'queued', queuedAt: Date.now(), retries: (job.retries || 0) + 1, spec });

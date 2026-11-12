@@ -8,7 +8,7 @@ const DATA = '/data/t';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let worker;
 const startWorker = () => {
-  worker = spawn('node', ['/src/worker/index.js'], { env: { ...process.env, DATA_DIR: DATA, WORKER_PORT: '7999', SD_CLI: '/fake/sd-cli', AUDIO_CLI: '/fake/audiocpp-cli', PATH: `/fake/bin:${process.env.PATH}` }, stdio: ['ignore', 'pipe', 'pipe'] });
+  worker = spawn('node', ['/src/worker/index.js'], { env: { ...process.env, DATA_DIR: DATA, WORKER_PORT: '7999', SD_CLI: '/fake/sd-cli', MEMORY_WAIT_MS: '500', AUDIO_CLI: '/fake/audiocpp-cli', PATH: `/fake/bin:${process.env.PATH}` }, stdio: ['ignore', 'pipe', 'pipe'] });
   worker.stdout.on('data', (d) => process.env.VERBOSE && process.stdout.write('  | ' + d));
   worker.stderr.on('data', (d) => process.stdout.write('  ! ' + d));
 };
@@ -256,6 +256,12 @@ const kfRuns = fs.readFileSync(`${DATA}/state/logs/${kf.id}.log`, 'utf8').split(
 check('first frame: drawn once, animated, then continued from the last frame', kf.status === 'done' && kfRuns.length === 3
   && / -M img_gen /.test(kfRuns[0]) && kfRuns[1].includes('_s0_init.png --strength 0.75') && kfRuns[2].includes('_s0_last.png --strength 0.55')
   && !outputFiles().some((f) => /_key|_init/.test(f)), `${kf.status} ${kf.error || ''} runs ${kfRuns.length}`);
+
+// GPU memory taken by another program for a moment: the run is repeated, the job still finishes
+fs.writeFileSync(`${DATA}/nomem`, '');
+let nm = (await api('/v1/jobs', 'POST', video(1))).body;
+nm = await waitFor(nm.id, (j) => ['done', 'failed'].includes(j.status));
+check('no GPU memory once: the run is repeated and the job finishes', nm.status === 'done' && sdRuns(nm.id) === 2 && !('_noMemory' in nm), `${nm.status} ${nm.error || ''} runs ${sdRuns(nm.id)}`);
 
 // Audio: one audio.cpp run with the mode's engine settings; the result is an MP3 with a waveform
 // thumbnail and its measured length

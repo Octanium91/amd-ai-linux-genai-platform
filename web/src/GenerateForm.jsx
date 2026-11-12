@@ -169,6 +169,8 @@ function StoryboardField({ form, set, preset, plan, hasImage, shots, keyModes, k
       <span className="field-hint">
         {shots
           ? t('Every part starts from its own keyframe drawn by an image mode, so the action really changes; the parts are joined with cuts.')
+          : preset?.keyframeStart
+            ? t('Every part continues from the last frame of the previous one with its own scene: one take without cuts.')
           : keyModes.length
             ? t('Every part continues from the last frame of the previous one: smooth, but the action barely changes.')
             : t('Every part continues from the last frame of the previous one. Download an image mode for a video made of shots.')}
@@ -809,6 +811,7 @@ export default function GenerateForm({ kind, user, presets, allPresets = [], tem
   const [image, setImage] = useState(null); // File
   const [imageRef, setImageRef] = useState(null); // name of an already uploaded file
   const [advanced, setAdvanced] = useState(false);
+  const [writing, setWriting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [drag, setDrag] = useState(false);
@@ -936,7 +939,9 @@ export default function GenerateForm({ kind, user, presets, allPresets = [], tem
   // A video made of shots: an image mode draws a keyframe for every part first
   const keyModes = KEYFRAME_ORDER.map((id) => allPresets.find((p) => p.id === id && p.available)).filter(Boolean);
   const keyMode = keyModes.find((p) => p.id === form.keyframePreset) || keyModes[0] || null;
-  const shots = isVideo && plan.segments > 1 && form.shots !== false && !!keyMode;
+  // The fast Wan modes follow a new scene from the last frame, so there one continuous take is the
+  // default; AnimateDiff barely changes the action that way and defaults to shots
+  const shots = isVideo && plan.segments > 1 && (form.shots ?? !preset?.keyframeStart) && !!keyMode;
   // The keyframe is drawn near the video size, at least 0.5 MP (as on the server)
   // Text to video in a mode that draws poorly from text alone: an image mode draws the first frame
   const startKey = isVideo && !!preset?.keyframeStart && !shots && task.key === 'create' && !(image || imageRef);
@@ -1008,9 +1013,27 @@ export default function GenerateForm({ kind, user, presets, allPresets = [], tem
     setError('');
     setBusy(true);
     try {
+      // A long video without scenes would repeat one action in every part: with the prompt assistant
+      // connected, the scenes are written first (and shown in the form) instead of by hand
+      let prompts = form.prompts;
+      if (isVideo && plan.segments > 1 && !prompts?.some(Boolean) && (await api('/api/prompt/status').catch(() => null))?.ready) {
+        setWriting(true);
+        try {
+          const r = await api('/api/prompt/storyboard', {
+            method: 'POST',
+            json: { presetId: preset.id, prompt: form.prompt, parts: plan.segments, partSeconds: (plan.frames - 1) / plan.fps, hasImage: !!(acceptsImage && (image || imageRef)) },
+          });
+          prompts = r.prompts;
+          setForm((f) => ({ ...f, prompts }));
+        } catch (err) {
+          throw new Error(t('The scenes could not be written: {error}', { error: err.message }));
+        } finally {
+          setWriting(false);
+        }
+      }
       const fd = new FormData();
       for (const [k, v] of Object.entries(form)) if (k !== 'prompts' && v != null && v !== '') fd.append(k, v);
-      if (isVideo && plan.segments > 1 && form.prompts?.some(Boolean)) fd.append('prompts', JSON.stringify(form.prompts.slice(0, plan.segments)));
+      if (isVideo && plan.segments > 1 && prompts?.some(Boolean)) fd.append('prompts', JSON.stringify(prompts.slice(0, plan.segments)));
       fd.set('shots', String(shots));
       if (shots) fd.set('keyframePreset', keyMode.id);
       fd.set('task', task.key);
@@ -1364,7 +1387,7 @@ export default function GenerateForm({ kind, user, presets, allPresets = [], tem
             </span>
           </div>
           <button className="btn primary" title="Ctrl+Enter" disabled={busy || !!why}>
-            {busy ? t('Submitting…') : queueSize ? t('Add to queue · {n} ahead', { n: queueSize }) : t('Generate')}
+            {writing ? t('Writing the scenes…') : busy ? t('Submitting…') : queueSize ? t('Add to queue · {n} ahead', { n: queueSize }) : t('Generate')}
           </button>
           {why && !busy && <span className="submit-why">{why}</span>}
         </div>
