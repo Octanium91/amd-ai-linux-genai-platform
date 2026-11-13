@@ -326,5 +326,29 @@
         "description": "Настоящее движение примерно за минуту на план в 2 с: две дистиллированные Wan 2.2 5B, крошечный декодер TAEHV и энкодер UMT5. 10,8 ГБ плюс энкодер."
       }
     }
+  },
+  {
+    "id": "video-vace-14b",
+    "name": "Video · Wan 2.1 VACE 14B — change a video, photorealistic",
+    "description": "The motion of your video with a new look (people into cats), or a subject from a photo in a new video, in 4 steps. Experimental; for Strix Halo (Radeon 8060S): 19.3 GB plus the Wan 2.1 VAE and the UMT5 encoder.",
+    "models": [
+      "wan21-vace-14b-q8",
+      "lightx2v-t2v-14b-lora",
+      "wan21-vae",
+      "umt5-xxl-q8"
+    ],
+    "presets": [
+      "vid-wan21-vace-14b"
+    ],
+    "i18n": {
+      "uk": {
+        "name": "Відео · Wan 2.1 VACE 14B — змінити відео, фотореалістично",
+        "description": "Рух вашого відео з новим виглядом (люди стають котами) або об’єкт із фото в новому відео, за 4 кроки. Експериментально; для Strix Halo (Radeon 8060S): 19,3 ГБ плюс VAE Wan 2.1 і енкодер UMT5."
+      },
+      "ru": {
+        "name": "Видео · Wan 2.1 VACE 14B — изменить видео, фотореалистично",
+        "description": "Движение вашего видео с новым видом (люди становятся котами) или объект с фото в новом видео, за 4 шага. Экспериментально; для Strix Halo (Radeon 8060S): 19,3 ГБ плюс VAE Wan 2.1 и энкодер UMT5."
+      }
+    }
   }
 ]

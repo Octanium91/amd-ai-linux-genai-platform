@@ -2033,5 +2033,82 @@
         "description": "Настоящее движение Wan за 3 шага: план в 2 с при 832×480 примерно за минуту. Apache-2.0. 1280×704 — размер, на котором модель обучали: чётче всего, примерно втрое дольше."
       }
     }
+  },
+  {
+    "id": "vid-wan21-vace-14b",
+    "kind": "video",
+    "name": "Wan 2.1 VACE 14B · 4 steps (experimental)",
+    "description": "Keeps the motion of an uploaded video and changes its look, or puts a person or object from a photo into a new video, photorealistic. The large Wan 2.1 in 4 steps with the lightx2v LoRA; 16 fps, one pass up to 5 s. For Strix Halo: the weights alone are 18.7 GB.",
+    "experimental": true,
+    "minGtt": 32,
+    "promptQuality": {
+      "suffix": "Photorealistic, rich detail, smooth natural motion."
+    },
+    "tasks": [
+      "reference",
+      "restyle"
+    ],
+    "image": "optional",
+    "models": {
+      "diffusion": "wan21-vace-14b-q8",
+      "vae": "wan21-vae",
+      "t5xxl": "umt5-xxl-q8",
+      "lora": "lightx2v-t2v-14b-lora"
+    },
+    "loraDir": "loras",
+    "promptSuffix": " <lora:lightx2v_T2V_14B_cfg_step_distill_v2_lora_rank64_bf16:1.0>",
+    "defaults": {
+      "width": 832,
+      "height": 480,
+      "cfg": 1,
+      "flowShift": 5,
+      "sampler": "euler",
+      "negative": "",
+      "nativeFps": 16,
+      "maxFrames": 81,
+      "segmentFrames": 81,
+      "maxSegments": 1,
+      "duration": 2,
+      "quality": {
+        "normal": 4
+      },
+      "outFpsOptions": [
+        16,
+        32,
+        48
+      ]
+    },
+    "resolutions": [
+      [
+        832,
+        480
+      ],
+      [
+        480,
+        832
+      ]
+    ],
+    "recommendedResolutions": [
+      [
+        832,
+        480
+      ]
+    ],
+    "preview": "proj",
+    "extraArgs": [
+      "--diffusion-fa",
+      "--vae-tiling",
+      "--offload-to-cpu"
+    ],
+    "i18n": {
+      "uk": {
+        "name": "Wan 2.1 VACE 14B · 4 кроки (експериментальний)",
+        "description": "Зберігає рух завантаженого відео й змінює його вигляд або вставляє людину чи предмет із фото в нове відео, фотореалістично. Велика Wan 2.1 за 4 кроки з LoRA lightx2v; 16 fps, один прохід до 5 с. Для Strix Halo: самі ваги займають 18,7 ГБ."
+      },
+      "ru": {
+        "name": "Wan 2.1 VACE 14B · 4 шага (экспериментальный)",
+        "description": "Сохраняет движение загруженного видео и меняет его вид либо вставляет человека или предмет с фото в новое видео, фотореалистично. Большая Wan 2.1 за 4 шага с LoRA lightx2v; 16 fps, один проход до 5 с. Для Strix Halo: одни веса занимают 18,7 ГБ."
+      }
+    }
   }
 ]

@@ -475,5 +475,43 @@
         "description": "Крошечный автоэнкодер для Wan 2.2: декодирует клип за секунды вместо десятков минут, чуть мягче полного VAE."
       }
     }
+  },
+  {
+    "id": "wan21-vace-14b-q8",
+    "name": "Wan 2.1 VACE 14B (GGUF Q8_0)",
+    "category": "diffusion",
+    "description": "The large Wan 2.1 with VACE: changes the look of a video or puts a subject from a photo into one, photorealistic where the 1.3B model draws an illustration. 18.7 GB of weights: for Strix Halo.",
+    "file": "diffusion_models/Wan2.1_14B_VACE-Q8_0.gguf",
+    "url": "https://huggingface.co/QuantStack/Wan2.1_14B_VACE-GGUF/resolve/main/Wan2.1_14B_VACE-Q8_0.gguf",
+    "size": 18663274400,
+    "license": "Apache-2.0",
+    "homepage": "https://huggingface.co/QuantStack/Wan2.1_14B_VACE-GGUF",
+    "i18n": {
+      "uk": {
+        "description": "Велика Wan 2.1 з VACE: змінює вигляд відео або вставляє в нього об’єкт із фото, фотореалістично там, де модель 1.3B малює ілюстрацію. 18,7 ГБ ваг: для Strix Halo."
+      },
+      "ru": {
+        "description": "Большая Wan 2.1 с VACE: меняет вид видео или вставляет в него объект с фото, фотореалистично там, где модель 1.3B рисует иллюстрацию. 18,7 ГБ весов: для Strix Halo."
+      }
+    }
+  },
+  {
+    "id": "lightx2v-t2v-14b-lora",
+    "name": "lightx2v Wan 2.1 14B — 4-step LoRA (rank 64)",
+    "category": "lora",
+    "description": "Step and CFG distillation for Wan 2.1 14B: 4 steps without CFG instead of 20 with it (weight 1.0).",
+    "file": "loras/lightx2v_T2V_14B_cfg_step_distill_v2_lora_rank64_bf16.safetensors",
+    "url": "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Lightx2v/lightx2v_T2V_14B_cfg_step_distill_v2_lora_rank64_bf16.safetensors",
+    "size": 630697104,
+    "license": "Apache-2.0 (the lightx2v model card; this file is a LoRA extraction repacked by Kijai)",
+    "homepage": "https://huggingface.co/lightx2v/Wan2.1-T2V-14B-StepDistill-CfgDistill-Lightx2v",
+    "i18n": {
+      "uk": {
+        "description": "Дистиляція кроків і CFG для Wan 2.1 14B: 4 кроки без CFG замість 20 із ним (вага 1.0)."
+      },
+      "ru": {
+        "description": "Дистилляция шагов и CFG для Wan 2.1 14B: 4 шага без CFG вместо 20 с ним (вес 1.0)."
+      }
+    }
   }
 ]
