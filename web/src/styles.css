@@ -190,6 +190,7 @@ a { color: var(--accent-text); }
 .status-pill .sp-badge { font-size: var(--fs-xs); padding: 0 7px; border-radius: var(--r-full); background: var(--bad-soft); color: var(--bad); font-weight: 550; }
 .status-pill .sp-queue { color: var(--muted); }
 
+@media (min-width: 1101px) { .sysbar.sysbar-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
 .sysbar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; font-size: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 10px 4px; }
 .sys-block { padding: 2px 14px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .sys-block + .sys-block { border-left: 1px solid var(--line); }

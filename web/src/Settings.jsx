@@ -121,6 +121,13 @@ export default function Settings() {
 
 // The prompt assistant ("Improve with AI"): an Ollama server and model that rewrite descriptions into prompts
 const RECOMMENDED_MODELS = ['dolphin-llama3', 'huihui_ai/qwen2.5-abliterate:3b'];
+// Where the model runs: the NPU through a FastFlowLM server, or the GPU / the processor through Ollama
+const DEVICES = [
+  { id: 'auto', label: 'Automatic' },
+  { id: 'npu', label: 'NPU' },
+  { id: 'gpu', label: 'GPU' },
+  { id: 'cpu', label: 'CPU' },
+];
 
 function PromptAssistantSettings() {
   const [form, setForm] = useState(null);
@@ -128,10 +135,28 @@ function PromptAssistantSettings() {
   const [checking, setChecking] = useState(false);
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
+  // The FastFlowLM server's models, and what the machine's NPU can do (from the system info)
+  const [npuModels, setNpuModels] = useState(null);
+  const [npuChecking, setNpuChecking] = useState(false);
+  const [npu, setNpu] = useState(null);
 
   useEffect(() => {
     api('/api/settings').then((s) => setForm(s.promptAssistant)).catch((e) => setError(e.message));
+    api('/api/state').then((s) => setNpu(s.system?.npu || { present: false })).catch(() => {});
   }, []);
+
+  const checkNpu = async (url = form?.npuUrl) => {
+    setNpuChecking(true);
+    setError('');
+    try {
+      setNpuModels((await api(`/api/settings/npu?url=${encodeURIComponent(url)}`)).models);
+    } catch (err) {
+      setNpuModels(null);
+      setError(err.message);
+    } finally {
+      setNpuChecking(false);
+    }
+  };
 
   const check = async (url = form?.url) => {
     setChecking(true);
@@ -146,7 +171,8 @@ function PromptAssistantSettings() {
     }
   };
   useEffect(() => {
-    if (form?.enabled) check(form.url);
+    if (form?.enabled && form.device !== 'npu') check(form.url);
+    if (form?.enabled && ['auto', 'npu'].includes(form.device || 'auto')) checkNpu(form.npuUrl);
   }, [form === null]);
 
   const save = async (e) => {
@@ -166,6 +192,10 @@ function PromptAssistantSettings() {
   const installed = models?.models?.map((m) => m.name) || [];
   const has = (name) => installed.some((n) => n === name || n === `${name}:latest`);
   const missing = models && !has(form.model);
+  const device = form.device || 'auto';
+  const useNpu = device === 'auto' || device === 'npu';
+  const useOllama = device !== 'npu';
+  const npuUnusable = npu && !npu.llm;
 
   return (
     <form className="card form" onSubmit={save}>
@@ -182,6 +212,55 @@ function PromptAssistantSettings() {
         <input type="checkbox" checked={form.enabled} onChange={(e) => setForm({ ...form, enabled: e.target.checked })} />
         <span>{t('Enable the prompt assistant')}</span>
       </label>
+      <div className="field">
+        <span className="field-label">{t('Where the language model runs')}</span>
+        <div className="seg" role="radiogroup" aria-label={t('Where the language model runs')}>
+          {DEVICES.map((d) => (
+            <button key={d.id} type="button" role="radio" aria-checked={device === d.id} className={`seg-item ${device === d.id ? 'on' : ''}`}
+              style={{ flex: 1, justifyContent: 'center' }} onClick={() => setForm({ ...form, device: d.id })}>
+              {t(d.label)}{d.id === 'npu' && <span className="muted small"> · {t('recommended')}</span>}{d.id === 'cpu' && <span className="muted small"> · {t('not recommended')}</span>}
+            </button>
+          ))}
+        </div>
+        <span className="field-hint">
+          {device === 'npu' ? t('Recommended. The model runs on the NPU through a FastFlowLM server: it takes no GPU memory, keeps its speed while a generation runs and slows that generation the least.')
+            : device === 'gpu' ? t('The model runs on the GPU through Ollama: the fastest answers, but it shares the GPU and its memory with the generations.')
+              : device === 'cpu' ? t('Not recommended: the model runs on the processor through Ollama, slower than the GPU, and takes the processor from a running generation. Prefer the NPU.')
+                : t('The NPU when its FastFlowLM server answers, the GPU (Ollama) otherwise.')}
+        </span>
+        {useNpu && npuUnusable && (
+          <span className="field-hint warn">
+            {device === 'npu' ? t('This machine has no NPU that can run language models now (see System): the assistant will not work on this setting.')
+              : t('This machine has no NPU that can run language models now (see System): the GPU is used instead.')}
+          </span>
+        )}
+      </div>
+      {useNpu && (
+        <>
+          <label className="field">
+            <span className="field-label">{t('FastFlowLM server address (NPU)')}</span>
+            <div className="model-pick">
+              <input value={form.npuUrl || ''} onChange={(e) => setForm({ ...form, npuUrl: e.target.value })} placeholder="http://host.docker.internal:52625" />
+              <button type="button" className="btn" disabled={npuChecking} onClick={() => checkNpu()}>{npuChecking ? t('Checking…') : t('Check')}</button>
+            </div>
+            <span className="field-hint">{t('host.docker.internal is the machine the platform runs on (FastFlowLM on its default port 52625).')}</span>
+          </label>
+          {npuModels && <div className="muted small">{t('FastFlowLM answers: {n} models available.', { n: npuModels.length })}</div>}
+          <label className="field">
+            <span className="field-label">{t('Model on the NPU')}</span>
+            <div className="model-pick">
+              <input list="npu-models" value={form.npuModel || ''} onChange={(e) => setForm({ ...form, npuModel: e.target.value })} />
+              <datalist id="npu-models">
+                {(npuModels || []).map((n) => <option key={n} value={n} />)}
+              </datalist>
+            </div>
+            <span className="field-hint">{t('A light model is enough and answers faster: qwen3:4b (3.1 GB, about 20 tokens per second on a Ryzen AI 9 HX 370). It writes both prompts and the scenes of long videos. FastFlowLM downloads a model on first use.')}</span>
+            {npuModels && form.npuModel && !npuModels.includes(form.npuModel) && <span className="field-hint warn">{t('The FastFlowLM server does not list this model.')}</span>}
+          </label>
+        </>
+      )}
+      {useOllama && (
+      <>
       <label className="field">
         <span className="field-label">{t('Ollama server address')}</span>
         <div className="model-pick">
@@ -220,6 +299,8 @@ function PromptAssistantSettings() {
         <span className="field-hint">{t('A storyboard of dozens of parts needs a larger model: dolphin-llama3 (8B) writes a real story in 1–3 minutes, 3B models repeat themselves. Empty: the model above.')}</span>
         {models && form.storyboardModel && !has(form.storyboardModel) && <span className="field-hint warn">{t('This model is not installed on the Ollama server: run "ollama pull {model}" there.', { model: form.storyboardModel })}</span>}
       </label>
+      </>
+      )}
       {error && <div className="error">{error}</div>}
       {msg && <div className="muted small">{msg}</div>}
       <div className="modal-actions">

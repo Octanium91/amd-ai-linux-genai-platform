@@ -2,6 +2,8 @@
 // English prompt written for the mode that will run it. Administrators connect the Ollama server
 // in Settings; the button in the form is active only while the configured model is available.
 // Ollama API: POST /api/chat (stream: false, format: JSON schema), GET /api/tags, POST /api/show.
+// The model can also run on the NPU, through a FastFlowLM server and its OpenAI-compatible API
+// (POST /v1/chat/completions with response_format, GET /v1/models): see backend() below.
 import { readSettings } from '../common/settings.js';
 import { loadCatalog } from './models.js';
 import { loadPresets } from './presets.js';
@@ -38,7 +40,84 @@ async function ollama(base, path, body, timeoutMs = 8000, signal = null) {
 // The assistant shares the GPU memory with the generations: a model left loaded after its answer
 // (5.7 GB for a minute) made the keyframe of the very next job fail for lack of memory. It is
 // unloaded as soon as the answer is written; loading it again takes a few seconds.
-const unload = (s, model = s.model) => ollama(s.url, '/api/generate', { model, keep_alive: 0 }, 8000).catch(() => {});
+// A model on the NPU takes no GPU memory, so it stays loaded.
+const unload = (b, model = b.model) => (b.kind === 'npu' ? null : ollama(b.url, '/api/generate', { model, keep_alive: 0 }, 8000).catch(() => {}));
+
+// The FastFlowLM server on the NPU: whether it answers and which models it knows. It downloads a
+// model on first use, so every model of the list can be asked for. Checked at most every 30 s.
+let npuCache = { at: 0, url: '', value: { ok: false, models: [] } };
+export async function npuServer(base, force = false) {
+  if (!force && npuCache.url === base && Date.now() - npuCache.at < 30000) return npuCache.value;
+  let value = { ok: false, models: [] };
+  try {
+    const d = await ollama(base, '/v1/models', null, 4000);
+    value = { ok: true, models: (d?.data || []).map((m) => m.id).filter(Boolean) };
+  } catch {}
+  npuCache = { at: Date.now(), url: base, value };
+  return value;
+}
+
+// Where the assistant's model runs for these settings (promptAssistant.device):
+//   npu   the FastFlowLM server; one light model writes both prompts and storyboards
+//   gpu   the Ollama server, as before
+//   cpu   the Ollama server with every layer kept off the GPU (num_gpu 0)
+//   auto  the NPU when its server answers, the GPU otherwise
+export async function backend(s, force = false) {
+  const device = s.device || 'auto';
+  if (device === 'npu' || device === 'auto') {
+    const n = await npuServer(s.npuUrl, force);
+    if (n.ok || device === 'npu') {
+      return { kind: 'npu', device: 'npu', url: s.npuUrl, model: s.npuModel, storyboardModel: s.npuModel, reachable: n.ok, models: n.models };
+    }
+  }
+  return { kind: 'ollama', device: device === 'cpu' ? 'cpu' : 'gpu', url: s.url, model: s.model, storyboardModel: s.storyboardModel || s.model, cpu: device === 'cpu' };
+}
+
+// One chat request with a JSON schema for the answer, on either backend.
+// Returns { content, truncated }.
+async function chat(b, { messages, format, temperature = 0.4, numPredict = 400, repeatPenalty = null }, timeoutMs, signal) {
+  if (b.kind === 'npu') {
+    const out = await ollama(b.url, '/v1/chat/completions', {
+      model: b.model,
+      messages,
+      temperature,
+      max_tokens: numPredict,
+      ...(repeatPenalty ? { repeat_penalty: repeatPenalty } : {}),
+      response_format: { type: 'json_schema', json_schema: { name: 'answer', schema: format, strict: true } },
+      // No reasoning trace: a thinking model spent 10 s and 200 tokens on it before a two-line answer
+      think: false,
+      enable_thinking: false,
+      reasoning_effort: 'none',
+    }, timeoutMs, signal);
+    const choice = out?.choices?.[0];
+    return { content: choice?.message?.content || '', truncated: choice?.finish_reason === 'length' };
+  }
+  const out = await ollama(b.url, '/api/chat', {
+    model: b.model,
+    stream: false,
+    // Loaded only briefly: the GPU memory belongs to the generations
+    keep_alive: '1m',
+    // A prompt needs no reasoning trace; models that cannot think ignore it
+    think: false,
+    format,
+    options: { temperature, num_predict: numPredict, ...(repeatPenalty ? { repeat_penalty: repeatPenalty } : {}), ...(b.cpu ? { num_gpu: 0 } : {}) },
+    messages,
+  }, timeoutMs, signal);
+  return { content: out?.message?.content || '', truncated: out?.done_reason === 'length' };
+}
+
+// What went wrong with a request, in the words of the backend that was asked
+function failure(b, e) {
+  const kind = e.name === 'TimeoutError' || e.name === 'AbortError' ? 'timeout' : e.cause ? 'unreachable' : 'error';
+  if (b?.kind === 'npu') {
+    if (kind === 'timeout') return 'The model on the NPU did not answer in time';
+    if (kind === 'unreachable') return 'The FastFlowLM server is not reachable';
+    return 'The FastFlowLM server returned an error';
+  }
+  if (kind === 'timeout') return 'The Ollama model did not answer in time';
+  if (kind === 'unreachable') return 'The Ollama server is not reachable';
+  return 'The Ollama model returned an error';
+}
 
 // Ollama reports "dolphin-phi" as "dolphin-phi:latest"
 const sameModel = (a, b) => a === b || a === `${b}:latest` || `${a}:latest` === b;
@@ -56,12 +135,18 @@ export async function listModels(base) {
 let cached = { at: 0, key: '', value: null, pending: null };
 export async function assistantStatus(force = false) {
   const s = readSettings().promptAssistant;
-  const key = `${s.enabled}|${s.url}|${s.model}`;
+  const key = `${s.enabled}|${s.url}|${s.model}|${s.device}|${s.npuUrl}|${s.npuModel}`;
   if (!force && cached.key === key && Date.now() - cached.at < 30000) return cached.value;
   if (cached.pending && cached.key === key) return cached.pending;
   const check = (async () => {
     let value = { enabled: s.enabled, ready: false, model: s.model };
-    if (s.enabled) {
+    const b = s.enabled ? await backend(s, force) : null;
+    if (b) value = { ...value, model: b.model, device: b.device };
+    if (b?.kind === 'npu') {
+      value = !b.reachable ? { ...value, error: 'The FastFlowLM server is not reachable' }
+        : b.models.includes(b.model) ? { ...value, ready: true }
+          : { ...value, error: 'The FastFlowLM server does not know this model' };
+    } else if (s.enabled) {
       try {
         const { models } = await listModels(s.url);
         value = models.some((m) => sameModel(m.name, s.model))
@@ -343,29 +428,22 @@ export async function enhancePrompt(s, preset, input, signal = null) {
   const fields = ['idea_en', ...(style === 'tags' ? tagFields : style === 'sfx' ? SFX_FIELDS : ['prompt'])];
   const format = { type: 'object', properties: Object.fromEntries(fields.map((k) => [k, { type: 'string' }])), required: fields };
   const started = Date.now();
-  const body = {
-    model: s.model,
-    stream: false,
-    // Loaded only briefly: the GPU memory belongs to the generations
-    keep_alive: '1m',
-    // A prompt needs no reasoning trace; models that cannot think ignore it
-    think: false,
+  const out = await chat(s, {
     format,
     // Room for the translation and the answer, more for a long idea
-    options: { temperature: 0.4, num_predict: Math.min(1200, 400 + Math.round(input.idea.length / 2)) },
+    numPredict: Math.min(1200, 400 + Math.round(input.idea.length / 2)),
     messages: [
       { role: 'system', content: audio ? audioSystemPrompt(style, { duration, lyricsMode: input.lyricsMode }) : systemPrompt(preset, style, { duration, hasImage: !!input.hasImage, task: input.task }, tagFields) },
       { role: 'user', content: describe(example.idea) },
       { role: 'assistant', content: JSON.stringify(exampleAnswer) },
       { role: 'user', content: describe(input.idea) },
     ],
-  };
-  const out = await ollama(s.url, '/api/chat', body, 180000, signal);
+  }, 180000, signal);
   // A cut-off answer is not a prompt: its raw JSON would end up in the result
-  if (out?.done_reason === 'length') return { prompt: '', style, model: s.model, truncated: true };
+  if (out.truncated) return { prompt: '', style, model: s.model, truncated: true };
   let data = {};
   try {
-    data = JSON.parse(out?.message?.content || '{}');
+    data = JSON.parse(out.content || '{}');
   } catch {
     return { prompt: '', style, model: s.model };
   }
@@ -461,13 +539,10 @@ function partsSystem(style, n) {
 }
 
 async function chatJson(s, system, example, ask, format, numPredict, signal) {
-  const out = await ollama(s.url, '/api/chat', {
-    model: s.model,
-    stream: false,
-    keep_alive: '1m',
-    think: false,
+  const out = await chat(s, {
     format,
-    options: { temperature: 0.4, repeat_penalty: 1.08, num_predict: numPredict },
+    repeatPenalty: 1.08,
+    numPredict,
     messages: [
       { role: 'system', content: system },
       { role: 'user', content: example.ask },
@@ -475,9 +550,9 @@ async function chatJson(s, system, example, ask, format, numPredict, signal) {
       { role: 'user', content: ask },
     ],
   }, 120000, signal);
-  if (out?.done_reason === 'length') return { truncated: true };
+  if (out.truncated) return { truncated: true };
   try {
-    return { data: JSON.parse(out?.message?.content || '{}') };
+    return { data: JSON.parse(out.content || '{}') };
   } catch {
     return { data: {} };
   }
@@ -581,18 +656,18 @@ export function promptRoutes(api) {
     // The browser gave up (closed the page, navigated away): stop waiting for the model
     const abort = new AbortController();
     res.on('close', () => !res.writableFinished && abort.abort());
+    let b = null;
     try {
-      const r = await enhancePrompt(s, preset, { idea, width: req.body.width, height: req.body.height, duration: req.body.duration, hasImage: !!req.body.hasImage, task: String(req.body.task || ''), lyricsMode: String(req.body.lyricsMode || '') }, abort.signal);
+      b = await backend(s);
+      const r = await enhancePrompt(b, preset, { idea, width: req.body.width, height: req.body.height, duration: req.body.duration, hasImage: !!req.body.hasImage, task: String(req.body.task || ''), lyricsMode: String(req.body.lyricsMode || '') }, abort.signal);
       if (r.truncated) return res.status(502).json({ error: 'The model answer was cut off, try a shorter description' });
       if (!r.prompt) return res.status(502).json({ error: 'The model returned an empty prompt, try again' });
-      await unload(s);
-      res.json(r);
+      await unload(b);
+      res.json({ ...r, device: b.device });
     } catch (e) {
       if (abort.signal.aborted) return;
-      console.warn(`[prompt] ${s.model} @ ${s.url}: ${e.cause?.code || e.message}`);
-      if (e.name === 'TimeoutError' || e.name === 'AbortError') return res.status(502).json({ error: 'The Ollama model did not answer in time' });
-      if (e.cause) return res.status(502).json({ error: 'The Ollama server is not reachable' });
-      res.status(502).json({ error: 'The Ollama model returned an error' });
+      console.warn(`[prompt] ${b?.model} @ ${b?.url}: ${e.cause?.code || e.message}`);
+      res.status(502).json({ error: failure(b, e) });
     } finally {
       running.delete(user);
     }
@@ -613,18 +688,19 @@ export function storyboardRoutes(api) {
     running.add(user);
     const abort = new AbortController();
     res.on('close', () => !res.writableFinished && abort.abort());
+    let b = null;
     try {
-      const r = await storyboard({ ...s, model: s.storyboardModel || s.model }, preset, { idea, parts: req.body.parts, partSeconds: req.body.partSeconds, hasImage: !!req.body.hasImage }, abort.signal);
+      b = await backend(s);
+      b = { ...b, model: b.storyboardModel };
+      const r = await storyboard(b, preset, { idea, parts: req.body.parts, partSeconds: req.body.partSeconds, hasImage: !!req.body.hasImage }, abort.signal);
       if (r.truncated) return res.status(502).json({ error: 'The model answer was cut off, try a shorter description' });
       if (!r.prompts) return res.status(502).json({ error: 'The model returned an empty prompt, try again' });
-      await unload(s, s.storyboardModel || s.model);
-      res.json(r);
+      await unload(b);
+      res.json({ ...r, device: b.device });
     } catch (e) {
       if (abort.signal.aborted) return;
-      console.warn(`[prompt] storyboard ${s.model} @ ${s.url}: ${e.cause?.code || e.message}`);
-      if (e.name === 'TimeoutError' || e.name === 'AbortError') return res.status(502).json({ error: 'The Ollama model did not answer in time' });
-      if (e.cause) return res.status(502).json({ error: 'The Ollama server is not reachable' });
-      res.status(502).json({ error: 'The Ollama model returned an error' });
+      console.warn(`[prompt] storyboard ${b?.model} @ ${b?.url}: ${e.cause?.code || e.message}`);
+      res.status(502).json({ error: failure(b, e) });
     } finally {
       running.delete(user);
     }
@@ -643,5 +719,15 @@ export function promptAdminRoutes(api, requireAdmin) {
     } finally {
       cached.at = 0;
     }
+  });
+
+  // The FastFlowLM server on the NPU, for the same choice: whether it answers and its models
+  api.get('/settings/npu', requireAdmin, async (req, res) => {
+    const base = ollamaUrl(req.query.url || readSettings().promptAssistant.npuUrl);
+    if (!base) return res.status(400).json({ error: 'The FastFlowLM address must be an http:// or https:// URL' });
+    const n = await npuServer(base, true);
+    cached.at = 0;
+    if (!n.ok) return res.status(502).json({ error: 'The FastFlowLM server is not reachable' });
+    res.json({ url: base, models: n.models });
   });
 }

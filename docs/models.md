@@ -112,6 +112,29 @@ The defaults follow the models' training so that the result matches the prompt; 
 
 ## Prompt assistant
 
+### Where the model runs
+
+**Settings → Prompt assistant → Where the language model runs** (`promptAssistant.device`):
+
+| Choice | Runs on | Through |
+|---|---|---|
+| **NPU** (recommended) | the Ryzen AI NPU (XDNA 2) | a [FastFlowLM](https://github.com/ROCm/FastFlowLM) server and its OpenAI-compatible API (`npuUrl`, port 52625; `npuModel`, `qwen3:4b` by default: one light model writes both prompts and storyboards) |
+| GPU | the Radeon iGPU | Ollama (`url`, `model`, `storyboardModel`); the platform unloads the model after each answer |
+| CPU (not recommended) | the processor | Ollama with every layer kept off the GPU (`num_gpu: 0`) |
+| Automatic (default) | the NPU when its FastFlowLM server answers, the GPU otherwise | |
+
+Measured on the reference machine (64 GB, kernel 7.2.12, Mesa 26.1.6) with a language model answering non-stop while the Wan 2.2 5B Turbo reference clip (832×480, 49 frames, 4 steps) is sampled; alone the clip samples in 67 s:
+
+| The model runs on | Clip sampling | The language model's speed |
+|---|---|---|
+| NPU, Qwen3 4B (FastFlowLM) | 93.7 s (+40%) | 17.4 tokens/s (20 alone) |
+| GPU, Qwen2.5 3B (Ollama) | 97.3 s (+45%) | about 11.6 tokens/s (34.7 alone) |
+| CPU, the same model | 104.6 s (+56%) | 19 falling to about 10 tokens/s (35.5 alone) |
+
+So no place is free: the three share the memory and the power budget of one APU. The NPU costs the generation the least, keeps its own speed, and takes no GPU memory (GTT). A real request lasts seconds, not the whole clip: on the NPU a prompt took 6.6–10.5 s and a five-part storyboard 23.7 s.
+
+### Models and setup
+
 The "✦ Improve with AI" button in the prompt box sends the text to a language model on an [Ollama](https://ollama.com) server and replaces it with a prompt written for the selected mode; "Undo" brings the original back. The web container calls Ollama (`POST /api/chat` with a JSON schema, `keep_alive: 1m` so the model leaves GPU memory soon after), the worker is not involved.
 
 Set it up in **Settings → Prompt assistant**: the server address (`http://host.docker.internal:11434` is the Docker host, where Ollama usually runs; `docker-compose.yml` maps that name for the web container) and the model. Recommended: `dolphin-llama3` (8B), installed with `ollama pull dolphin-llama3`. On the reference machine it answers in 5–8 s and kept the meaning of every Russian test description (a lighthouse on a cliff at sunset, a cat on a windowsill in the rain, a girl in a red dress in an autumn alley). `dolphin-phi` (2.7B) answers in 2–4 s but turned the same descriptions into other scenes (no lighthouse, no rain, snow in autumn); it is usable with English descriptions. A fast alternative is `huihui_ai/qwen2.5-abliterate:3b` (Qwen 2.5 3B without refusals, 1.9 GB): 3–7 s, understood all the Russian descriptions, with simpler wording and an occasional untranslated word. The example exchange is marked as format only, since small models otherwise copy its objects (flags and snow turned up in unrelated prompts). The button is disabled while the assistant is off, the server is unreachable or the model is not installed.

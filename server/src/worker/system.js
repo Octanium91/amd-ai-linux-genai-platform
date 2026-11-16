@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { config } from '../common/config.js';
-import { npuInfo } from './npu.js';
+import { npuInfo, npuLoad } from './npu.js';
 import { activeReasons, POWER_REASONS, readGpuMetrics, THERMAL_REASONS, throttleDelta } from './gpumetrics.js';
 
 let gpuDir = null;
@@ -344,6 +344,12 @@ async function sample() {
     data: data && { free: data.free, total: data.total, used: sizes.output, sameDisk: models?.dev === data.dev, temp: await temp(data) },
   };
   await sensorSample(s).catch(() => {});
+  // The NPU, when the driver runs it: powered or not and the share of time it was (npu.js)
+  const n = info.npu?.state === 'ready' ? npuLoad() : null;
+  if (n) {
+    s.npuActive = n.active;
+    s.npuBusy = n.busy;
+  }
   s.sampledAt = Date.now();
   snapshot = s;
 }

@@ -1,0 +1,18 @@
+# Add to the compose file that runs Ollama (or any other): FastFlowLM on the NPU.
+# Copy this directory next to that compose file as ./fastflowlm first.
+services:
+  fastflowlm:
+    build: ./fastflowlm
+    image: fastflowlm:1.0.13
+    container_name: fastflowlm
+    restart: unless-stopped
+    ports:
+      - "52625:52625"
+    devices:
+      - /dev/accel/accel0:/dev/accel/accel0
+    ulimits:
+      memlock: -1
+    environment:
+      - FLM_MODEL=qwen3:4b
+    volumes:
+      - ./flm_data:/root/.config/flm

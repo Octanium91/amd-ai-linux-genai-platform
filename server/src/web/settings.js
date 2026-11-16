@@ -76,7 +76,12 @@ export function settingsRoutes(api, requireAdmin) {
       if (!/^[\w.:/-]{1,200}$/.test(model)) return res.status(400).json({ error: 'Enter the name of an Ollama model' });
       const storyboardModel = String(p.storyboardModel ?? '').trim();
       if (storyboardModel && !/^[\w.:/-]{1,200}$/.test(storyboardModel)) return res.status(400).json({ error: 'Enter the name of an Ollama model' });
-      settings.promptAssistant = { enabled: p.enabled === true, url, model, storyboardModel };
+      const device = ['auto', 'npu', 'gpu', 'cpu'].includes(p.device) ? p.device : settings.promptAssistant.device;
+      const npuUrl = p.npuUrl == null ? settings.promptAssistant.npuUrl : ollamaUrl(p.npuUrl);
+      if (!npuUrl) return res.status(400).json({ error: 'The FastFlowLM address must be an http:// or https:// URL' });
+      const npuModel = String(p.npuModel ?? settings.promptAssistant.npuModel).trim();
+      if (!/^[\w.:/-]{1,200}$/.test(npuModel)) return res.status(400).json({ error: 'Enter the name of a FastFlowLM model' });
+      settings.promptAssistant = { enabled: p.enabled === true, url, model, storyboardModel, device, npuUrl, npuModel };
     }
     writeSettings(settings);
     res.json(settings);

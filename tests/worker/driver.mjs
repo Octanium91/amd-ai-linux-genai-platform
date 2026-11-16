@@ -301,6 +301,22 @@ check('npu: a working XDNA 2 with its name, firmware and node', n.ready.state ==
 check('npu: what keeps language models off it', n.oldKernel.llmBlock === 'kernel' && n.oldFirmware.llmBlock === 'firmware' && n.first.llmBlock === 'generation'
   && [n.oldKernel, n.oldFirmware, n.first].every((x) => x.state === 'ready' && !x.llm), `${n.oldKernel.llmBlock} ${n.oldFirmware.llmBlock} ${n.first.llmBlock}`);
 
+// NPU load: the share of the time between two samples the NPU was powered
+const { npuLoad } = await import('/src/worker/npu.js');
+const loadDev = '/tmp/npu-ready/bus/pci/devices/0000:c6:00.1';
+fs.mkdirSync(`${loadDev}/power`, { recursive: true });
+const power = (status, ms) => { fs.writeFileSync(`${loadDev}/power/runtime_status`, `${status}
+`); fs.writeFileSync(`${loadDev}/power/runtime_active_time`, `${ms}
+`); };
+power('suspended', 1000);
+const l0 = npuLoad(loadDev, 10000);
+power('active', 2500);
+const l1 = npuLoad(loadDev, 12000);
+power('suspended', 2500);
+const l2 = npuLoad(loadDev, 14000);
+check('npu: load from the powered time between samples', l0.busy === null && !l0.active && l1.busy === 75 && l1.active && l2.busy === 0 && !l2.active
+  && npuLoad('/tmp/npu-absent/none', 1) === null, `${JSON.stringify(l0)} ${JSON.stringify(l1)} ${JSON.stringify(l2)}`);
+
 // Audio: one audio.cpp run with the mode's engine settings; the result is an MP3 with a waveform
 // thumbnail and its measured length
 fs.mkdirSync(`${DATA}/models/audio`, { recursive: true });

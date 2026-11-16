@@ -73,7 +73,7 @@ export default function SystemBar({ system, online }) {
   );
   const splitDisks = st.models && st.data && !st.data.sameDisk;
   return (
-    <div className="sysbar">
+    <div className={`sysbar ${system.npu?.state === 'ready' ? 'sysbar-5' : ''}`}>
       <Block
         name="CPU"
         sub={cpuName || system.family}
@@ -92,6 +92,22 @@ export default function SystemBar({ system, online }) {
           {join(`${system.cpuBusy ?? '—'}%`, ghz(system.cpuMhz))}
         </Row>
       </Block>
+      {system.npu?.state === 'ready' && (
+        <Block
+          name="NPU"
+          sub={join(system.npu.family, system.npu.name?.replace(/^NPU\s+/i, ''))}
+          title={join(system.npu.family, system.npu.name, system.npu.id, system.npu.firmware && t('firmware {v}', { v: system.npu.firmware }))}
+        >
+          <Row
+            label={t('Load')}
+            meter={system.npuBusy ?? 0}
+            load
+            title={t('NPU load: the share of time it was powered and working (it powers down a few seconds after its last task)')}
+          >
+            {join(`${system.npuBusy ?? '—'}%`, system.npuActive ? t('working') : t('idle'))}
+          </Row>
+        </Block>
+      )}
       <Block
         name="GPU"
         sub={gpuName}
