@@ -141,8 +141,14 @@ const CHECKS = {
     title: 'NPU (XDNA)',
     text: (s, p) => {
       if (!p.present) return t('No XDNA NPU detected.');
-      if (p.driver) return t('An XDNA NPU and its driver are present; the platform does not use the NPU yet.');
-      return t('An XDNA NPU is present but not used: Linux has no NPU runtime for diffusion video models yet (see docs/hardware.md).');
+      const q = { ...p, family: p.family || 'XDNA', name: p.name || p.id };
+      if (p.state === 'no-driver' || (!p.state && !p.driver)) return t('A {family} NPU is present, but its driver (amdxdna) is not loaded: it is in the kernel since 6.14, and this kernel is {kernel}. The platform does not use the NPU.', q);
+      if (p.state === 'no-device') return t('The {family} NPU driver is loaded, but the NPU did not start: its firmware is probably missing (firmware-amd-graphics or linux-firmware). The platform does not use the NPU.', q);
+      const can = p.llm ? t('It can run language models through FastFlowLM or Lemonade; image and video models do not run on an NPU under Linux. The platform does not use it.')
+        : p.llmBlock === 'generation' ? t('The Linux tools that run language models on an NPU (FastFlowLM, Lemonade) support XDNA 2 only. The platform does not use it.')
+          : p.llmBlock === 'kernel' ? t('Running language models on it (FastFlowLM, Lemonade) needs kernel 7.0 or newer; this one is {kernel}. The platform does not use it.', q)
+            : t('Running language models on it (FastFlowLM, Lemonade) needs NPU firmware 1.1.0.0 or newer. The platform does not use it.');
+      return `${t('The {family} NPU works: {name}, driver amdxdna, firmware {firmware}.', q)} ${can}`;
     },
   },
 };

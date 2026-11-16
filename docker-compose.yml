@@ -20,6 +20,7 @@ services:
       target: worker
       args:
         SD_CPP_REF: ${SD_CPP_REF:-88411ef}
+        MESA_SUITE: ${MESA_SUITE:-trixie}
     image: genai-platform-worker:latest
     container_name: genai-worker
     # Radeon iGPU via Vulkan: render node + numeric GIDs of the host render/video groups (written by setup.sh)

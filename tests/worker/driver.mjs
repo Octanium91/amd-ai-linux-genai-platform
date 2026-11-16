@@ -263,6 +263,44 @@ let nm = (await api('/v1/jobs', 'POST', video(1))).body;
 nm = await waitFor(nm.id, (j) => ['done', 'failed'].includes(j.status));
 check('no GPU memory once: the run is repeated and the job finishes', nm.status === 'done' && sdRuns(nm.id) === 2 && !('_noMemory' in nm), `${nm.status} ${nm.error || ''} runs ${sdRuns(nm.id)}`);
 
+// The NPU is described from sysfs alone: the chip, its driver, firmware and device node
+const { npuInfo } = await import('/src/worker/npu.js');
+const fakeSys = (name, { device, driver, firmware, node, vbnv } = {}) => {
+  const sys = `/tmp/npu-${name}`;
+  const dev = `${sys}/bus/pci/devices/0000:c6:00.1`;
+  fs.mkdirSync(`${sys}/bus/pci/devices/0000:00:00.0`, { recursive: true });
+  fs.writeFileSync(`${sys}/bus/pci/devices/0000:00:00.0/vendor`, '0x1022\n');
+  fs.writeFileSync(`${sys}/bus/pci/devices/0000:00:00.0/device`, '0x1507\n');
+  if (!device) return sys;
+  fs.mkdirSync(dev, { recursive: true });
+  fs.writeFileSync(`${dev}/vendor`, '0x1022\n');
+  fs.writeFileSync(`${dev}/device`, `${device}\n`);
+  fs.writeFileSync(`${dev}/revision`, '0x10\n');
+  if (driver) fs.symlinkSync('../../../../bus/pci/drivers/amdxdna', `${dev}/driver`);
+  if (firmware) fs.writeFileSync(`${dev}/fw_version`, `${firmware}\n`);
+  if (vbnv) fs.writeFileSync(`${dev}/vbnv`, `${vbnv}\n`);
+  if (node) fs.mkdirSync(`${dev}/accel/accel0`, { recursive: true });
+  return sys;
+};
+const strix = { device: '0x17f0', driver: true, firmware: '1.1.2.64', node: true, vbnv: 'NPU Strix' };
+const n = {
+  absent: npuInfo(fakeSys('absent'), '7.2.12+deb13-amd64'),
+  noDriver: npuInfo(fakeSys('nodrv', { device: '0x17f0' }), '6.12.117+deb13-amd64'),
+  noDevice: npuInfo(fakeSys('nodev', { device: '0x17f0', driver: true }), '7.2.12+deb13-amd64'),
+  ready: npuInfo(fakeSys('ready', strix), '7.2.12+deb13-amd64'),
+  oldKernel: npuInfo(fakeSys('oldk', strix), '6.16.3-amd64'),
+  oldFirmware: npuInfo(fakeSys('oldfw', { ...strix, firmware: '1.0.0.63' }), '7.2.12+deb13-amd64'),
+  first: npuInfo(fakeSys('xdna1', { ...strix, device: '0x1502' }), '7.2.12+deb13-amd64'),
+};
+check('npu: absent, without a driver and without a started device', !n.absent.present && n.absent.state === 'absent'
+  && n.noDriver.present && n.noDriver.state === 'no-driver' && !n.noDriver.driver && !n.noDriver.llm
+  && n.noDevice.state === 'no-device' && n.noDevice.driver === 'amdxdna' && !n.noDevice.llm,
+  `${n.absent.state} ${n.noDriver.state} ${n.noDevice.state}`);
+check('npu: a working XDNA 2 with its name, firmware and node', n.ready.state === 'ready' && n.ready.id === '1022:17f0' && n.ready.family === 'XDNA 2'
+  && n.ready.name === 'NPU Strix' && n.ready.firmware === '1.1.2.64' && n.ready.node === 'accel0' && n.ready.llm && n.ready.llmBlock === null, JSON.stringify(n.ready));
+check('npu: what keeps language models off it', n.oldKernel.llmBlock === 'kernel' && n.oldFirmware.llmBlock === 'firmware' && n.first.llmBlock === 'generation'
+  && [n.oldKernel, n.oldFirmware, n.first].every((x) => x.state === 'ready' && !x.llm), `${n.oldKernel.llmBlock} ${n.oldFirmware.llmBlock} ${n.first.llmBlock}`);
+
 // Audio: one audio.cpp run with the mode's engine settings; the result is an MP3 with a waveform
 // thumbnail and its measured length
 fs.mkdirSync(`${DATA}/models/audio`, { recursive: true });

@@ -58,10 +58,17 @@ COPY server/package.json server/package-lock.json server/.npmrc ./
 # onnxruntime-node (background removal on the CPU) ships binaries for every platform: keep linux/x64
 RUN npm ci --omit=dev --no-audit --no-fund  && find node_modules/onnxruntime-node/bin -mindepth 3 -maxdepth 3 -type d ! -path '*/linux/x64' -exec rm -rf {} +
 
-# ---------- worker: the same Debian 13 as the host (same Mesa/RADV version) ----------
+# ---------- worker: Debian 13 like the host, with its own Mesa (RADV) ----------
 FROM debian:trixie AS worker
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      libvulkan1 mesa-vulkan-drivers vulkan-tools libgomp1 ffmpeg ca-certificates \
+# The container's Mesa is the one that drives the GPU, not the host's. The stock 25.0.7 is the
+# default: the benchmarks were measured with it. MESA_SUITE=trixie-backports takes the newer one
+# (26.1.6 in November 2026): Wan 2.2 Turbo samples 3% faster with it, Z-Image 7% slower, see
+# docs/hardware.md.
+ARG MESA_SUITE=trixie
+RUN echo "deb http://deb.debian.org/debian trixie-backports main" > /etc/apt/sources.list.d/backports.list \
+    && apt-get update && apt-get install -y --no-install-recommends \
+      vulkan-tools libgomp1 ffmpeg ca-certificates \
+    && apt-get install -y --no-install-recommends -t "${MESA_SUITE}" libvulkan1 mesa-vulkan-drivers \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=sdcpp /src/build/bin/ /usr/local/bin/
 COPY --from=audiocpp /out/ /opt/audiocpp/

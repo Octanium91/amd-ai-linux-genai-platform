@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { config } from '../common/config.js';
+import { npuInfo } from './npu.js';
 import { activeReasons, POWER_REASONS, readGpuMetrics, THERMAL_REASONS, throttleDelta } from './gpumetrics.js';
 
 let gpuDir = null;
@@ -19,20 +20,6 @@ function cpuModel() {
   } catch {
     return null;
   }
-}
-
-// The XDNA NPU (Ryzen AI) shows up on PCI as 1022:1502 / 1022:17f0; the amdxdna driver provides /dev/accel
-function npuInfo() {
-  let present = false;
-  try {
-    for (const d of fs.readdirSync('/sys/bus/pci/devices')) {
-      const base = `/sys/bus/pci/devices/${d}`;
-      const vendor = fs.readFileSync(`${base}/vendor`, 'utf8').trim();
-      const device = fs.readFileSync(`${base}/device`, 'utf8').trim();
-      if (vendor === '0x1022' && ['0x1502', '0x17f0'].includes(device)) present = true;
-    }
-  } catch {}
-  return { present, driver: fs.existsSync('/dev/accel') };
 }
 
 // Everything about the GPU comes from the driver stack, nothing from a model table:

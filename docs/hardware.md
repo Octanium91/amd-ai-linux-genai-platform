@@ -24,8 +24,8 @@ The whole lineup is RDNA 3.5 (gfx1150/gfx1151/gfx1152), supported by Mesa RADV s
 | NPU | XDNA 2 (`1022:17f0`), not used, see below |
 | Memory | 64 GB in SO-DIMM slots, shared with the GPU (32 GB until November 2026, see [the 32 GB configuration](#the-32-gb-configuration)) |
 | BIOS | UMA Frame Buffer = 512 MB (the minimum; the GPU takes the rest dynamically through GTT) |
-| Kernel | Debian 13 `6.12.x`, parameters `amdgpu.gttsize=49152 ttm.pages_limit=12582912 ttm.page_pool_size=12582912` → 48 GB GTT, all of it resident |
-| Mesa | 25.0.7 (RADV), `mesa-vulkan-drivers` from Debian 13 |
+| Kernel | `7.2.12` from `trixie-backports` since November 2026, for the NPU driver (Debian 13's own `6.12.x` until then: the benchmarks were measured on it). The same runs on 6.12.117 and 7.2.12 with Mesa 26.1.6: Wan 2.2 5B Turbo samples in 65.5 s and 67.2 s, Z-Image Turbo in 138.5 s and 140.1 s, so the kernel changes nothing for generation. Parameters `amdgpu.gttsize=49152 ttm.pages_limit=12582912 ttm.page_pool_size=12582912` → 48 GB GTT, all of it resident |
+| Mesa | In the worker image, which is what drives the GPU: 26.1.6 (RADV) from `trixie-backports` since November 2026 (`MESA_SUITE=trixie-backports` in `.env`); the benchmarks were measured with the stock 25.0.7. Same runs on both, 64 GB, kernel 6.12.117: Wan 2.2 5B Turbo 832×480, 49 frames, 4 steps samples in 65.5 s on 26.1.6 and 67.7 s on 25.0.7 (−3%); Z-Image Turbo 1024×1024, 8 steps in 138.5 s and 129.5 s (+7%). The unified 48.50 GiB heap works on both; 26.1 reports the GPU as `RADV STRIX1` instead of `RADV GFX1150` |
 | Disk | 4 TB NVMe (models and results) |
 
 ### The 32 GB configuration
@@ -67,11 +67,23 @@ Keep in mind that GTT and RAM are the same physical memory. Wan video generation
 
 ## NPU (XDNA)
 
-The whole lineup has an XDNA 2 NPU (~50 TOPS), but the platform does not use it yet:
+The whole lineup has an XDNA 2 NPU (~50 TOPS). The platform does not use it: under Linux it runs language models, not diffusion models. The state as checked in November 2026:
 
-- The `amdxdna` driver landed in the kernel only in 6.14. Debian 13 (6.12) does not have it; it needs DKMS from [xdna-driver](https://github.com/amd/xdna-driver) plus XRT.
-- [Ryzen AI Software for Linux](https://ryzenai.docs.amd.com/en/latest/linux.html) supports only the "NPU-only" flow for CNN/NLP models and LLMs, with packages built for Ubuntu 24.04.
-- Diffusion video models do not run on the NPU under Linux. For SD there is the community project [amd-npu-stable-diffusion-linux](https://github.com/mcolsen/amd-npu-stable-diffusion-linux), images only.
-- The AMD Amuse app on Windows uses the NPU to accelerate some models and for "XDNA Super Resolution". On Linux that upscale is cheaper on the iGPU (ESRGAN via Vulkan).
+- **Driver.** `amdxdna` is in the kernel since 6.14; the tools that run language models on it ask for kernel 7.0 or newer, or the `amdxdna-dkms` backport ([FastFlowLM](https://github.com/ROCm/FastFlowLM), [Lemonade](https://lemonade-server.ai/)). Debian 13 ships 6.12, which has no driver: the NPU is listed by `lspci` (`1022:17f0`), but there is no `/dev/accel`. `trixie-backports` carries a 7.2 kernel.
+- **Firmware.** NPU firmware 1.1.0.0 or later; `firmware-amd-graphics` from backports installs it to `/lib/firmware/amdnpu/17f0_10`. Lemonade asks for linux-firmware 20260221 or later.
+- **Userspace.** XRT, AMD's runtime, is required. FastFlowLM lists Ubuntu 24.04, 25.10 and 26.04 and Arch (a `.deb` and a source build); Lemonade lists Debian 13 with backports enabled. The memlock limit must be unlimited.
+- **What runs.** Since March 2026 (FastFlowLM on Linux, Lemonade 10) small language models: Qwen3 4B, Gemma 3 4B, Llama 3.2 1B and the like, behind an OpenAI-compatible API (port 52625, structured output supported). FastFlowLM's NPU kernels are proprietary binaries, free to use; its runtime is MIT.
+- **What does not.** No image or video diffusion on the NPU under Linux in any of these tools. The AMD Amuse app on Windows uses the NPU for some models and for "XDNA Super Resolution"; on Linux that upscale is cheaper on the iGPU (ESRGAN via Vulkan).
 
-The platform reports whether an NPU is present (`/api/state` → `system.npu`). It makes sense to revisit it once `amdxdna` ships in the stock distribution kernel and Linux runtimes for diffusion models appear.
+**On the reference machine** (Debian 13, November 2026) it took three packages from `trixie-backports` and one download:
+
+```
+sudo apt install -t trixie-backports linux-image-amd64 libxrt2 libxrt-npu2
+sudo apt install ./fastflowlm_1.0.13_debian13_amd64.deb     # from the FastFlowLM releases on GitHub
+echo "$USER - memlock unlimited" | sudo tee /etc/security/limits.d/90-npu.conf
+sudo reboot
+```
+
+After the reboot `/dev/accel/accel0` exists (group `render`), and `flm validate` reports kernel 7.2.12, `amdxdna` 0.10, firmware 1.1.2.64 and 8 NPU columns. `flm pull qwen3:4b` (3.1 GB) and `flm serve qwen3:4b` answered over `/v1/chat/completions` at **about 20 tokens per second** (1.2–1.3 s to the first token), with 0.9 GB of RAM in the server process and nothing taken from GTT. The model list also has `gemma4-it:12b`, `llama3.1:8b` and `deepseek-r1:8b`; they were not run.
+
+The platform knows the NPU without using it: `server/src/worker/npu.js` reads from sysfs whether there is one, its generation (XDNA or XDNA 2) and PCI id, whether the `amdxdna` driver took it, the running firmware version and the device node, and tells whether the language-model runtimes above could use it (XDNA 2, kernel 7.0+, firmware 1.1.0.0+) or what is missing. It is shown as the NPU line of the system check and returned in `/api/state` → `system.npu`; the container needs no access to `/dev/accel` for that. The one use it could have here is the prompt assistant: a language model on the NPU would not take GPU memory from the generations. That needs a 7.x kernel on the host and an OpenAI-compatible client next to the Ollama one in `server/src/web/prompt.js`.

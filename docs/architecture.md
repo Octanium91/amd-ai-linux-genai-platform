@@ -23,7 +23,8 @@ Code: `server/src/web` (the web container), `server/src/worker` (the worker), `s
 | `web/presets.js` | generation modes and start templates |
 | `web/worker.js` | worker API client with the last known state cached |
 | `worker/queue.js` | the queue: one job on the GPU, sd-cli progress parsing, segments, finalization, drain |
-| `worker/system.js`, `worker/diagnostics.js` | APU, iGPU (Vulkan), GTT, NPU, CPU and disk usage; the system check |
+| `worker/system.js`, `worker/diagnostics.js` | APU, iGPU (Vulkan), GTT, CPU and disk usage; the system check |
+| `worker/npu.js` | what the machine's NPU is and whether it works (read from sysfs; the platform does not use the NPU) |
 | `worker/index.js`, `worker/ctl.js` | the internal API and its command-line client for `update.sh` |
 
 Both images are based on Debian 13 like the host, so Mesa/RADV versions match between the worker and the host. The engine runs as an `sd-cli` process inside the worker, so no Docker socket access is needed.
@@ -140,7 +141,7 @@ Every route except sign-in requires a session. Mutating requests require the `X-
 | `swap` | no swap (info) |
 | `disk` | < 30 GB (warn) or < 10 GB (fail) free for models |
 | `engine`, `ffmpeg` | `sd-cli` or ffmpeg does not run (fail) |
-| `npu` | informational only |
+| `npu` | informational only: the NPU as `worker/npu.js` reads it from sysfs (present or not, XDNA generation, the `amdxdna` driver, firmware version, device node; `state` is `absent`, `no-driver`, `no-device` or `ready`) and whether the Linux language-model runtimes could use it (`llm`, or what is missing in `llmBlock`: `generation`, `kernel`, `firmware`) |
 
 Results are cached for a minute (`GET /api/diagnostics?refresh=1` forces a re-run). `/api/state` carries a short `health` summary for the dot on the Admin menu and the admin notice; modes with `minGtt` show a warning in the form when GTT is smaller.
 

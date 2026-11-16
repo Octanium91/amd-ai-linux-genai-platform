@@ -5,6 +5,7 @@ import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import { config } from '../common/config.js';
+import { npuInfo } from './npu.js';
 
 const GB = 1024 ** 3;
 const run = (cmd, args, timeout = 20000) => new Promise((resolve) => {
@@ -110,8 +111,9 @@ async function collect() {
   else add('cpu', 'warn', { cpu: cpu.model, reason: 'not-amd' });
 
   if (gpu) {
-    const arch = gpu.match(/GFX\d+/i)?.[0]?.toUpperCase() || null;
-    if (arch && /^GFX115/.test(arch)) add('gpu-arch', 'ok', { arch });
+    // RADV names the chip "GFX1150" up to Mesa 25 and "STRIX1" (STRIX_HALO, KRACKAN1) from Mesa 26
+    const arch = gpu.match(/GFX\d+|STRIX\w*|KRACKAN\w*/i)?.[0]?.toUpperCase() || null;
+    if (arch && /^(GFX115|STRIX|KRACKAN)/.test(arch)) add('gpu-arch', 'ok', { arch });
     else add('gpu-arch', 'warn', { arch: arch || gpu });
   }
 
@@ -173,16 +175,8 @@ async function collect() {
   const ff = await run('ffmpeg', ['-version'], 10000);
   add('ffmpeg', ff.ok ? 'ok' : 'fail', { version: ff.out.split('\n')[0].replace(/ Copyright.*/, '').trim() || null });
 
-  // --- NPU (informational: not used by the platform yet) ---
-  let npu = false;
-  try {
-    for (const d of fs.readdirSync('/sys/bus/pci/devices')) {
-      const b = `/sys/bus/pci/devices/${d}`;
-      if (fs.readFileSync(`${b}/vendor`, 'utf8').trim() === '0x1022'
-        && ['0x1502', '0x17f0'].includes(fs.readFileSync(`${b}/device`, 'utf8').trim())) npu = true;
-    }
-  } catch {}
-  add('npu', 'info', { present: npu, driver: fs.existsSync('/dev/accel') });
+  // --- NPU (informational: the platform does not use it, see npu.js) ---
+  add('npu', 'info', npuInfo());
 
   const worst = checks.some((c) => c.status === 'fail') ? 'fail' : checks.some((c) => c.status === 'warn') ? 'warn' : 'ok';
   return { checks, status: worst, at: Date.now() };
