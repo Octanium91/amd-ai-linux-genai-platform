@@ -51,7 +51,7 @@ Taken on the reference machine (Radeon 890M) at the size of a 13" laptop screen 
 
 Built for the **Ryzen AI** lineup (RDNA 3.5 + XDNA 2): Strix Point (Ryzen AI 9 HX 370/365 — Radeon 890M/880M), Krackan Point (Ryzen AI 7/5 — Radeon 860M/840M), Strix Halo (Ryzen AI MAX/MAX+ — Radeon 8040S/8050S/8060S). It works on any GPU with Vulkan, but the settings and measurements target these APUs.
 
-Developed and measured on a **Sapphire EDGE AI 370**: Ryzen AI 9 HX 370, Radeon 890M, 32 GB LPDDR5X, 512 MB UMA, 24 GB GTT, Debian 13, kernel 6.12, Mesa 25.0.7. Details in [docs/hardware.md](docs/hardware.md), measurements in [docs/benchmarks.md](docs/benchmarks.md).
+Developed and measured on a **Sapphire EDGE AI 370**: Ryzen AI 9 HX 370, Radeon 890M, 64 GB of RAM, 512 MB UMA, 48 GB GTT, Debian 13, kernel 6.12, Mesa 25.0.7 (32 GB and a 24 GB GTT until November 2026: the benchmarks were measured in that configuration, and everything in the default catalog ran on it). Details in [docs/hardware.md](docs/hardware.md), measurements in [docs/benchmarks.md](docs/benchmarks.md).
 
 The NPU (XDNA) is not used yet: on Linux it has no support for diffusion video models. See [docs/hardware.md](docs/hardware.md#npu-xdna).
 

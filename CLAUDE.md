@@ -13,7 +13,7 @@
 ## Platform
 
 - Target hardware: AMD Ryzen AI APUs (Strix Point, Krackan Point, Strix Halo) on Linux. Acceleration is **Vulkan only** (Mesa RADV via stable-diffusion.cpp). Do not introduce ROCm.
-- Reference machine for measurements: Sapphire EDGE AI 370 (Ryzen AI 9 HX 370, Radeon 890M, 32 GB, GTT 24 GB, Debian 13). Benchmarks in `docs/benchmarks.md` must be real measurements, not estimates.
+- Reference machine for measurements: Sapphire EDGE AI 370 (Ryzen AI 9 HX 370, Radeon 890M, 64 GB, GTT 48 GB, Debian 13; 32 GB with a 24 GB GTT until November 2026, the configuration the existing benchmarks were measured in). Benchmarks in `docs/benchmarks.md` must be real measurements, not estimates.
 - Models are never baked into the image; they are downloaded at runtime from `catalog/models.json` into `MODELS_PATH`. Results go to `OUTPUT_PATH`, state to `DATA_PATH`.
 
 ## Deployment

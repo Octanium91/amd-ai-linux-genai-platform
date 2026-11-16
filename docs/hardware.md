@@ -22,11 +22,21 @@ The whole lineup is RDNA 3.5 (gfx1150/gfx1151/gfx1152), supported by Mesa RADV s
 | CPU | AMD Ryzen AI 9 HX 370 (4× Zen 5 + 8× Zen 5c, 24 threads) |
 | iGPU | Radeon 890M (RDNA 3.5, 16 CU, gfx1150), reported by Vulkan as `AMD Radeon Graphics (RADV GFX1150)` |
 | NPU | XDNA 2 (`1022:17f0`), not used, see below |
-| Memory | 32 GB LPDDR5X, shared with the GPU |
+| Memory | 64 GB in SO-DIMM slots, shared with the GPU (32 GB until November 2026, see [the 32 GB configuration](#the-32-gb-configuration)) |
 | BIOS | UMA Frame Buffer = 512 MB (the minimum; the GPU takes the rest dynamically through GTT) |
-| Kernel | Debian 13 `6.12.x`, parameters `amdgpu.gttsize=24576 ttm.pages_limit=6291456 ttm.page_pool_size=6291456` → 24 GB GTT, all of it resident |
+| Kernel | Debian 13 `6.12.x`, parameters `amdgpu.gttsize=49152 ttm.pages_limit=12582912 ttm.page_pool_size=12582912` → 48 GB GTT, all of it resident |
 | Mesa | 25.0.7 (RADV), `mesa-vulkan-drivers` from Debian 13 |
 | Disk | 4 TB NVMe (models and results) |
+
+### The 32 GB configuration
+
+Until November 2026 the reference machine had 32 GB of RAM (30.5 GB usable) and a 24 GB GTT (`amdgpu.gttsize=24576 ttm.pages_limit=6291456 ttm.page_pool_size=6291456`, a `24.50 GiB` Vulkan heap). The platform was developed on it, and every number in [benchmarks.md](benchmarks.md) was measured on it unless the row says otherwise. It is kept here for anyone with a 32 GB machine:
+
+- **Everything in the default catalog ran:** the image modes (Realistic Vision 6, RealVisXL V5 and Lightning, Z-Image Turbo, inpainting, Real-ESRGAN, background removal), AnimateLCM and AnimateDiff v3, Wan 2.2 5B (Turbo, FastWan and the full model), Wan 2.1 T2V 1.3B, Wan 2.1 VACE 1.3B, long videos of shots and in one continuous shot, and the audio modes. The heaviest, the Wan 2.2 5B modes, peak at about 17 GB of GTT; a run without `--offload-to-cpu` reached 27.1 of 30.5 GB of RAM.
+- **Nothing else heavy could run at the same time.** With a 12B language model loaded in Ollama on the same GPU (about 10 GB of GTT, 14 GB with its process), the Z-Image keyframe still fitted, but Wan 2.2 5B Turbo failed every time with `model manager cannot make enough memory available on Vulkan0` (about 570 MB free where 990 MB were needed), and the machine kept 7–11 GB in swap.
+- **Wan 2.1 VACE 14B did not fit:** 18.7 GB of weights next to the 5.8 GB text encoder.
+
+With 64 GB and a 48 GB GTT the same Wan 2.2 5B Turbo clip (832×480, 49 frames, 4 steps) ran next to that loaded 12B model: 67.5 s of sampling, 75 s in all (sd-cli alone, without the platform's queue).
 
 ## Memory: UMA, GTT and the Vulkan heap
 
@@ -43,7 +53,7 @@ Two steps are required:
    # gttsize in MiB (deprecated on newer kernels, which size GTT from the ttm limit); ttm values in 4 KiB pages (24 GB = 6291456)
    ```
    Then `sudo update-grub` and reboot. Check with `cat /sys/class/drm/card*/device/mem_info_gtt_total` and `cat /sys/module/ttm/parameters/pages_limit` (× 4096 must be at least the GTT size). `scripts/setup.sh` computes the values for your RAM.
-2. **Unify the Vulkan heaps.** On APUs, RADV exposes a small DEVICE_LOCAL heap (≈ UMA) plus part of GTT separately by default. The Mesa option `radv_enable_unified_heap_on_apu=true` makes a single DEVICE_LOCAL heap the size of GTT. The platform enables it both through an environment variable and through `config/drirc`. Check with `./scripts/check-gpu.sh`: the reference machine shows a `24.50 GiB` heap, not 512 MB.
+2. **Unify the Vulkan heaps.** On APUs, RADV exposes a small DEVICE_LOCAL heap (≈ UMA) plus part of GTT separately by default. The Mesa option `radv_enable_unified_heap_on_apu=true` makes a single DEVICE_LOCAL heap the size of GTT. The platform enables it both through an environment variable and through `config/drirc`. Check with `./scripts/check-gpu.sh`: the reference machine shows a `48.50 GiB` heap (`24.50 GiB` while it had 32 GB), not 512 MB.
 
 The UMA size in the BIOS can stay at the minimum: with the unified heap it is not needed, and the RAM stays available to the system.
 

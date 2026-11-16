@@ -1,6 +1,6 @@
 # Benchmarks
 
-Machine: Sapphire EDGE AI 370 — Ryzen AI 9 HX 370, **Radeon 890M (16 CU)**, 32 GB LPDDR5X, 24 GB GTT, Debian 13, kernel 6.12, Mesa 25.0.7 (RADV), stable-diffusion.cpp `88411ef` (Vulkan). Video test prompt: "A cute raccoon playing guitar in the beach".
+Machine: Sapphire EDGE AI 370 — Ryzen AI 9 HX 370, **Radeon 890M (16 CU)**, 32 GB of RAM, 24 GB GTT (the machine has had 64 GB and a 48 GB GTT since November 2026; a row measured after that says so, see [hardware.md](hardware.md#the-32-gb-configuration)), Debian 13, kernel 6.12, Mesa 25.0.7 (RADV), stable-diffusion.cpp `88411ef` (Vulkan). Video test prompt: "A cute raccoon playing guitar in the beach".
 
 All numbers are measured, not estimated, unless marked as an estimate.
 
