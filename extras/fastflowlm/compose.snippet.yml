@@ -1,5 +1,6 @@
-# Add to the compose file that runs Ollama (or any other): FastFlowLM on the NPU.
-# Copy this directory next to that compose file as ./fastflowlm first.
+# FastFlowLM on the NPU as a service of a compose file you already have (the one that runs Ollama,
+# for example): copy this directory next to that file as ./fastflowlm and paste the service.
+# To run it on its own, use docker-compose.yml of this directory instead. See docs/npu.md.
 services:
   fastflowlm:
     build: ./fastflowlm

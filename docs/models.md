@@ -131,7 +131,7 @@ Measured on the reference machine (64 GB, kernel 7.2.12, Mesa 26.1.6) with a lan
 | GPU, Qwen2.5 3B (Ollama) | 97.3 s (+45%) | about 11.6 tokens/s (34.7 alone) |
 | CPU, the same model | 104.6 s (+56%) | 19 falling to about 10 tokens/s (35.5 alone) |
 
-So no place is free: the three share the memory and the power budget of one APU. The NPU costs the generation the least, keeps its own speed, and takes no GPU memory (GTT). A real request lasts seconds, not the whole clip: on the NPU a prompt took 6.6–10.5 s and a five-part storyboard 23.7 s.
+So no place is free: the three share the memory and the power budget of one APU. The NPU costs the generation the least, keeps its own speed, and takes no GPU memory (GTT); its server does keep 8.4 GB of RAM for as long as it runs. Setting it up is in [npu.md](npu.md). A real request lasts seconds, not the whole clip: on the NPU a prompt took 6.6–10.5 s and a five-part storyboard 23.7 s.
 
 ### Models and setup
 

@@ -1,0 +1,25 @@
+# FastFlowLM on the Ryzen AI NPU, for the platform's prompt assistant (docs/npu.md):
+#   docker compose -f extras/fastflowlm/docker-compose.yml up -d --build
+# The host needs kernel 7.0+ with the amdxdna driver and the NPU firmware; nothing else.
+name: fastflowlm
+
+services:
+  fastflowlm:
+    build: .
+    image: fastflowlm:1.0.13
+    container_name: fastflowlm
+    restart: unless-stopped
+    # No authentication: keep the port away from untrusted networks. The platform's web container
+    # reaches it at http://host.docker.internal:52625
+    ports:
+      - "52625:52625"
+    # The NPU, and the right to pin the model's memory
+    devices:
+      - /dev/accel/accel0:/dev/accel/accel0
+    ulimits:
+      memlock: -1
+    environment:
+      # The model loaded at start (downloaded on first start, 3.1 GB); others are fetched when asked for
+      - FLM_MODEL=qwen3:4b
+    volumes:
+      - ./flm_data:/root/.config/flm

@@ -8,3 +8,4 @@ server/public/
 *.log
 .DS_Store
 .idea/
+extras/fastflowlm/flm_data/

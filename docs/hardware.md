@@ -71,20 +71,11 @@ The whole lineup has an XDNA 2 NPU (~50 TOPS). Under Linux it runs language mode
 
 - **Driver.** `amdxdna` is in the kernel since 6.14; the tools that run language models on it ask for kernel 7.0 or newer, or the `amdxdna-dkms` backport ([FastFlowLM](https://github.com/ROCm/FastFlowLM), [Lemonade](https://lemonade-server.ai/)). Debian 13 ships 6.12, which has no driver: the NPU is listed by `lspci` (`1022:17f0`), but there is no `/dev/accel`. `trixie-backports` carries a 7.2 kernel.
 - **Firmware.** NPU firmware 1.1.0.0 or later; `firmware-amd-graphics` from backports installs it to `/lib/firmware/amdnpu/17f0_10`. Lemonade asks for linux-firmware 20260221 or later.
-- **Userspace.** XRT, AMD's runtime, is required. FastFlowLM lists Ubuntu 24.04, 25.10 and 26.04 and Arch (a `.deb` and a source build); Lemonade lists Debian 13 with backports enabled. The memlock limit must be unlimited.
+- **Userspace.** XRT, AMD's runtime, is required (in the platform's setup it is inside the FastFlowLM container). FastFlowLM lists Ubuntu 24.04, 25.10 and 26.04 and Arch (a `.deb` and a source build); Lemonade lists Debian 13 with backports enabled. The memlock limit must be unlimited.
 - **What runs.** Since March 2026 (FastFlowLM on Linux, Lemonade 10) small language models: Qwen3 4B, Gemma 3 4B, Llama 3.2 1B and the like, behind an OpenAI-compatible API (port 52625, structured output supported). FastFlowLM's NPU kernels are proprietary binaries, free to use; its runtime is MIT.
 - **What does not.** No image or video diffusion on the NPU under Linux in any of these tools. The AMD Amuse app on Windows uses the NPU for some models and for "XDNA Super Resolution"; on Linux that upscale is cheaper on the iGPU (ESRGAN via Vulkan).
 
-**On the reference machine** (Debian 13, November 2026) it took three packages from `trixie-backports` and one download:
-
-```
-sudo apt install -t trixie-backports linux-image-amd64 libxrt2 libxrt-npu2
-sudo apt install ./fastflowlm_1.0.13_debian13_amd64.deb     # from the FastFlowLM releases on GitHub
-echo "$USER - memlock unlimited" | sudo tee /etc/security/limits.d/90-npu.conf
-sudo reboot
-```
-
-After the reboot `/dev/accel/accel0` exists (group `render`), and `flm validate` reports kernel 7.2.12, `amdxdna` 0.10, firmware 1.1.2.64 and 8 NPU columns. `flm pull qwen3:4b` (3.1 GB) and `flm serve qwen3:4b` answered over `/v1/chat/completions` at **about 20 tokens per second** (1.2–1.3 s to the first token), with 0.9 GB of RAM in the server process and nothing taken from GTT. The model list also has `gemma4-it:12b`, `llama3.1:8b` and `deepseek-r1:8b`; they were not run.
+**On the reference machine** (Debian 13, November 2026) the host needed two packages from `trixie-backports`, the 7.2 kernel and `firmware-amd-graphics`; XRT and FastFlowLM run in a container. After the reboot `/dev/accel/accel0` exists (group `render`), and `flm validate` reports kernel 7.2.12, `amdxdna` 0.10, firmware 1.1.2.64 and 8 NPU columns. Qwen3 4B answers at about 20 tokens per second and takes nothing from GTT, but the server keeps 8.4 GB of RAM (7.2 GB pinned) for as long as it runs. The model list also has `gemma4-it:12b` (7.0 tokens per second, 8.6 GB of RAM; the same model through Ollama: 15.6 on the GPU with 10.1 GB, 12.3 on the processor with 9.5 GB), `llama3.1:8b` and `deepseek-r1:8b`, which were not run. **The step-by-step setup is in [npu.md](npu.md).**
 
 `server/src/worker/npu.js` reads from sysfs whether there is one, its generation (XDNA or XDNA 2) and PCI id, whether the `amdxdna` driver took it, the running firmware version and the device node, and tells whether the language-model runtimes above could use it (XDNA 2, kernel 7.0+, firmware 1.1.0.0+) or what is missing. It is shown as the NPU line of the system check and returned in `/api/state` → `system.npu`; the container needs no access to `/dev/accel` for that. The system bar shows the NPU next to the CPU and GPU when it works: whether it is powered and its load, the share of time the kernel kept it powered between two samples (the driver has no utilisation counter; the NPU powers down 5 s after its last work, so short bursts read a little high).
 

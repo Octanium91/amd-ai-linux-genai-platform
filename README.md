@@ -53,7 +53,7 @@ Built for the **Ryzen AI** lineup (RDNA 3.5 + XDNA 2): Strix Point (Ryzen AI 9 H
 
 Developed and measured on a **Sapphire EDGE AI 370**: Ryzen AI 9 HX 370, Radeon 890M, 64 GB of RAM, 512 MB UMA, 48 GB GTT, Debian 13 (32 GB, a 24 GB GTT, kernel 6.12 and Mesa 25.0.7 until November 2026: the benchmarks were measured in that configuration, and everything in the default catalog ran on it). Details in [docs/hardware.md](docs/hardware.md), measurements in [docs/benchmarks.md](docs/benchmarks.md).
 
-The NPU (XDNA) is not used: on Linux it runs language models (kernel 7.0+; Qwen3 4B at about 20 tokens per second on the reference machine), not diffusion models. See [docs/hardware.md](docs/hardware.md#npu-xdna).
+The NPU (XDNA) generates nothing: on Linux it runs language models (kernel 7.0+; Qwen3 4B at about 20 tokens per second on the reference machine), not diffusion models; the prompt assistant can run on it, see [docs/npu.md](docs/npu.md).
 
 ## Quick start
 
@@ -82,6 +82,7 @@ GTT (the memory the GPU can use) is the key parameter for video. If `setup.sh` w
 | Document | Contents |
 |---|---|
 | [docs/hardware.md](docs/hardware.md) | Ryzen AI lineup, reference machine, BIOS, GTT, Vulkan, NPU |
+| [docs/npu.md](docs/npu.md) | Running the prompt assistant on the NPU: kernel, firmware, the FastFlowLM container, settings, troubleshooting |
 | [docs/models.md](docs/models.md) | Model and mode catalog, licenses, templates, adding your own |
 | [docs/benchmarks.md](docs/benchmarks.md) | Speed measurements and what affects them |
 | [docs/architecture.md](docs/architecture.md) | How the platform works, data layout, API, security, i18n |
