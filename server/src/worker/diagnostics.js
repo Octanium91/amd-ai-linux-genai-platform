@@ -175,8 +175,10 @@ async function collect() {
   const ff = await run('ffmpeg', ['-version'], 10000);
   add('ffmpeg', ff.ok ? 'ok' : 'fail', { version: ff.out.split('\n')[0].replace(/ Copyright.*/, '').trim() || null });
 
-  // --- NPU (informational: the platform does not use it, see npu.js) ---
-  add('npu', 'info', npuInfo());
+  // --- NPU (see npu.js): OK when it works. A missing or idle NPU is not a problem, only
+  // information: generation does not need it, the prompt assistant then runs on the GPU ---
+  const npu = npuInfo();
+  add('npu', npu.state === 'ready' ? 'ok' : 'info', npu);
 
   const worst = checks.some((c) => c.status === 'fail') ? 'fail' : checks.some((c) => c.status === 'warn') ? 'warn' : 'ok';
   return { checks, status: worst, at: Date.now() };

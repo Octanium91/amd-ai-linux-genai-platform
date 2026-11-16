@@ -142,7 +142,7 @@ Every route except sign-in requires a session. Mutating requests require the `X-
 | `swap` | no swap (info) |
 | `disk` | < 30 GB (warn) or < 10 GB (fail) free for models |
 | `engine`, `ffmpeg` | `sd-cli` or ffmpeg does not run (fail) |
-| `npu` | informational only: the NPU as `worker/npu.js` reads it from sysfs (present or not, XDNA generation, the `amdxdna` driver, firmware version, device node; `state` is `absent`, `no-driver`, `no-device` or `ready`) and whether the Linux language-model runtimes could use it (`llm`, or what is missing in `llmBlock`: `generation`, `kernel`, `firmware`) |
+| `npu` | never a problem: `ok` when the NPU works, `info` when there is none or it does not (generation does not need it). The NPU as `worker/npu.js` reads it from sysfs (present or not, XDNA generation, the `amdxdna` driver, firmware version, device node; `state` is `absent`, `no-driver`, `no-device` or `ready`) and whether the Linux language-model runtimes could use it (`llm`, or what is missing in `llmBlock`: `generation`, `kernel`, `firmware`) |
 
 Results are cached for a minute (`GET /api/diagnostics?refresh=1` forces a re-run). `/api/state` carries a short `health` summary for the dot on the Admin menu and the admin notice; modes with `minGtt` show a warning in the form when GTT is smaller.
 
